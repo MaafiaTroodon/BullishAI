@@ -11,9 +11,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
+  let symbol = 'UNKNOWN'
   try {
     const { symbol: symbolParam } = await params
-    const symbol = symbolParam.toUpperCase()
+    symbol = symbolParam.toUpperCase()
     const { searchParams } = new URL(request.url)
     const range = (searchParams.get('range') || '1D').toUpperCase() as any
 
@@ -81,7 +82,7 @@ export async function GET(
       news,
     })
   } catch (error: any) {
-    console.error(`Stock API error for ${params.symbol}:`, error.message)
+    console.error(`Stock API error for ${symbol}:`, error.message)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
