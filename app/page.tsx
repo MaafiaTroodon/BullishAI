@@ -1,30 +1,179 @@
+'use client'
+
 import Link from 'next/link'
-import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap, Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react'
+import { StockChart } from '@/components/charts/StockChart'
+import useSWR from 'swr'
+
+const fetcher = (url: string) => fetch(url).then(r => r.json())
+
+const TOP_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
 
 export default function Home() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
+  // Simulate login state for demo
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsLoggedIn(localStorage.getItem('isLoggedIn') === 'true')
+    }
+  }, [])
+
+  // Handle search with suggestions
+  const handleSearchChange = async (value: string) => {
+    setSearchQuery(value)
+    if (value.length >= 2) {
+      try {
+        const response = await fetch(`/api/search?query=${encodeURIComponent(value)}`)
+        const data = await response.json()
+        if (data.results) {
+          setSearchSuggestions(data.results)
+          setShowSuggestions(true)
+        }
+      } catch (error) {
+        console.error('Search error:', error)
+      }
+    } else {
+      setShowSuggestions(false)
+    }
+  }
+
+  const { data: topQuotes } = useSWR(
+    `/api/quote?symbol=${selectedSymbol}`,
+    fetcher,
+    { refreshInterval: 15000 }
+  )
+
+  const { data: chartData } = useSWR(
+    `/api/chart?symbol=${selectedSymbol}&range=1d`,
+    fetcher
+  )
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery && searchQuery.length <= 5) {
+      setSelectedSymbol(searchQuery.toUpperCase())
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Navigation */}
-      <nav className="border-b border-slate-800">
+      <nav className="border-b border-slate-800 sticky top-0 z-50 bg-slate-900/95 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <Link href="/" className="flex items-center">
               <TrendingUp className="h-8 w-8 text-blue-500" />
               <span className="ml-2 text-2xl font-bold text-white">BullishAI</span>
-            </div>
+            </Link>
+            
+            {/* Search Bar in Navbar */}
+            <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-2xl mx-8 relative">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onBlur={() => {
+                    setTimeout(() => setShowSuggestions(false), 200)
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && searchQuery) {
+                      window.location.href = `/stocks/${searchQuery.toUpperCase()}`
+                      setShowSuggestions(false)
+                    }
+                  }}
+                  placeholder="Search stocks (e.g., AAPL, TSLA, MSFT)"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-80 overflow-y-auto">
+                    {searchSuggestions.map((item, idx) => (
+                      <button
+                        key={`${item.symbol}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          window.location.href = `/stocks/${item.symbol}`
+                          setSearchQuery('')
+                          setShowSuggestions(false)
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-slate-700 transition text-white border-b border-slate-700 last:border-b-0"
+                      >
+                        <div className="font-semibold">{item.symbol}</div>
+                        <div className="text-sm text-slate-400">{item.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </form>
+
             <div className="flex items-center space-x-4">
-              <Link
-                href="/auth/signin"
-                className="text-slate-300 hover:text-white px-4 py-2 transition"
-              >
-                Sign In
+              <Link href="/dashboard" className="hidden md:block text-slate-300 hover:text-white px-4 py-2 transition">
+                Dashboard
               </Link>
-              <Link
-                href="/auth/signup"
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-              >
-                Get Started
+              <Link href="/watchlist" className="hidden md:block text-slate-300 hover:text-white px-4 py-2 transition">
+                Watchlist
               </Link>
+              {isLoggedIn ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="flex items-center gap-2 text-slate-300 hover:text-white transition"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+                      JD
+                    </div>
+                    <span className="hidden md:inline">John Doe</span>
+                    <ChevronDown className="h-4 w-4 hidden md:block" />
+                  </button>
+                  {userMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
+                      <Link href="/settings" className="flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-t-lg">
+                        <Settings className="h-4 w-4" />
+                        Settings
+                      </Link>
+                      <button 
+                        onClick={() => {
+                          setIsLoggedIn(false)
+                          if (typeof window !== 'undefined') {
+                            localStorage.setItem('isLoggedIn', 'false')
+                          }
+                          setUserMenuOpen(false)
+                          alert('Successfully logged out!')
+                          window.location.href = '/'
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/signin"
+                    className="text-slate-300 hover:text-white px-4 py-2 transition"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -76,6 +225,57 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Live Market Preview */}
+      {!isLoggedIn && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
+          
+          {/* Top Stocks */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            {TOP_STOCKS.map((symbol) => (
+              <button
+                key={symbol}
+                onClick={() => setSelectedSymbol(symbol)}
+                className={`p-4 rounded-lg border transition ${
+                  selectedSymbol === symbol
+                    ? 'bg-blue-600 border-blue-500'
+                    : 'bg-slate-800 border-slate-700 hover:border-blue-500/50'
+                }`}
+              >
+                <div className="text-white font-bold">{symbol}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Chart */}
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            {topQuotes && (
+              <div className="mb-4">
+                <h3 className="text-2xl font-bold text-white mb-2">{selectedSymbol}</h3>
+                <div className="flex items-center gap-4">
+                  <span className="text-4xl font-bold text-white">
+                    ${topQuotes.price?.toFixed(2) || 'Loading...'}
+                  </span>
+                  <span className={`text-xl font-semibold ${
+                    topQuotes.changePercent >= 0 ? 'text-green-500' : 'text-red-500'
+                  }`}>
+                    {topQuotes.changePercent >= 0 ? '+' : ''}{topQuotes.changePercent?.toFixed(2) || 0}%
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {chartData && chartData.data && Array.isArray(chartData.data) ? (
+              <StockChart data={chartData.data} symbol={selectedSymbol} />
+            ) : (
+              <div className="h-[400px] flex items-center justify-center">
+                <p className="text-slate-400">Loading chart...</p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Features */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -192,4 +392,3 @@ export default function Home() {
     </div>
   )
 }
-

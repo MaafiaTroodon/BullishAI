@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCompanyNews } from '@/lib/finnhub'
+import { getMultiSourceNews } from '@/lib/news-multi-source'
 import { z } from 'zod'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 const newsSchema = z.object({
   symbol: z.string().min(1).max(10).toUpperCase(),
-  limit: z.coerce.number().min(1).max(20).optional().default(5),
 })
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const symbol = searchParams.get('symbol')
-    const limit = searchParams.get('limit')
 
     if (!symbol) {
       return NextResponse.json(
@@ -21,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate input
-    const validation = newsSchema.safeParse({ symbol, limit })
+    const validation = newsSchema.safeParse({ symbol })
     if (!validation.success) {
       return NextResponse.json(
         { error: 'Invalid parameters' },
@@ -29,31 +31,25 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const news = await getCompanyNews(
-      validation.data.symbol,
-      validation.data.limit
-    )
+    try {
+      const news = await getMultiSourceNews(validation.data.symbol)
 
-    // Transform news data to a cleaner format
-    const formattedNews = news.map((item: any) => ({
-      headline: item.headline,
-      summary: item.summary,
-      source: item.source,
-      url: item.url,
-      image: item.image,
-      datetime: item.datetime,
-    }))
-
-    return NextResponse.json({
-      symbol: validation.data.symbol,
-      news: formattedNews,
-    })
+      return NextResponse.json({
+        symbol: validation.data.symbol,
+        items: news,
+      })
+    } catch (error: any) {
+      console.error('News fetch failed:', error.message)
+      return NextResponse.json({
+        symbol: validation.data.symbol,
+        items: [],
+      })
+    }
   } catch (error: any) {
-    console.error('News API error:', error)
+    console.error('News API error:', error.message)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
-

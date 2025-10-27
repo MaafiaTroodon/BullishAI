@@ -17,10 +17,14 @@ export default function SignIn() {
     setLoading(true)
     setError('')
     
-    // TODO: Integrate with actual auth
-    // For now, just redirect to dashboard
+    // Simulate login
     setTimeout(() => {
       setLoading(false)
+      // Set logged in state
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('isLoggedIn', 'true')
+      }
+      alert('Successfully signed in!')
       router.push('/dashboard')
     }, 1000)
   }
@@ -103,4 +107,3 @@ export default function SignIn() {
     </div>
   )
 }
-

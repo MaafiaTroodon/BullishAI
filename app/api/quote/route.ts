@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getQuote as getFinnhubQuote } from '@/lib/finnhub'
-import { getQuote as getTwelveDataQuote } from '@/lib/twelvedata'
+import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
 import { z } from 'zod'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 const quoteSchema = z.object({
   symbol: z.string().min(1).max(10).toUpperCase(),
@@ -28,50 +31,36 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    let data
-    let source = 'finnhub'
-
     try {
-      // Try Finnhub first
-      data = await getFinnhubQuote(validation.data.symbol)
-      if (!data || data.c === 0) {
-        throw new Error('No data')
-      }
+      const data = await getComprehensiveQuote(validation.data.symbol)
+      return NextResponse.json({
+        symbol: validation.data.symbol,
+        price: data.price,
+        change: data.change,
+        changePercent: data.changePct,
+        high: data.high,
+        low: data.low,
+        open: data.open,
+        previousClose: data.previousClose,
+        volume: data.volume,
+        marketCap: data.marketCap,
+        peRatio: data.peRatio,
+        week52High: data.week52High,
+        week52Low: data.week52Low,
+        source: data.source,
+      })
     } catch (error: any) {
-      // Fallback to Twelve Data
-      if (error.message === 'RATE_LIMIT' || error.message === 'No data') {
-        try {
-          data = await getTwelveDataQuote(validation.data.symbol)
-          source = 'twelvedata'
-        } catch (fallbackError) {
-          return NextResponse.json(
-            { error: 'Failed to fetch quote from all sources' },
-            { status: 500 }
-          )
-        }
-      } else {
-        throw error
-      }
+      console.error('Quote fetch failed:', error.message)
+      return NextResponse.json(
+        { error: 'Failed to fetch quote', symbol: validation.data.symbol },
+        { status: 502 }
+      )
     }
-
-    return NextResponse.json({
-      symbol: validation.data.symbol,
-      price: data.c,
-      change: data.d,
-      changePercent: data.dp,
-      high: data.h,
-      low: data.l,
-      open: data.o,
-      previousClose: data.pc,
-      timestamp: data.t,
-      source,
-    })
   } catch (error: any) {
-    console.error('Quote API error:', error)
+    console.error('Quote API error:', error.message)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
-
