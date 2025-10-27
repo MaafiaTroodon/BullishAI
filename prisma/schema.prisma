@@ -1,0 +1,66 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  watchlists Watchlist[]
+  alerts     Alert[]
+  
+  @@map("users")
+}
+
+model Watchlist {
+  id        String         @id @default(cuid())
+  name      String
+  userId    String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WatchlistItem[]
+  
+  @@map("watchlists")
+}
+
+model WatchlistItem {
+  id          String    @id @default(cuid())
+  symbol      String
+  watchlistId String
+  createdAt   DateTime  @default(now())
+  
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  
+  @@unique([watchlistId, symbol])
+  @@map("watchlist_items")
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  userId    String
+  symbol    String
+  type      String   // "above" | "below" | "pct_move"
+  value     Float
+  active    Boolean  @default(true)
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("alerts")
+}
+
