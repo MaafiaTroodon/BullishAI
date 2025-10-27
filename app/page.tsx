@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap, Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 import { StockChart } from '@/components/charts/StockChart'
-import { AIChat } from '@/components/AIChat'
+import { InlineAIChat } from '@/components/InlineAIChat'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -232,7 +232,7 @@ export default function Home() {
 
       {/* AI Chat Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <AIChat />
+        <InlineAIChat isLoggedIn={isLoggedIn} />
       </section>
 
       {/* Live Market Preview */}
@@ -398,15 +398,4 @@ export default function Home() {
       </footer>
     </div>
   )
-}
-
-// Declare global types for Botpress
-declare global {
-  interface Window {
-    botpressWebChat?: {
-      init: (config: any) => void
-      onEvent: (callback: (event: any) => void) => void
-      sendEvent: (event: any) => void
-    }
-  }
 }
