@@ -39,7 +39,7 @@ export async function GET(
     }
 
     // Fetch news
-    let news = []
+    let news: any[] = []
     try {
       const newsData = await getMultiSourceNews(symbol)
       news = newsData.slice(0, 10) // Limit to 10 items
