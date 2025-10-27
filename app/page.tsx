@@ -241,10 +241,21 @@ export default function Home() {
               e.preventDefault()
               if (!isLoggedIn) {
                 alert('Please sign in to use AI chat')
+                window.location.href = '/auth/signin'
                 return
               }
-              // TODO: Implement chatbot functionality
-              alert('AI chat coming soon!')
+              
+              // Open Botpress chat
+              if (typeof window !== 'undefined' && window.botpressWebChat) {
+                try {
+                  window.botpressWebChat.sendEvent({ type: 'show' })
+                } catch (error) {
+                  console.error('Error opening Botpress:', error)
+                }
+              } else {
+                // If Botpress not loaded yet, initialize it
+                console.log('Botpress not initialized yet')
+              }
             }}
           >
             <div className="flex-1 relative">
@@ -254,9 +265,17 @@ export default function Home() {
                 onClick={() => {
                   if (!isLoggedIn) {
                     alert('Please sign in to use AI chat')
+                    window.location.href = '/auth/signin'
+                  } else if (typeof window !== 'undefined' && window.botpressWebChat) {
+                    // Open chat when input is clicked if logged in
+                    try {
+                      window.botpressWebChat.sendEvent({ type: 'show' })
+                    } catch (error) {
+                      console.error('Error opening Botpress:', error)
+                    }
                   }
                 }}
-                placeholder={isLoggedIn ? "Ask anything..." : "Sign in to use AI chat"}
+                placeholder={isLoggedIn ? "Ask anything about stocks..." : "Sign in to use AI chat"}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
               />
             </div>
@@ -441,4 +460,15 @@ export default function Home() {
       <BotpressLauncher />
     </div>
   )
+}
+
+// Declare global types for Botpress
+declare global {
+  interface Window {
+    botpressWebChat?: {
+      init: (config: any) => void
+      onEvent: (callback: (event: any) => void) => void
+      sendEvent: (event: any) => void
+    }
+  }
 }
