@@ -26,6 +26,33 @@ export default function Home() {
     }
   }, [])
 
+  // Function to safely open Botpress chat
+  const openBotpressChat = async () => {
+    if (typeof window === 'undefined' || !window.botpressWebChat) {
+      console.log('Botpress not loaded yet')
+      return
+    }
+
+    try {
+      // Check if Botpress is ready by trying to open it
+      // The actual API might be different - let's use a safer approach
+      if (window.botpressWebChat && typeof window.botpressWebChat.sendEvent === 'function') {
+        window.botpressWebChat.sendEvent({ type: 'show' })
+      } else {
+        // Fallback: try to access the iframe directly
+        const botpressDiv = document.querySelector('#botpress-webchat-container')
+        if (botpressDiv) {
+          botpressDiv.style.display = 'block'
+          botpressDiv.style.zIndex = '9999'
+        }
+      }
+    } catch (error) {
+      console.error('Error opening Botpress:', error)
+      // Try alternative approach
+      alert('Chat is loading. Please click the chat button in the bottom right corner.')
+    }
+  }
+
   // Handle search with suggestions
   const handleSearchChange = async (value: string) => {
     setSearchQuery(value)
@@ -246,16 +273,7 @@ export default function Home() {
               }
               
               // Open Botpress chat
-              if (typeof window !== 'undefined' && window.botpressWebChat) {
-                try {
-                  window.botpressWebChat.sendEvent({ type: 'show' })
-                } catch (error) {
-                  console.error('Error opening Botpress:', error)
-                }
-              } else {
-                // If Botpress not loaded yet, initialize it
-                console.log('Botpress not initialized yet')
-              }
+              openBotpressChat()
             }}
           >
             <div className="flex-1 relative">
@@ -266,13 +284,9 @@ export default function Home() {
                   if (!isLoggedIn) {
                     alert('Please sign in to use AI chat')
                     window.location.href = '/auth/signin'
-                  } else if (typeof window !== 'undefined' && window.botpressWebChat) {
+                  } else {
                     // Open chat when input is clicked if logged in
-                    try {
-                      window.botpressWebChat.sendEvent({ type: 'show' })
-                    } catch (error) {
-                      console.error('Error opening Botpress:', error)
-                    }
+                    openBotpressChat()
                   }
                 }}
                 placeholder={isLoggedIn ? "Ask anything about stocks..." : "Sign in to use AI chat"}

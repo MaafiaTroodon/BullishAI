@@ -81,7 +81,7 @@ export function BotpressLauncher({ className }: BotpressLauncherProps) {
     }
   }, [isLoggedIn, isInitialized])
 
-  const handleClick = () => {
+  const handleClick = async () => {
     if (!isLoggedIn) {
       // Show sign-in prompt and redirect
       alert('Please sign in to use AI chat')
@@ -89,19 +89,27 @@ export function BotpressLauncher({ className }: BotpressLauncherProps) {
       return
     }
 
-    if (isInitialized && window.botpressWebChat) {
-      try {
+    if (typeof window === 'undefined' || !window.botpressWebChat) {
+      console.log('Botpress not loaded yet')
+      return
+    }
+
+    try {
+      // Try the sendEvent API first
+      if (window.botpressWebChat && typeof window.botpressWebChat.sendEvent === 'function') {
         window.botpressWebChat.sendEvent({ type: 'show' })
-      } catch (error) {
-        console.error('Error opening Botpress:', error)
+      } else {
+        // Fallback: try to access the iframe directly
+        const botpressDiv = document.querySelector('#botpress-webchat-container')
+        if (botpressDiv) {
+          botpressDiv.style.display = 'block'
+          botpressDiv.style.zIndex = '9999'
+        }
       }
-    } else if (isLoggedIn && !isInitialized) {
-      // Try to initialize now
-      const clientId = process.env.NEXT_PUBLIC_BOTPRESS_CLIENT_ID
-      if (clientId) {
-        // Force re-initialization
-        location.reload()
-      }
+    } catch (error) {
+      console.error('Error opening Botpress:', error)
+      // Try alternative approach
+      alert('Chat is loading. Please wait a moment and try again.')
     }
   }
 
