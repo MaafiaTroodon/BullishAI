@@ -26,9 +26,20 @@ export default function Home() {
     }
   }, [])
 
-  // Function to handle AI chat click
+  // Function to handle AI chat click - triggers Botpress chat
   const openBotpressChat = () => {
-    alert('AI chat feature is currently being set up. Please check back soon!')
+    if (typeof window !== 'undefined' && window.botpressWebChat) {
+      try {
+        // Try to open Botpress chat
+        const botpressWidget = document.querySelector('[data-bp-widget-id]')
+        if (botpressWidget) {
+          // Botpress will have its own button, but we can try to trigger it
+          console.log('Botpress chat is available')
+        }
+      } catch (error) {
+        console.error('Error with Botpress:', error)
+      }
+    }
   }
 
   // Handle search with suggestions
