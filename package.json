@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
-    "inngest": "npx inngest-cli dev"
+    "inngest": "npx inngest-cli dev",
+    "test:api": "node scripts/smoke.js"
   },
   "engines": {
     "node": ">=20"

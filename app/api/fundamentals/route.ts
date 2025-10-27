@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normalizeToSymbol, coerceTicker } from '@/lib/market/symbols'
-import { fetchQuote } from '@/lib/market/providers'
-import { quoteCache } from '@/lib/cache/lru'
+import { normalizeToSymbol } from '@/lib/market/symbols'
+import { fetchFundamentals } from '@/lib/market/providers'
+import { fundamentalsCache } from '@/lib/cache/lru'
 import { setCORSHeaders } from '@/lib/http/cors'
 import { z } from 'zod'
 
@@ -13,12 +13,10 @@ const schema = z.object({
 })
 
 export async function GET(request: NextRequest) {
-  const startTime = Date.now()
-  
   try {
     const { searchParams } = new URL(request.url)
     const tickerParam = searchParams.get('ticker') || searchParams.get('symbol')
-    
+
     const parseResult = schema.safeParse({ ticker: tickerParam })
     if (!parseResult.success || !tickerParam) {
       return setCORSHeaders(NextResponse.json(
@@ -37,27 +35,26 @@ export async function GET(request: NextRequest) {
     }
 
     // Check cache
-    const cacheKey = `quote:${symbol}`
-    const cached = quoteCache.get(cacheKey)
+    const cacheKey = `fundamentals:${symbol}`
+    const cached = fundamentalsCache.get(cacheKey)
     if (cached) {
       return setCORSHeaders(NextResponse.json({ ok: true, data: cached }))
     }
 
-    // Fetch quote
-    const quote = await fetchQuote(symbol)
-    
+    // Fetch fundamentals
+    const fundamentals = await fetchFundamentals(symbol)
+
     // Cache it
-    quoteCache.set(cacheKey, quote)
+    fundamentalsCache.set(cacheKey, fundamentals)
 
-    const latency = Date.now() - startTime
-    console.log(`Quote fetched for ${symbol} in ${latency}ms from ${quote.source}`)
+    console.log(`Fundamentals fetched for ${symbol} from ${fundamentals.source}`)
 
-    return setCORSHeaders(NextResponse.json({ ok: true, data: quote }))
+    return setCORSHeaders(NextResponse.json({ ok: true, data: fundamentals }))
   } catch (error: any) {
-    console.error('Quote API error:', error)
+    console.error('Fundamentals API error:', error)
     return setCORSHeaders(NextResponse.json(
-      { ok: false, error: error.message || 'Failed to fetch quote' },
-      { status: 200 } // Return 200 so Botpress doesn't treat it as an error
+      { ok: false, error: error.message || 'Failed to fetch fundamentals' },
+      { status: 200 }
     ))
   }
 }
@@ -65,3 +62,4 @@ export async function GET(request: NextRequest) {
 export async function OPTIONS() {
   return setCORSHeaders(new NextResponse(null, { status: 204 }))
 }
+
