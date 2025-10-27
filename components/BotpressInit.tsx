@@ -28,28 +28,30 @@ export function BotpressInit() {
     const clientId = "b1524900-7e8c-4649-8460-196542907801"
     
     // Check if script already loaded
-    if (document.querySelector('script[src*="botpress.cloud"]')) {
+    if (document.querySelector('script[src*="botpress.cloud"]') || (window as any).botpressWebChat) {
       return
     }
 
-    // Load Botpress embed script
+    // Load Botpress inject script
     const script = document.createElement('script')
-    script.src = `https://cdn.botpress.cloud/webchat/shareable.js`
-    script.type = 'module'
+    script.src = `https://cdn.botpress.cloud/webchat/v1/inject.js`
+    script.async = true
     
     script.onload = () => {
-      // Initialize Botpress inline script after the module loads
-      const inlineScript = document.createElement('script')
-      inlineScript.type = 'module'
-      inlineScript.textContent = `
-        import { Webchat } from 'https://cdn.botpress.cloud/webchat/shareable.js'
-        Webchat.init({
-          clientId: '${clientId}',
-          composerPlaceholder: 'Ask about stocks...',
-          botName: 'BullishAI'
-        })
-      `
-      document.body.appendChild(inlineScript)
+      // Initialize Botpress after script loads
+      if ((window as any).botpressWebChat) {
+        try {
+          (window as any).botpressWebChat.init({
+            clientId: clientId,
+            composerPlaceholder: 'Ask about stocks...',
+            botName: 'BullishAI',
+            botConversationDescription: 'Stock and market assistant',
+          })
+          console.log('Botpress initialized')
+        } catch (error) {
+          console.error('Error initializing Botpress:', error)
+        }
+      }
     }
 
     document.body.appendChild(script)
