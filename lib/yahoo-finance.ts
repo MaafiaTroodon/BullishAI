@@ -41,7 +41,7 @@ export async function getYahooQuote(symbol: string): Promise<YahooQuote> {
       return 0
     }
     
-    if (response.data?.chart?.result?.[0]?.meta) {
+    if (response && response.data?.chart?.result?.[0]?.meta) {
       const meta = response.data.chart.result[0].meta
       
       // Get latest quote data
