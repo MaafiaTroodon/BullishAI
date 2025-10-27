@@ -21,42 +21,24 @@ export function BotpressInit() {
     }
   }, [])
 
-  useEffect(() => {
-    // Only load Botpress if logged in
-    if (!isLoggedIn || typeof window === 'undefined') return
+  // Only render iframe if logged in
+  if (!isLoggedIn) {
+    return null
+  }
 
-    const clientId = "b1524900-7e8c-4649-8460-196542907801"
-    
-    // Check if script already loaded
-    if (document.querySelector('script[src*="botpress.cloud"]') || (window as any).botpressWebChat) {
-      return
-    }
-
-    // Load Botpress inject script
-    const script = document.createElement('script')
-    script.src = `https://cdn.botpress.cloud/webchat/v1/inject.js`
-    script.async = true
-    
-    script.onload = () => {
-      // Initialize Botpress after script loads
-      if ((window as any).botpressWebChat) {
-        try {
-          (window as any).botpressWebChat.init({
-            clientId: clientId,
-            composerPlaceholder: 'Ask about stocks...',
-            botName: 'BullishAI',
-            botConversationDescription: 'Stock and market assistant',
-          })
-          console.log('Botpress initialized')
-        } catch (error) {
-          console.error('Error initializing Botpress:', error)
-        }
-      }
-    }
-
-    document.body.appendChild(script)
-  }, [isLoggedIn])
-
-  return null
+  return (
+    <iframe
+      src="https://cdn.botpress.cloud/webchat/v3.3/shareable.html?configUrl=https://files.bpcontent.cloud/2025/10/27/21/20251027211735-6LQXMGEJ.json"
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        width: '400px',
+        height: '600px',
+        border: 'none',
+        zIndex: 9999,
+      }}
+    />
+  )
 }
 
