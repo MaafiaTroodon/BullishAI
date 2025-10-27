@@ -12,12 +12,14 @@ interface NewsArticle {
 }
 
 interface NewsFeedProps {
-  news: NewsArticle[]
+  news?: NewsArticle[]
+  initialNews?: any[]
   symbol: string
 }
 
-export function NewsFeed({ news, symbol }: NewsFeedProps) {
-  if (!news || news.length === 0) {
+export function NewsFeed({ news, initialNews, symbol }: NewsFeedProps) {
+  const displayNews = news || initialNews || []
+  if (!displayNews || displayNews.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <h3 className="text-xl font-semibold text-white mb-4">Latest News for {symbol}</h3>
@@ -30,7 +32,7 @@ export function NewsFeed({ news, symbol }: NewsFeedProps) {
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
       <h3 className="text-xl font-semibold text-white mb-4">Latest News for {symbol}</h3>
       <div className="space-y-4">
-        {news.map((article, index) => (
+        {displayNews.map((article, index) => (
           <a
             key={index}
             href={article.url}
