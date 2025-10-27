@@ -30,6 +30,15 @@ interface NewsItem {
   summary?: string
 }
 
+export interface CandleData {
+  timestamp: number
+  close: number
+  high?: number
+  low?: number
+  open?: number
+  volume?: number
+}
+
 async function fetchJSON(url: string, timeoutMs = 2000): Promise<any> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
