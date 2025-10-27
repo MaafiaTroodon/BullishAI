@@ -9,10 +9,11 @@ export const revalidate = 10
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { symbol: string } }
+  { params }: { params: Promise<{ symbol: string }> }
 ) {
   try {
-    const symbol = params.symbol.toUpperCase()
+    const { symbol: symbolParam } = await params
+    const symbol = symbolParam.toUpperCase()
     const { searchParams } = new URL(request.url)
     const range = (searchParams.get('range') || '1D').toUpperCase() as any
 
