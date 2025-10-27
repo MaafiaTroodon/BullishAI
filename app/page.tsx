@@ -28,28 +28,39 @@ export default function Home() {
 
   // Function to safely open Botpress chat
   const openBotpressChat = async () => {
-    if (typeof window === 'undefined' || !window.botpressWebChat) {
-      console.log('Botpress not loaded yet')
-      return
-    }
-
     try {
-      // Check if Botpress is ready by trying to open it
-      // The actual API might be different - let's use a safer approach
-      if (window.botpressWebChat && typeof window.botpressWebChat.sendEvent === 'function') {
-        window.botpressWebChat.sendEvent({ type: 'show' })
-      } else {
-        // Fallback: try to access the iframe directly
-        const botpressDiv = document.querySelector('#botpress-webchat-container')
-        if (botpressDiv) {
-          botpressDiv.style.display = 'block'
-          botpressDiv.style.zIndex = '9999'
+      // Try multiple approaches to open Botpress chat
+      
+      // Approach 1: Click the FAB button programmatically
+      const fabButton = document.querySelector('[id*="bp-widget"] button, [class*="bp-widget"] button')
+      if (fabButton) {
+        (fabButton as HTMLElement).click()
+        return
+      }
+      
+      // Approach 2: Try to find and trigger the webchat
+      const webchatContainer = document.querySelector('[class*="bp-webchat"], [id*="bp-webchat"]')
+      if (webchatContainer) {
+        (webchatContainer as HTMLElement).style.display = 'block'
+        ;(webchatContainer as HTMLElement).style.zIndex = '9999'
+        return
+      }
+      
+      // Approach 3: Use the Botpress API if available and fully initialized
+      if (window.botpressWebChat && window.botpressWebChat.sendEvent) {
+        // Check if the method is actually callable
+        const hasIframe = 'iframeWindow' in window.botpressWebChat
+        if (hasIframe) {
+          window.botpressWebChat.sendEvent({ type: 'show' })
+          return
         }
       }
+      
+      // Approach 4: Fallback message
+      console.log('Botpress chat is still loading. Please use the chat button in the bottom right corner.')
+      
     } catch (error) {
       console.error('Error opening Botpress:', error)
-      // Try alternative approach
-      alert('Chat is loading. Please click the chat button in the bottom right corner.')
     }
   }
 
