@@ -1,19 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Webchat, WebchatProvider, Fab, getClient, Configuration } from '@botpress/webchat'
-
-const clientId = process.env.NEXT_PUBLIC_BOTPRESS_CLIENT_ID || "b1524900-7e8c-4649-8460-196542907801"
-
-const configuration: Configuration = {
-  composerPlaceholder: 'Ask about stocks...',
-  botName: 'BullishAI',
-  botConversationDescription: 'Stock and market assistant',
-  color: '#4F46E5',
-}
+import { useEffect, useState } from 'react'
 
 export function BotpressInit() {
-  const [isWebchatOpen, setIsWebchatOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
@@ -24,8 +13,6 @@ export function BotpressInit() {
       }
       
       checkLogin()
-      
-      // Listen for storage changes
       window.addEventListener('storage', checkLogin)
       
       return () => {
@@ -34,39 +21,40 @@ export function BotpressInit() {
     }
   }, [])
 
-  const toggleWebchat = () => {
-    if (!isLoggedIn) {
-      alert('Please sign in to use AI chat')
+  useEffect(() => {
+    // Only load Botpress if logged in
+    if (!isLoggedIn || typeof window === 'undefined') return
+
+    const clientId = "b1524900-7e8c-4649-8460-196542907801"
+    
+    // Check if script already loaded
+    if (document.querySelector('script[src*="botpress.cloud"]')) {
       return
     }
-    setIsWebchatOpen((prevState) => !prevState)
-  }
 
-  // Don't show anything if not logged in
-  if (!isLoggedIn) {
-    return null
-  }
+    // Load Botpress embed script
+    const script = document.createElement('script')
+    script.src = `https://cdn.botpress.cloud/webchat/shareable.js`
+    script.type = 'module'
+    
+    script.onload = () => {
+      // Initialize Botpress inline script after the module loads
+      const inlineScript = document.createElement('script')
+      inlineScript.type = 'module'
+      inlineScript.textContent = `
+        import { Webchat } from 'https://cdn.botpress.cloud/webchat/shareable.js'
+        Webchat.init({
+          clientId: '${clientId}',
+          composerPlaceholder: 'Ask about stocks...',
+          botName: 'BullishAI'
+        })
+      `
+      document.body.appendChild(inlineScript)
+    }
 
-  const client = getClient({ clientId })
+    document.body.appendChild(script)
+  }, [isLoggedIn])
 
-  return (
-    <WebchatProvider client={client} configuration={configuration}>
-      <Fab onClick={toggleWebchat} />
-      {isWebchatOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '90px',
-            right: '20px',
-            width: '400px',
-            height: '600px',
-            zIndex: 9999,
-          }}
-        >
-          <Webchat />
-        </div>
-      )}
-    </WebchatProvider>
-  )
+  return null
 }
 

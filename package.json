@@ -16,7 +16,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@botpress/webchat": "^3.2.11",
     "@prisma/client": "5.19.0",
     "axios": "^1.7.0",
     "clsx": "^2.1.0",
