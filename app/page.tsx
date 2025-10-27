@@ -26,42 +26,9 @@ export default function Home() {
     }
   }, [])
 
-  // Function to safely open Botpress chat
-  const openBotpressChat = async () => {
-    try {
-      // Try multiple approaches to open Botpress chat
-      
-      // Approach 1: Click the FAB button programmatically
-      const fabButton = document.querySelector('[id*="bp-widget"] button, [class*="bp-widget"] button')
-      if (fabButton) {
-        (fabButton as HTMLElement).click()
-        return
-      }
-      
-      // Approach 2: Try to find and trigger the webchat
-      const webchatContainer = document.querySelector('[class*="bp-webchat"], [id*="bp-webchat"]')
-      if (webchatContainer) {
-        (webchatContainer as HTMLElement).style.display = 'block'
-        ;(webchatContainer as HTMLElement).style.zIndex = '9999'
-        return
-      }
-      
-      // Approach 3: Use the Botpress API if available and fully initialized
-      if (window.botpressWebChat && window.botpressWebChat.sendEvent) {
-        // Check if the method is actually callable
-        const hasIframe = 'iframeWindow' in window.botpressWebChat
-        if (hasIframe) {
-          window.botpressWebChat.sendEvent({ type: 'show' })
-          return
-        }
-      }
-      
-      // Approach 4: Fallback message
-      console.log('Botpress chat is still loading. Please use the chat button in the bottom right corner.')
-      
-    } catch (error) {
-      console.error('Error opening Botpress:', error)
-    }
+  // Function to handle AI chat click
+  const openBotpressChat = () => {
+    alert('AI chat feature is currently being set up. Please check back soon!')
   }
 
   // Handle search with suggestions

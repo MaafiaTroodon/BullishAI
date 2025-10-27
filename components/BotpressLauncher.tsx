@@ -10,7 +10,6 @@ interface BotpressLauncherProps {
 
 export function BotpressLauncher({ className }: BotpressLauncherProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -30,58 +29,7 @@ export function BotpressLauncher({ className }: BotpressLauncherProps) {
     }
   }, [])
 
-  useEffect(() => {
-    // Initialize Botpress when user logs in
-    if (isLoggedIn && typeof window !== 'undefined' && !isInitialized) {
-      const clientId = process.env.NEXT_PUBLIC_BOTPRESS_CLIENT_ID
-      
-      if (clientId && !window.botpressWebChat) {
-        console.log('Loading Botpress Webchat script...')
-        
-        // Load the Botpress script
-        const script = document.createElement('script')
-        script.src = 'https://cdn.botpress.cloud/webchat/v1/inject.js'
-        script.async = true
-        
-        script.onload = () => {
-          console.log('Botpress script loaded, initializing...')
-          
-          if (window.botpressWebChat && clientId) {
-            try {
-              window.botpressWebChat.init({
-                clientId: clientId,
-                composerPlaceholder: 'Ask about stocks...',
-                botConversationDescription: 'Stock and market assistant',
-                botName: 'BullishAI',
-                companyName: 'BullishAI',
-                website: 'https://bullish-ai.com',
-                useSessionStorage: true,
-                enablePersistHistory: true,
-                enableTranscriptDownload: false,
-                showPoweredBy: false,
-              })
-              
-              window.botpressWebChat.onEvent((event: any) => {
-                if (event.type === 'show') {
-                  console.log('Botpress opened')
-                }
-              })
-              
-              setIsInitialized(true)
-            } catch (error) {
-              console.error('Error initializing Botpress:', error)
-            }
-          }
-        }
-        
-        document.body.appendChild(script)
-      } else if (clientId && window.botpressWebChat) {
-        setIsInitialized(true)
-      }
-    }
-  }, [isLoggedIn, isInitialized])
-
-  const handleClick = async () => {
+  const handleClick = () => {
     if (!isLoggedIn) {
       // Show sign-in prompt and redirect
       alert('Please sign in to use AI chat')
@@ -89,40 +37,8 @@ export function BotpressLauncher({ className }: BotpressLauncherProps) {
       return
     }
 
-    try {
-      // Try multiple approaches to open Botpress chat
-      
-      // Approach 1: Click the FAB button programmatically
-      const fabButton = document.querySelector('[id*="bp-widget"] button, [class*="bp-widget"] button')
-      if (fabButton) {
-        (fabButton as HTMLElement).click()
-        return
-      }
-      
-      // Approach 2: Try to find and trigger the webchat
-      const webchatContainer = document.querySelector('[class*="bp-webchat"], [id*="bp-webchat"]')
-      if (webchatContainer) {
-        (webchatContainer as HTMLElement).style.display = 'block'
-        ;(webchatContainer as HTMLElement).style.zIndex = '9999'
-        return
-      }
-      
-      // Approach 3: Use the Botpress API if available and fully initialized
-      if (window.botpressWebChat && window.botpressWebChat.sendEvent) {
-        // Check if the method is actually callable by checking for required properties
-        const hasIframe = 'iframeWindow' in window.botpressWebChat
-        if (hasIframe) {
-          window.botpressWebChat.sendEvent({ type: 'show' })
-          return
-        }
-      }
-      
-      // Approach 4: Fallback - just scroll to make the button visible
-      console.log('Botpress chat is loading. The floating chat button should appear in the bottom right corner.')
-      
-    } catch (error) {
-      console.error('Error opening Botpress:', error)
-    }
+    // For now, show a message that AI chat is being set up
+    alert('AI chat is currently being set up. Please check back soon or contact support.')
   }
 
   return (
