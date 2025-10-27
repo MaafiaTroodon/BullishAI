@@ -8,6 +8,7 @@ import useSWR from 'swr'
 import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { DevStatus } from '@/components/DevStatus'
+import { BotpressLauncher } from '@/components/BotpressLauncher'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX']
@@ -407,6 +408,9 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Botpress Launcher */}
+      <BotpressLauncher />
     </div>
   )
 }

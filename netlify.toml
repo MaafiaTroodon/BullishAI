@@ -7,6 +7,11 @@
   to = "/index.html"
   status = 200
 
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.botpress.cloud https://*.botpress.cloud; connect-src 'self' https://*.botpress.cloud https://cdn.botpress.cloud; img-src 'self' data: blob: https://*.botpress.cloud; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src https://*.botpress.cloud;"
+
 [build.environment]
   NODE_VERSION = "20"
 

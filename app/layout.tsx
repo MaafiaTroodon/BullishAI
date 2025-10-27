@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -16,7 +17,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        {children}
+        {/* Botpress Webchat Script */}
+        <Script
+          src="https://cdn.botpress.cloud/webchat/v1/inject.js"
+          strategy="afterInteractive"
+        />
+      </body>
     </html>
   );
 }

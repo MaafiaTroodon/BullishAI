@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap, Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 import { StockChart } from '@/components/charts/StockChart'
+import { BotpressLauncher } from '@/components/BotpressLauncher'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -435,6 +436,9 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* Botpress Launcher */}
+      <BotpressLauncher />
     </div>
   )
 }
