@@ -3,13 +3,14 @@ import { db } from '@/lib/db'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; itemId: string } }
+  { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
+    const { itemId } = await params
     const body = await request.json()
 
     const item = await db.watchlistItem.update({
-      where: { id: params.itemId },
+      where: { id: itemId },
       data: body,
     })
 
@@ -25,11 +26,13 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; itemId: string } }
+  { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
+    const { itemId } = await params
+    
     await db.watchlistItem.delete({
-      where: { id: params.itemId },
+      where: { id: itemId },
     })
 
     return NextResponse.json({ success: true })

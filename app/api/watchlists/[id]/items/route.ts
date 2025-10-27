@@ -10,11 +10,12 @@ const addItemSchema = z.object({
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const items = await db.watchlistItem.findMany({
-      where: { watchlistId: params.id },
+      where: { watchlistId: id },
       orderBy: { createdAt: 'asc' },
     })
 
@@ -30,9 +31,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const validation = addItemSchema.safeParse(body)
 
@@ -46,7 +48,7 @@ export async function POST(
     // Check if item already exists
     const existing = await db.watchlistItem.findFirst({
       where: {
-        watchlistId: params.id,
+        watchlistId: id,
         symbol: validation.data.symbol,
       },
     })
@@ -61,7 +63,7 @@ export async function POST(
     const item = await db.watchlistItem.create({
       data: {
         symbol: validation.data.symbol,
-        watchlistId: params.id,
+        watchlistId: id,
       },
     })
 
