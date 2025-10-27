@@ -196,12 +196,14 @@ export default function Home() {
             >
               Launch Dashboard →
             </Link>
-            <Link
-              href="/auth/signup"
-              className="inline-block bg-slate-800 border border-slate-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-slate-700 transition"
-            >
-              Get Started Free
-            </Link>
+            {!isLoggedIn && (
+              <Link
+                href="/auth/signup"
+                className="inline-block bg-slate-800 border border-slate-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-slate-700 transition"
+              >
+                Get Started Free
+              </Link>
+            )}
           </div>
           
           {/* Trust Indicators */}
@@ -226,10 +228,55 @@ export default function Home() {
         </div>
       </section>
 
+      {/* AI Chat Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-8 border border-slate-700">
+          <div className="mb-4">
+            <span className="text-sm font-semibold text-blue-400 uppercase tracking-wider">AI-Powered</span>
+          </div>
+          <form 
+            className="flex gap-3 items-center"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!isLoggedIn) {
+                alert('Please sign in to use AI chat')
+                return
+              }
+              // TODO: Implement chatbot functionality
+              alert('AI chat coming soon!')
+            }}
+          >
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                readOnly={!isLoggedIn}
+                onClick={() => {
+                  if (!isLoggedIn) {
+                    alert('Please sign in to use AI chat')
+                  }
+                }}
+                placeholder={isLoggedIn ? "Ask anything..." : "Sign in to use AI chat"}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!isLoggedIn}
+              className={`px-8 py-4 rounded-lg font-semibold transition ${
+                isLoggedIn 
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              Ask AI →
+            </button>
+          </form>
+        </div>
+      </section>
+
       {/* Live Market Preview */}
-      {!isLoggedIn && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
           
           {/* Top Stocks */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -275,7 +322,6 @@ export default function Home() {
             )}
           </div>
         </section>
-      )}
 
       {/* Features */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
