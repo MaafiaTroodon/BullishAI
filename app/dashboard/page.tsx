@@ -211,7 +211,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Price Card */}
         {isLoadingQuote ? (
           <div className="bg-slate-800 rounded-lg p-8 border border-slate-700 animate-pulse">

@@ -85,7 +85,7 @@ export function StockChart({ data, symbol, range = '1d', source }: StockChartPro
           </div>
         )}
       </div>
-      <ResponsiveContainer width="100%" height={400}>
+      <ResponsiveContainer width="100%" height={500}>
         <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 40 }}>
           <defs>
             <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">

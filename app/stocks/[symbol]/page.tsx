@@ -60,7 +60,7 @@ export default function StockPage() {
       
       {/* Header Stats */}
       <div className="bg-slate-800 border-b border-slate-700 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">{quote.symbol}</h1>
@@ -93,48 +93,48 @@ export default function StockPage() {
           </div>
 
           {/* Full Stock Info Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6 text-sm">
-            <div>
-              <div className="text-slate-400 mb-1">Open</div>
-              <div className="text-white font-semibold">${quote.open?.toFixed(2) || 'N/A'}</div>
+          <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-6 mt-8 text-base">
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">Open</div>
+              <div className="text-white font-semibold text-lg">{quote.open?.toFixed(2) ? `$${quote.open?.toFixed(2)}` : 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">High</div>
-              <div className="text-white font-semibold">${quote.high?.toFixed(2) || 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">High</div>
+              <div className="text-white font-semibold text-lg">{quote.high?.toFixed(2) ? `$${quote.high?.toFixed(2)}` : 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">Low</div>
-              <div className="text-white font-semibold">${quote.low?.toFixed(2) || 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">Low</div>
+              <div className="text-white font-semibold text-lg">{quote.low?.toFixed(2) ? `$${quote.low?.toFixed(2)}` : 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">Prev Close</div>
-              <div className="text-white font-semibold">${quote.previousClose?.toFixed(2) || 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">Prev Close</div>
+              <div className="text-white font-semibold text-lg">{quote.previousClose?.toFixed(2) ? `$${quote.previousClose?.toFixed(2)}` : 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">Volume</div>
-              <div className="text-white font-semibold">{quote.volume ? (quote.volume / 1000000).toFixed(1) + 'M' : 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">Volume</div>
+              <div className="text-white font-semibold text-lg">{quote.volume ? (quote.volume / 1000000).toFixed(1) + 'M' : 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">Market Cap</div>
-              <div className="text-white font-semibold">{quote.marketCap ? (quote.marketCap / 1000000000).toFixed(1) + 'B' : 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">Market Cap</div>
+              <div className="text-white font-semibold text-lg">{quote.marketCapShort || (quote.marketCap ? (quote.marketCap / 1000000000).toFixed(1) + 'B' : 'N/A')}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">P/E Ratio</div>
-              <div className="text-white font-semibold">{quote.peRatio?.toFixed(2) || 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">P/E Ratio</div>
+              <div className="text-white font-semibold text-lg">{quote.peRatio?.toFixed(2) || 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">52W High</div>
-              <div className="text-white font-semibold">${quote.week52High?.toFixed(2) || 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">52W High</div>
+              <div className="text-white font-semibold text-lg">{quote.week52High?.toFixed(2) ? `$${quote.week52High?.toFixed(2)}` : 'N/A'}</div>
             </div>
-            <div>
-              <div className="text-slate-400 mb-1">52W Low</div>
-              <div className="text-white font-semibold">${quote.week52Low?.toFixed(2) || 'N/A'}</div>
+            <div className="bg-slate-700/30 rounded-lg p-4">
+              <div className="text-slate-400 mb-2 text-sm">52W Low</div>
+              <div className="text-white font-semibold text-lg">{quote.week52Low?.toFixed(2) ? `$${quote.week52Low?.toFixed(2)}` : 'N/A'}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Chart Range Selector */}
         <div className="flex gap-2 mb-6">
           {['1D', '5D', '1M', '6M', '1Y', '5Y'].map((r) => (
