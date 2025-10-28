@@ -295,11 +295,11 @@ export default function Home() {
             </div>
 
             {/* Top Stories Widget */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-              <div className="p-4 border-b border-slate-700">
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[500px] flex flex-col">
+              <div className="p-4 border-b border-slate-700 flex-shrink-0">
                 <h3 className="text-2xl font-bold text-white">Top Stories</h3>
               </div>
-              <div className="h-[500px]">
+              <div className="flex-1 overflow-y-auto">
                 <TradingViewTopStories 
                   displayMode="compact" 
                   width="100%" 
