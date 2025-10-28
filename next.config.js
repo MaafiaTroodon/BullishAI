@@ -13,7 +13,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://s3.tradingview.com https://www.tradingview.com; frame-src https://s3.tradingview.com https://www.tradingview.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data:; connect-src 'self' https://s3.tradingview.com https://www.tradingview.com;",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://s3.tradingview.com https://www.tradingview.com; frame-src 'self' https://s3.tradingview.com https://www.tradingview.com https://*.tradingview.com; img-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; connect-src 'self' https://s3.tradingview.com https://www.tradingview.com wss://*.tradingview.com;",
           },
         ],
       },

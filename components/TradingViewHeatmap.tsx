@@ -21,36 +21,32 @@ export function TradingViewHeatmap() {
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js'
     script.type = 'text/javascript'
     script.async = true
+    script.innerHTML = `
+      {
+        "dataSource": "SPX500",
+        "blockSize": "market_cap_basic",
+        "blockColor": "change",
+        "grouping": "sector",
+        "locale": "en",
+        "symbolUrl": "",
+        "colorTheme": "dark",
+        "exchanges": [],
+        "hasTopBar": false,
+        "isDataSetEnabled": false,
+        "isZoomEnabled": true,
+        "hasSymbolTooltip": true,
+        "isMonoSize": false,
+        "width": "100%",
+        "height": "600"
+      }`
     
-    script.innerHTML = JSON.stringify({
-      dataSource: 'SPX500',
-      blockSize: 'market_cap_basic',
-      blockColor: 'change',
-      grouping: 'sector',
-      locale: 'en',
-      symbolUrl: '',
-      colorTheme: 'dark',
-      exchanges: [],
-      hasTopBar: false,
-      isDataSetEnabled: false,
-      isZoomEnabled: true,
-      hasSymbolTooltip: true,
-      isMonoSize: false,
-      width: '100%',
-      height: 600
-    })
-    
-    const handleLoad = () => {
-      setIsLoading(false)
-    }
-    
+    const handleLoad = () => setIsLoading(false)
     script.onload = handleLoad
     script.onerror = handleLoad
     setTimeout(() => setIsLoading(false), 2000)
     
     currentContainer.appendChild(script)
 
-    // No cleanup - let React handle unmounting
     return () => {
       setIsLoading(false)
     }
