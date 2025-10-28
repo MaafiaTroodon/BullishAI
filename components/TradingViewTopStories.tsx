@@ -43,6 +43,8 @@ function TradingViewTopStories({
       colorTheme,
       isTransparent,
       locale,
+      width,
+      height,
     }
 
     if (symbol) {
@@ -52,7 +54,7 @@ function TradingViewTopStories({
     script.innerHTML = JSON.stringify(config)
 
     container.current.appendChild(script)
-  }, [displayMode, feedMode, colorTheme, isTransparent, locale, symbol])
+  }, [displayMode, feedMode, colorTheme, isTransparent, locale, symbol, width, height])
 
   return (
     <div className="tradingview-widget-container" ref={container}>
