@@ -239,9 +239,9 @@ export default function WatchlistPage() {
                             )}
                           </td>
                           <td className="text-right p-4 text-xs">
-                            {quote && quote.data.marketCap && quote.data.marketCap > 0 ? (
-                              <span className="text-slate-400">
-                                {(quote.data.marketCap / 1000000000).toFixed(1)}B
+                            {quote && quote.data.marketCapShort ? (
+                              <span className="text-white font-medium" title={`Source: ${quote.data.marketCapSource || 'N/A'}`}>
+                                {quote.data.marketCapShort}
                               </span>
                             ) : (
                               <span className="text-slate-500">--</span>
