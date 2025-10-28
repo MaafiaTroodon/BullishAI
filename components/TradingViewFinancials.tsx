@@ -33,6 +33,14 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     currentContainer.appendChild(script)
 
     return () => {
+      // Cleanup on unmount
+      try {
+        if (currentContainer && currentContainer.firstChild) {
+          currentContainer.removeChild(currentContainer.firstChild)
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
       currentContainer.innerHTML = ''
     }
   }, [symbol, exchange])

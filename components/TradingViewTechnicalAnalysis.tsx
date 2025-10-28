@@ -38,6 +38,13 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
 
     return () => {
       // Cleanup on unmount
+      try {
+        if (currentContainer && currentContainer.firstChild) {
+          currentContainer.removeChild(currentContainer.firstChild)
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
       currentContainer.innerHTML = ''
     }
   }, [symbol, exchange])

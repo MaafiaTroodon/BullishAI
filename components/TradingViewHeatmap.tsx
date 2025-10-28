@@ -50,6 +50,13 @@ export function TradingViewHeatmap() {
     setTimeout(() => setIsLoading(false), 2000) // Fallback timeout
 
     return () => {
+      try {
+        if (currentContainer && currentContainer.firstChild) {
+          currentContainer.removeChild(currentContainer.firstChild)
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
       currentContainer.innerHTML = ''
     }
   }, [])
