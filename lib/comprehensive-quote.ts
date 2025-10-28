@@ -4,7 +4,7 @@ const FINNHUB_KEY = process.env.FINNHUB_API_KEY
 const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY
 const ALPHAVANTAGE_KEY = process.env.ALPHAVANTAGE_API_KEY
 const FMP_KEY = process.env.FINANCIALMODELINGPREP_API_KEY
-const TIINGO_KEY = process.env.TIINGO_API_KEY
+const TIINGO_KEY = process.env.TIINGO_API_KEY || process.env.NEXT_PUBLIC_TIINGO_API_KEY
 
 export interface ComprehensiveQuote {
   price: number
@@ -247,6 +247,42 @@ async function fetchFromFMP(symbol: string): Promise<ComprehensiveQuote | null> 
   }
 }
 
+// Fetch from Tiingo for market cap
+async function fetchMarketCapFromTiingo(symbol: string): Promise<number> {
+  if (!TIINGO_KEY) return 0
+  
+  try {
+    const response = await axios.get(
+      `https://api.tiingo.com/tiingo/daily/${symbol}?token=${TIINGO_KEY}`,
+      { timeout: 3000 }
+    )
+    
+    // Tiingo doesn't directly provide market cap, but we can get shares outstanding
+    if (response.data && response.data[0]) {
+      // Try to get market cap from fundamentals
+      try {
+        const fundResponse = await axios.get(
+          `https://api.tiingo.com/tiingo/fundamentals/${symbol}?token=${TIINGO_KEY}`,
+          { timeout: 3000 }
+        )
+        
+        const shares = fundResponse.data?.[0]?.sharesOutstanding
+        const price = response.data[0]?.adjClose || response.data[0]?.close
+        
+        if (shares && price) {
+          return shares * price
+        }
+      } catch {
+        // Fallback calculation not available
+      }
+    }
+    return 0
+  } catch (error: any) {
+    console.log('Tiingo fetch failed:', error.message)
+    return 0
+  }
+}
+
 // Main function that tries all sources
 export async function getComprehensiveQuote(symbol: string): Promise<ComprehensiveQuote> {
   // Try all sources in parallel
@@ -304,10 +340,15 @@ export async function getComprehensiveQuote(symbol: string): Promise<Comprehensi
     }
   }
   
-  // If we still don't have market cap, try to calculate it
+  // If we still don't have market cap, try to fetch from Tiingo
   if (bestQuote.marketCap === 0) {
-    // For now, return 0 if we can't get it
-    console.log(`Warning: Could not fetch market cap for ${symbol}`)
+    const tiingoMarketCap = await fetchMarketCapFromTiingo(symbol)
+    if (tiingoMarketCap > 0) {
+      bestQuote.marketCap = tiingoMarketCap
+      bestQuote.source += ', Tiingo'
+    } else {
+      console.log(`Warning: Could not fetch market cap for ${symbol}`)
+    }
   }
   
   bestQuote.source = successfulQuotes.map(q => q.source).join(', ')
