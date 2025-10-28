@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap, Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react'
-import { StockChart } from '@/components/charts/StockChart'
 import { InlineAIChat } from '@/components/InlineAIChat'
 import { PopularToday } from '@/components/PopularToday'
 import { TradingViewHeatmap } from '@/components/TradingViewHeatmap'
+import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
+import TradingViewTopStories from '@/components/TradingViewTopStories'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -269,31 +270,39 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Chart */}
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            {topQuotes && (
-              <div className="mb-4">
-                <h3 className="text-2xl font-bold text-white mb-2">{selectedSymbol}</h3>
-                <div className="flex items-center gap-4">
-                  <span className="text-4xl font-bold text-white">
-                    ${topQuotes.price?.toFixed(2) || 'Loading...'}
-                  </span>
-                  <span className={`text-xl font-semibold ${
-                    topQuotes.changePercent >= 0 ? 'text-green-500' : 'text-red-500'
-                  }`}>
-                    {topQuotes.changePercent >= 0 ? '+' : ''}{topQuotes.changePercent?.toFixed(2) || 0}%
-                  </span>
+          {/* Chart and Top Stories Side by Side */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Advanced Chart */}
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+              {topQuotes && (
+                <div className="p-4">
+                  <h3 className="text-2xl font-bold text-white mb-2">{selectedSymbol}</h3>
+                  <div className="flex items-center gap-4">
+                    <span className="text-4xl font-bold text-white">
+                      ${topQuotes.price?.toFixed(2) || 'Loading...'}
+                    </span>
+                    <span className={`text-xl font-semibold ${
+                      topQuotes.changePercent >= 0 ? 'text-green-500' : 'text-red-500'
+                    }`}>
+                      {topQuotes.changePercent >= 0 ? '+' : ''}{topQuotes.changePercent?.toFixed(2) || 0}%
+                    </span>
+                  </div>
                 </div>
+              )}
+              <div className="h-[500px]">
+                <TradingViewAdvancedChart symbol={selectedSymbol} />
               </div>
-            )}
-            
-            {chartData && chartData.data && Array.isArray(chartData.data) ? (
-              <StockChart data={chartData.data} symbol={selectedSymbol} />
-            ) : (
-              <div className="h-[400px] flex items-center justify-center">
-                <p className="text-slate-400">Loading chart...</p>
+            </div>
+
+            {/* Top Stories Widget */}
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+              <div className="p-4 border-b border-slate-700">
+                <h3 className="text-2xl font-bold text-white">Top Stories</h3>
               </div>
-            )}
+              <div className="h-[500px]">
+                <TradingViewTopStories width="100%" height="100%" />
+              </div>
+            </div>
           </div>
         </section>
 
