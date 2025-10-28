@@ -271,7 +271,7 @@ export default function Home() {
           </div>
 
           {/* Chart and Top Stories Side by Side */}
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
             {/* Advanced Chart */}
             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
               {topQuotes && (
@@ -300,7 +300,11 @@ export default function Home() {
                 <h3 className="text-2xl font-bold text-white">Top Stories</h3>
               </div>
               <div className="h-[500px]">
-                <TradingViewTopStories width="100%" height="100%" />
+                <TradingViewTopStories 
+                  displayMode="compact" 
+                  width="100%" 
+                  height="100%" 
+                />
               </div>
             </div>
           </div>
