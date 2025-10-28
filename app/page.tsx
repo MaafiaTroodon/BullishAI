@@ -6,6 +6,7 @@ import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap, Menu, User, Lo
 import { StockChart } from '@/components/charts/StockChart'
 import { InlineAIChat } from '@/components/InlineAIChat'
 import { PopularToday } from '@/components/PopularToday'
+import { TradingViewHeatmap } from '@/components/TradingViewHeatmap'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -234,6 +235,14 @@ export default function Home() {
       {/* AI Chat Section */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <InlineAIChat isLoggedIn={isLoggedIn} />
+      </section>
+
+      {/* Stock Heatmap */}
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h2 className="text-3xl font-bold text-white mb-6 text-center">Market Heatmap</h2>
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+          <TradingViewHeatmap />
+        </div>
       </section>
 
       {/* Popular Today Stocks */}
