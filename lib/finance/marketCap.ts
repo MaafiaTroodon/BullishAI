@@ -78,6 +78,7 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
       const yahooData = yahooResponse.data.quoteSummary.result[0]
       
       // Try marketCap from price module first
+      // Yahoo Finance might return in different units, so we check
       let marketCapRaw = yahooData.price?.marketCap?.raw
       
       // Fallback to summaryDetail
@@ -88,6 +89,14 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
       // Fallback: calculate from shares outstanding
       if (!marketCapRaw && priceUSD && yahooData.summaryDetail?.sharesOutstanding?.raw) {
         marketCapRaw = priceUSD * yahooData.summaryDetail.sharesOutstanding.raw
+      }
+
+      // Sanity check: Yahoo's raw is already in USD
+      // But if value seems unreasonably large (> 100T), it might be in wrong units
+      if (marketCapRaw && marketCapRaw > 1e15) {
+        // Value too large, likely needs to be adjusted
+        // Just skip for now and try fallback
+        marketCapRaw = 0
       }
 
       if (marketCapRaw && marketCapRaw > 0) {
@@ -111,9 +120,8 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
         )
 
         if (finnhubResponse.data?.metric?.marketCapitalization) {
-          // Finnhub returns in billions
-          const marketCapBillions = finnhubResponse.data.metric.marketCapitalization
-          const marketCapRaw = marketCapBillions * 1e9
+          // Finnhub marketCapitalization is in raw USD (already correct)
+          const marketCapRaw = finnhubResponse.data.metric.marketCapitalization
 
           if (marketCapRaw > 0 && (!LARGE_CAPS.has(symbol) || marketCapRaw >= 5e9)) {
             result = {
