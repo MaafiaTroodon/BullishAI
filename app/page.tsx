@@ -68,7 +68,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Navigation */}
       <nav className="border-b border-slate-800 sticky top-0 z-50 bg-slate-900/95 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center">
               <TrendingUp className="h-8 w-8 text-blue-500" />
@@ -182,7 +182,7 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
           <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 bg-gradient-to-r from-blue-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
             AI-Powered Stock Insights
@@ -231,12 +231,12 @@ export default function Home() {
       </section>
 
       {/* AI Chat Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <InlineAIChat isLoggedIn={isLoggedIn} />
       </section>
 
       {/* Live Market Preview */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
           
           {/* Top Stocks */}
@@ -285,7 +285,7 @@ export default function Home() {
         </section>
 
       {/* Features */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold text-white mb-4">Everything You Need</h2>
           <p className="text-xl text-slate-400">Powerful tools for informed trading decisions</p>
@@ -361,7 +361,7 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-12 text-center border border-blue-500/50">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Start Tracking Your Portfolio Today
@@ -389,7 +389,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center text-slate-500">
             <p>Built with Next.js, Prisma, Groq AI, and Inngest</p>
             <p className="mt-2">© 2024 BullishAI. All rights reserved.</p>
