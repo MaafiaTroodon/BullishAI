@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { fetchMarketCapFromGoogle } from '../google-finance'
 
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.NEXT_PUBLIC_FINNHUB_KEY
 const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY || process.env.NEXT_PUBLIC_TWELVEDATA_KEY
@@ -181,6 +182,21 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
       }
     } catch (error) {
       console.log(`Twelve Data market cap failed for ${symbol}`)
+    }
+  }
+
+  // 5. Final fallback: Try Google Finance
+  if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
+    try {
+      const googleMarketCap = await fetchMarketCapFromGoogle(symbol, priceUSD)
+      if (googleMarketCap > 0 && (!LARGE_CAPS.has(symbol) || googleMarketCap >= 5e9)) {
+        result = {
+          raw: googleMarketCap,
+          source: 'google-finance'
+        }
+      }
+    } catch (error) {
+      console.log(`Google Finance market cap failed for ${symbol}`)
     }
   }
 

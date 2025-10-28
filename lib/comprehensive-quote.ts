@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { fetchFromGoogleFinance } from './google-finance'
 
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY
 const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY
@@ -288,6 +289,7 @@ export async function getComprehensiveQuote(symbol: string): Promise<Comprehensi
   // Try all sources in parallel
   const results = await Promise.allSettled([
     fetchFromYahoo(symbol),
+    fetchFromGoogleFinance(symbol),
     fetchFromFinnhub(symbol),
     fetchFromTwelve(symbol),
     fetchFromAlphaVantage(symbol),
