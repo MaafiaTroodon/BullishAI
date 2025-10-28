@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { TrendingUp, Brain, Bell, Search, BarChart3, Shield, Zap, Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 import { StockChart } from '@/components/charts/StockChart'
 import { InlineAIChat } from '@/components/InlineAIChat'
+import { PopularToday } from '@/components/PopularToday'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -234,6 +235,9 @@ export default function Home() {
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <InlineAIChat isLoggedIn={isLoggedIn} />
       </section>
+
+      {/* Popular Today Stocks */}
+      <PopularToday />
 
       {/* Live Market Preview */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">

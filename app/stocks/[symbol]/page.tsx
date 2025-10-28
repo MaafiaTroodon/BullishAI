@@ -6,7 +6,7 @@ import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { GlobalNavbar } from '@/components/GlobalNavbar'
 import { StockAIInsights } from '@/components/StockAIInsights'
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -15,12 +15,41 @@ export default function StockPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const [chartRange, setChartRange] = useState(searchParams.get('range') || '1d')
+  const [watchlistItems, setWatchlistItems] = useState<string[]>([])
+  const [isInWatchlist, setIsInWatchlist] = useState(false)
 
   const symbol = (params?.symbol as string)?.toUpperCase() || 'AAPL'
 
   const { data, isLoading, error } = useSWR(`/api/stocks/${symbol}?range=${chartRange}`, fetcher, {
     refreshInterval: 15000,
   })
+
+  // Load watchlist on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('watchlistItems')
+      if (saved) {
+        const items = JSON.parse(saved)
+        setWatchlistItems(items)
+        setIsInWatchlist(items.includes(symbol))
+      }
+    }
+  }, [symbol])
+
+  // Handle watchlist toggle
+  const handleWatchlistToggle = () => {
+    let newItems = [...watchlistItems]
+    if (isInWatchlist) {
+      newItems = newItems.filter(s => s !== symbol)
+      console.log(`${symbol} removed from watchlist`)
+    } else {
+      newItems.push(symbol)
+      console.log(`${symbol} added to watchlist`)
+    }
+    setWatchlistItems(newItems)
+    setIsInWatchlist(!isInWatchlist)
+    localStorage.setItem('watchlistItems', JSON.stringify(newItems))
+  }
 
   if (error) {
     return (
@@ -63,7 +92,8 @@ export default function StockPage() {
         <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">{quote.symbol}</h1>
+              <h1 className="text-2xl font-bold text-white mb-1">{data.companyName}</h1>
+              <p className="text-lg text-slate-400 mb-2">{quote.symbol}</p>
               {quote.changePct !== undefined && (
                 quote.changePct >= 0 ? (
                   <div className="flex items-center text-green-500">
@@ -89,6 +119,17 @@ export default function StockPage() {
                   Data: {quote.source}
                 </div>
               )}
+              <button
+                onClick={handleWatchlistToggle}
+                className={`mt-4 px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2 ${
+                  isInWatchlist
+                    ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                }`}
+              >
+                <Star className={`h-5 w-5 ${isInWatchlist ? 'fill-current' : ''}`} />
+                {isInWatchlist ? 'Remove from Watchlist' : 'Add to Watchlist'}
+              </button>
             </div>
           </div>
 

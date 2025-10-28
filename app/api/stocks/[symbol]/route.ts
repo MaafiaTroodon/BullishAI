@@ -3,6 +3,7 @@ import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
 import { getCandles } from '@/lib/market-data'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
 import { resolveMarketCapUSD, formatMarketCapShort, formatMarketCapFull } from '@/lib/finance/marketCap'
+import axios from 'axios'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -66,8 +67,27 @@ export async function GET(
       }
     }
 
+    // Try to get company name from quote summary
+    let companyName = null
+    try {
+      const summaryResponse = await axios.get(
+        `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryProfile`,
+        { timeout: 3000 }
+      )
+      
+      if (summaryResponse?.data?.quoteSummary?.result?.[0]?.summaryProfile) {
+        companyName = summaryResponse.data.quoteSummary.result[0].summaryProfile.longName || 
+                      summaryResponse.data.quoteSummary.result[0].summaryProfile.shortName || 
+                      symbol
+      }
+    } catch (error: any) {
+      // If company name fetch fails, use symbol as fallback
+      companyName = symbol
+    }
+
     return NextResponse.json({
       symbol,
+      companyName: companyName || symbol,
       quote: {
         price: quote.price,
         change: quote.change,
