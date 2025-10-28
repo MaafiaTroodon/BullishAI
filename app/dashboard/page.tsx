@@ -8,6 +8,7 @@ import useSWR from 'swr'
 import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { DevStatus } from '@/components/DevStatus'
+import { AIInsights } from '@/components/AIInsights'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX']
@@ -401,10 +402,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-            <h3 className="text-lg font-semibold text-white mb-4">AI Insights</h3>
-            <p className="text-slate-400">AI insights will appear here...</p>
-          </div>
+          <AIInsights watchlistItems={watchlistItems} quotes={batchQuotes} />
         </div>
       </main>
     </div>
