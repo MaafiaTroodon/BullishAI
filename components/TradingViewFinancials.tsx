@@ -16,11 +16,6 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     const currentContainer = container.current
     currentContainer.innerHTML = ''
 
-    // Only initialize once
-    if (currentContainer.querySelector('script')) {
-      return
-    }
-
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-financials.js'
     script.type = 'text/javascript'
@@ -37,8 +32,9 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     
     currentContainer.appendChild(script)
 
-    // No cleanup - let React handle unmounting
-    return () => {}
+    return () => {
+      currentContainer.innerHTML = ''
+    }
   }, [symbol, exchange])
 
   return (
