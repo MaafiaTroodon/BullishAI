@@ -146,8 +146,16 @@ export default function NewsPage() {
 
         {/* Last Update Info */}
         {!isLoading && news.length > 0 && (
-          <div className="mt-8 text-center text-slate-500 text-sm">
-            Last updated: {new Date().toLocaleTimeString()} • Showing top market news
+          <div className="mt-8 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full">
+              <Zap className="h-4 w-4 text-white" />
+              <span className="text-white text-sm font-semibold">
+                AI-Curated News • Powered by Groq Llama-3
+              </span>
+            </div>
+            <div className="mt-4 text-slate-500 text-sm">
+              Last updated: {new Date().toLocaleTimeString()} • Showing {news.length} top market news stories
+            </div>
           </div>
         )}
       </div>
