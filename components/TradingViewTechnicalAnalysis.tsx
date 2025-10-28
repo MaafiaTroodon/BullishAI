@@ -17,6 +17,11 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
     const currentContainer = container.current
     currentContainer.innerHTML = ''
 
+    // Only initialize once
+    if (currentContainer.querySelector('script')) {
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js'
     script.type = 'text/javascript'
@@ -36,17 +41,8 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
     
     currentContainer.appendChild(script)
 
-    return () => {
-      // Cleanup on unmount
-      try {
-        if (currentContainer && currentContainer.firstChild) {
-          currentContainer.removeChild(currentContainer.firstChild)
-        }
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      currentContainer.innerHTML = ''
-    }
+    // No cleanup - let React handle unmounting
+    return () => {}
   }, [symbol, exchange])
 
   return (

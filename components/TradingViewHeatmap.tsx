@@ -10,15 +10,13 @@ export function TradingViewHeatmap() {
     if (!container.current) return
 
     const currentContainer = container.current
-    currentContainer.innerHTML = ''
-    setIsLoading(true)
-
-    // Create wrapper div
-    const wrapper = document.createElement('div')
-    wrapper.className = 'tradingview-widget-container__widget'
-    wrapper.style.height = '600px'
-    wrapper.style.width = '100%'
     
+    // Only initialize once
+    if (currentContainer.querySelector('script')) {
+      setIsLoading(false)
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js'
     script.type = 'text/javascript'
@@ -42,22 +40,19 @@ export function TradingViewHeatmap() {
       height: 600
     })
     
-    wrapper.appendChild(script)
-    currentContainer.appendChild(wrapper)
-
-    const handleLoad = () => setIsLoading(false)
+    const handleLoad = () => {
+      setIsLoading(false)
+    }
+    
     script.onload = handleLoad
-    setTimeout(() => setIsLoading(false), 2000) // Fallback timeout
+    script.onerror = handleLoad
+    setTimeout(() => setIsLoading(false), 2000)
+    
+    currentContainer.appendChild(script)
 
+    // No cleanup - let React handle unmounting
     return () => {
-      try {
-        if (currentContainer && currentContainer.firstChild) {
-          currentContainer.removeChild(currentContainer.firstChild)
-        }
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      currentContainer.innerHTML = ''
+      setIsLoading(false)
     }
   }, [])
 
