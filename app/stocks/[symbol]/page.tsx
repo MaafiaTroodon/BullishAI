@@ -136,7 +136,7 @@ export default function StockPage() {
           </div>
 
           {/* Full Stock Info Grid */}
-          <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-6 mt-8 text-base">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-6 mt-8 text-base">
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">Open</div>
               <div className="text-white font-semibold text-lg">{quote.open?.toFixed(2) ? `$${quote.open?.toFixed(2)}` : 'N/A'}</div>
@@ -156,10 +156,6 @@ export default function StockPage() {
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">Volume</div>
               <div className="text-white font-semibold text-lg">{quote.volume ? (quote.volume / 1000000).toFixed(1) + 'M' : 'N/A'}</div>
-            </div>
-            <div className="bg-slate-700/30 rounded-lg p-4">
-              <div className="text-slate-400 mb-2 text-sm">Market Cap</div>
-              <div className="text-white font-semibold text-lg">{quote.marketCapShort || (quote.marketCap ? (quote.marketCap / 1000000000).toFixed(1) + 'B' : 'N/A')}</div>
             </div>
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">P/E Ratio</div>

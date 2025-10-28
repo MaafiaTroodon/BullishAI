@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Brain, TrendingUp, TrendingDown, AlertCircle, Target, Activity, DollarSign } from 'lucide-react'
+import { Brain, TrendingUp, TrendingDown, AlertCircle, Target, Activity } from 'lucide-react'
 
 interface StockAIInsightsProps {
   symbol: string
@@ -92,17 +92,74 @@ export function StockAIInsights({ symbol, quote, candles, news, changePctOverRan
         }
       }
 
-      // 6. Market cap context
-      if (quote.marketCap) {
-        const marketCapBillions = quote.marketCap / 1000000000
-        if (marketCapBillions > 500) {
-          insightList.push(`🏛️ Mega-cap: $${marketCapBillions.toFixed(0)}B market cap. Stable blue-chip with institutional backing.`)
-        } else if (marketCapBillions < 10) {
-          insightList.push(`🌱 Small-cap exposure: $${marketCapBillions.toFixed(1)}B market cap. Higher volatility potential.`)
+      // 6. Price action context  
+      if (quote.price && quote.previousClose) {
+        const intradayMove = ((quote.price - quote.previousClose) / quote.previousClose) * 100
+        if (Math.abs(intradayMove) > 3) {
+          insightList.push(`⚡ Notable intraday move: ${intradayMove >= 0 ? '+' : ''}${intradayMove.toFixed(1)}%. Significant catalyst or sentiment shift likely.`)
         }
       }
 
-      // Limit to 3-5 insights
+      // 7. Buying/Selling Recommendations
+      if (changePctOverRange !== null && quote.week52High && quote.week52Low) {
+        const rangeFromLow = ((quote.price - quote.week52Low) / (quote.week52High - quote.week52Low)) * 100
+        
+        if (rangeFromLow > 85 && changePctOverRange > 3) {
+          insightList.push(`🎯 Consider taking profits: Trading near 52W high with strong momentum. Watch for reversal signals.`)
+        } else if (rangeFromLow < 25 && changePctOverRange < -5) {
+          insightList.push(`🛒 Potential entry point: Near 52W low with oversold conditions. Monitor for volume confirmation.`)
+        } else if (rangeFromLow > 60 && changePctOverRange > 2) {
+          insightList.push(`📈 Trend continuation likely: Positive momentum in favorable price range. Consider scaling in on pullbacks.`)
+        } else if (rangeFromLow < 40 && changePctOverRange < -2) {
+          insightList.push(`⏳ Wait for confirmation: Oversold but no clear reversal yet. Watch for stabilization signals.`)
+        }
+      }
+
+      // 8. Market Context & Research
+      if (quote.volume && quote.peRatio) {
+        const volM = (quote.volume / 1000000).toFixed(0)
+        if (quote.peRatio > 25 && quote.volume > 50000000) {
+          insightList.push(`🔬 Market research indicates: High P/E with strong volume suggests growth narrative. Monitor earnings to justify premium.`)
+        }
+      }
+
+      // 9. News-driven trading signals
+      if (news && news.length > 0) {
+        const recentNews = news.slice(0, 5)
+        const bullishCount = recentNews.filter((item: any) => 
+          item.headline?.toLowerCase().includes('beat') ||
+          item.headline?.toLowerCase().includes('surge') ||
+          item.headline?.toLowerCase().includes('rally') ||
+          item.headline?.toLowerCase().includes('outperfor')
+        ).length
+        
+        const bearishCount = recentNews.filter((item: any) => 
+          item.headline?.toLowerCase().includes('miss') ||
+          item.headline?.toLowerCase().includes('fall') ||
+          item.headline?.toLowerCase().includes('decline') ||
+          item.headline?.toLowerCase().includes('warning')
+        ).length
+
+        if (bullishCount >= 2) {
+          insightList.push(`✅ News catalyst: Multiple positive headlines suggest buying pressure. Consider entering on dips with stop losses.`)
+        } else if (bearishCount >= 2) {
+          insightList.push(`❌ Risk management: Negative news flow suggests caution. Hold or consider protective stops if long.`)
+        }
+      }
+
+      // Ensure we generate at least 4-5 insights by filling if needed
+      const requiredInsights = 5
+      if (insightList.length < requiredInsights) {
+        // Add general market insight
+        if (insightList.length < requiredInsights) {
+          insightList.push(`💼 Investment strategy: Diversify position sizes. Consider dollar-cost averaging for volatile stocks.`)
+        }
+        if (insightList.length < requiredInsights) {
+          insightList.push(`📊 Technical analysis: Review TradingView indicators for entry/exit timing. Monitor key support/resistance levels.`)
+        }
+      }
+
+      // Always show 5 insights
       setInsights(insightList.slice(0, 5))
     } catch (error) {
       console.error('AI Insights error:', error)

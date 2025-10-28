@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { Plus, Trash2, TrendingUp, TrendingDown, Star, MoreVertical, Bell } from 'lucide-react'
+import { Plus, Trash2, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
-import { StockChart } from '@/components/charts/StockChart'
 import { GlobalNavbar } from '@/components/GlobalNavbar'
+import TradingViewMiniChart from '@/components/TradingViewMiniChart'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -53,11 +52,6 @@ export default function WatchlistPage() {
     `/api/quotes?symbols=${watchlistItems.join(',')}`,
     fetcher,
     { refreshInterval: 30000 }
-  )
-
-  const { data: chartData } = useSWR(
-    `/api/chart?symbol=${selectedSymbol}&range=5d`,
-    fetcher
   )
 
   const handleAddSymbol = async (e: React.FormEvent) => {
@@ -202,7 +196,6 @@ export default function WatchlistPage() {
                       <th className="text-right p-4 text-slate-400 font-medium">Price</th>
                       <th className="text-right p-4 text-slate-400 font-medium">Change</th>
                       <th className="text-right p-4 text-slate-400 font-medium">52W Range</th>
-                      <th className="text-right p-4 text-slate-400 font-medium">Mkt Cap</th>
                       <th className="text-center p-4 text-slate-400 font-medium w-12">Actions</th>
                     </tr>
                   </thead>
@@ -279,22 +272,6 @@ export default function WatchlistPage() {
                               <span className="text-slate-500">--</span>
                             )}
                           </td>
-                          <td className="text-right p-5 text-sm">
-                            {quote && quote.data.marketCapShort ? (
-                              <span 
-                                className="text-slate-400"
-                                title={quote.data.marketCapFull || ''}
-                              >
-                                {quote.data.marketCapShort}
-                              </span>
-                            ) : quote && quote.data.marketCap && quote.data.marketCap > 0 ? (
-                              <span className="text-slate-400">
-                                {(quote.data.marketCap / 1000000000).toFixed(1)}B
-                              </span>
-                            ) : (
-                              <span className="text-slate-500">--</span>
-                            )}
-                          </td>
                           <td className="text-center p-5">
                             <div className="flex justify-center gap-2">
                               <button
@@ -327,39 +304,33 @@ export default function WatchlistPage() {
             </div>
           </div>
 
-          {/* Chart Sidebar */}
+          {/* Mini Charts Grid - Only Starred Stocks */}
           <div className="lg:col-span-6">
-            <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 sticky top-4">
-              <h2 className="text-xl font-bold text-white mb-4">{selectedSymbol}</h2>
-              
-              {quotes.find((q: any) => q.symbol === selectedSymbol) && (
-                <div className="mb-4">
-                  <div className="text-3xl font-bold text-white mb-2">
-                    ${quotes.find((q: any) => q.symbol === selectedSymbol)?.data.c?.toFixed(2)}
+            <h2 className="text-xl font-bold text-white mb-4">Starred Stocks - Mini Charts</h2>
+            {starredItems.length === 0 ? (
+              <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
+                <p className="text-slate-400">Star stocks to see their mini charts here</p>
+                <p className="text-sm text-slate-500 mt-2">Click the star icon next to any stock in the list</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {starredItems.map((symbol) => (
+                  <div key={symbol} className="bg-slate-800 rounded-lg border border-slate-700 p-4 h-[280px]">
+                    <div className="mb-2">
+                      <span className="font-bold text-white">{symbol}</span>
+                    </div>
+                    <div className="h-[240px]">
+                      <TradingViewMiniChart symbol={symbol} />
+                    </div>
                   </div>
-                  <div className={`text-lg ${
-                    quotes.find((q: any) => q.symbol === selectedSymbol)?.data.dp >= 0 
-                      ? 'text-green-500' 
-                      : 'text-red-500'
-                  }`}>
-                    {quotes.find((q: any) => q.symbol === selectedSymbol)?.data.dp >= 0 ? '+' : ''}
-                    {quotes.find((q: any) => q.symbol === selectedSymbol)?.data.dp?.toFixed(2)}%
-                  </div>
-                </div>
-              )}
-
-              {chartData && chartData.data && Array.isArray(chartData.data) && chartData.data.length > 0 ? (
-                <StockChart data={chartData.data} symbol={selectedSymbol} />
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-slate-400">
-                  Loading chart...
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   )
 }
+
 
