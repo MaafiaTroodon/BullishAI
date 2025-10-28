@@ -7,6 +7,7 @@ import { NewsFeed } from '@/components/NewsFeed'
 import { GlobalNavbar } from '@/components/GlobalNavbar'
 import { StockAIInsights } from '@/components/StockAIInsights'
 import { TradingViewTechnicalAnalysis } from '@/components/TradingViewTechnicalAnalysis'
+import { TradingViewFinancials } from '@/components/TradingViewFinancials'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 
@@ -203,11 +204,12 @@ export default function StockPage() {
           </div>
         )}
 
-        {/* AI Insights and Technical Analysis Side by Side */}
+        {/* AI Insights, Financials, and Technical Analysis */}
         {quote && (
           <div className="grid lg:grid-cols-2 gap-6 mt-8">
-            {/* Left: AI Insights */}
-            <div>
+            {/* Left Column */}
+            <div className="space-y-6">
+              {/* AI Insights */}
               <StockAIInsights 
                 symbol={symbol} 
                 quote={quote} 
@@ -215,10 +217,17 @@ export default function StockPage() {
                 news={news || []}
                 changePctOverRange={changePctOverRange}
               />
+              
+              {/* Financials */}
+              <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+                <h3 className="text-xl font-bold text-white mb-4">Fundamental Data</h3>
+                <TradingViewFinancials symbol={symbol} />
+              </div>
             </div>
             
-            {/* Right: Technical Analysis */}
+            {/* Right Column */}
             <div>
+              {/* Technical Analysis */}
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
                 <h3 className="text-xl font-bold text-white mb-4">Technical Analysis</h3>
                 <TradingViewTechnicalAnalysis symbol={symbol} />

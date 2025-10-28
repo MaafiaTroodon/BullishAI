@@ -41,9 +41,11 @@ export function TradingViewHeatmap() {
   }, [])
 
   return (
-    <div className="tradingview-widget-container h-[600px] w-full" ref={container}>
-      <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
+    <div className="w-full">
+      <div className="tradingview-widget-container w-full h-[600px]" ref={container}>
+        <div className="tradingview-widget-container__widget" style={{ height: '600px' }}></div>
+      </div>
+      <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2 text-center">
         <a 
           href="https://www.tradingview.com/heatmap/stock/" 
           rel="noopener nofollow" 
