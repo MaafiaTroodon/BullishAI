@@ -1,63 +1,63 @@
 symbol,aliases
-AAPL,apple,apple inc,apple inc.
-AMZN,amazon,amazon.com,amazon inc
-NVDA,nvidia,nvidia corporation
-TSLA,tesla,tesla motors,tesla inc
-MSFT,microsoft,microsoft corporation,microsoft corp
-GOOGL,google,google class a,alphabet,alphabet class a
-GOOG,google class c,alphabet class c
-META,meta,meta platforms,facebook,facebook inc
-NFLX,netflix,netflix inc
-INTC,intel,intel corporation,intel corp
-AMD,amd,advanced micro devices
-IBM,international business machines,ibm corp
-ORCL,oracle,oracle corporation
-CRM,salesforce,salesforce.com
-PYPL,paypal,paypal holdings
-SHOP,shopify,shopify inc
-SQ,square,square inc,square payments
-COIN,coinbase,coinbase global
-JPM,jpmorgan,jp morgan,jpmorgan chase,jpm
-BAC,bank of america,boa,bank of america corp
-WFC,wells fargo,wells fargo bank
-C,citigroup,citi
-GS,goldman sachs,goldman sachs group
-MS,morgan stanley
-V,visa,visa inc
-MA,mastercard,mastercard inc
-AXP,american express,amex
-BRK.B,berkshire hathaway,berkshire hathaway b
-UNH,unitedhealth,unitedhealth group
-JNJ,johnson and johnson,jnj
-PFE,pfizer,pfizer inc
-MRK,merck,merck co
-XOM,exxon mobil,exxon,exxonmobil
-CVX,chevron,chevron corporation
-BP,british petroleum,bp plc
-TTE,total energies,total
-OXY,occidental petroleum,oxidental
-CAT,caterpillar,caterpillar inc
-BA,boeing,boeing co
-LMT,lockheed martin,lockheed martin corporation
-NOC,northrop grumman,northrop grumman corporation
-RTX,raytheon,raytheon technologies
-GM,general motors,gm motors
-F,ford,ford motor,ford motor company
-TM,toyota,toyota motor corporation
-NIO,nio inc,nio chinese ev
-RIVN,rivian,rivian automotive
-PLTR,palantir,palantir technologies
-SNOW,snowflake,snowflake inc
-MDB,mongodb,mongodb inc
-NET,cloudflare,cloudflare inc
-DDOG,datadog,datadog inc
-UBER,uber technologies,uber inc
-LYFT,lyft,lyft inc
-ABNB,airbnb,airbnb inc
-DIS,disney,walt disney,walt disney company
-WMT,walmart,walmart inc
-COST,costco,costco wholesale
-TGT,target,target corporation
-NKE,nike,nike inc
-SBUX,starbucks,starbucks corporation
+AAPL,Apple Apple Inc apple inc iphone
+MSFT,Microsoft microsoft corporation windows azure
+AMZN,Amazon amazon.com amazon prime aws
+NVDA,Nvidia nvidia corporation chips ai gpu
+TSLA,Tesla tesla motors elon musk electric vehicles ev
+META,Meta Facebook fb facebook inc instagram whatsapp
+GOOGL,Google Alphabet alphabet inc google search youtube
+GOOG,Google Alphabet class c alphabet class c google c
+NFLX,Netflix netflix inc streaming
+INTC,Intel intel corporation chips semis
+AMD,AMD Advanced Micro Devices ryzen
+IBM,IBM International Business Machines ibm corporation
+ORCL,Oracle oracle corporation database
+CRM,Salesforce salesforce.com crm saas
+PYPL,PayPal paypal holdings
+SHOP,Shopify shopify inc ecommerce
+SQ,Square Block square inc cash app
+COIN,Coinbase coinbase global cryptocurrency
+JPM,JPMorgan JPM Morgan jpmorgan chase chase bank
+BAC,Bank of America bofa bank of america corp
+WFC,Wells Fargo wells fargo co
+C,Citigroup citigroup inc
+GS,Goldman Sachs goldman sachs group
+MS,Morgan Stanley morgan stanley inc
+V,Visa visa inc payment
+MA,Mastercard mastercard inc payment
+AXP,American Express amex american express co
+BRK.B,Berkshire Berkshire Hathaway Berkshire class b
+UNH,UnitedHealth unitedhealth group
+JNJ,Johnson Johnson j&j
+PFE,Pfizer pfizer inc
+MRK,Merck merck co
+XOM,Exxon Mobil exxon mobil corporation oil
+CVX,Chevron chevron corporation oil
+BP,BP BP plc bp oil
+TTE,TotalEnergies total energies oil
+OXY,Occidental Occidental Petroleum
+CAT,Caterpillar caterpillar inc
+BA,Boeing boeing company airlines aerospace
+LMT,Lockheed Martin lockheed martin defense
+NOC,Northrop Grumman northrop grumman corp
+RTX,Raytheon raytheon technologies
+GM,General Motors gm automakers
+F,Ford ford motor company
+TM,Toyota toyota motor corporation
+NIO,Nio nio inc electric vehicles china
+RIVN,Rivian rivian automotive ev trucks
+PLTR,Palantir palantir technologies ai data
+SNOW,Snowflake snowflake inc cloud data
+MDB,MongoDB mongodb inc database
+NET,Cloudflare cloudflare inc cdn security
+DDOG,Datadog datadog inc monitoring
+UBER,Uber uber technologies rideshare
+LYFT,Lyft lyft inc rideshare
+ABNB,Airbnb airbnb inc travel hospitality
+DIS,Disney walt disney disney plus
+WMT,Walmart walmart inc retail
+COST,Costco costco wholesale
+TGT,Target target corporation
+NKE,Nike nike inc sportswear
+SBUX,Starbucks starbucks corporation coffee
 

@@ -1,67 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normalizeToSymbol, coerceTicker } from '@/lib/market/symbols'
-import { fetchQuote } from '@/lib/market/providers'
-import { quoteCache } from '@/lib/cache/lru'
-import { setCORSHeaders } from '@/lib/http/cors'
+import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-const schema = z.object({
-  ticker: z.string().optional(),
+const quoteSchema = z.object({
+  symbol: z.string().min(1).max(10).toUpperCase(),
 })
 
 export async function GET(request: NextRequest) {
-  const startTime = Date.now()
-  
   try {
     const { searchParams } = new URL(request.url)
-    const tickerParam = searchParams.get('ticker') || searchParams.get('symbol')
-    
-    const parseResult = schema.safeParse({ ticker: tickerParam })
-    if (!parseResult.success || !tickerParam) {
-      return setCORSHeaders(NextResponse.json(
-        { ok: false, error: 'Missing ticker parameter' },
-        { status: 400 }
-      ))
-    }
+    const symbol = searchParams.get('symbol')
 
-    // Normalize ticker
-    const symbol = normalizeToSymbol(tickerParam)
     if (!symbol) {
-      return setCORSHeaders(NextResponse.json(
-        { ok: false, error: `Unknown ticker: ${tickerParam}` },
+      return NextResponse.json(
+        { error: 'Symbol parameter is required' },
         { status: 400 }
-      ))
+      )
     }
 
-    // Check cache
-    const cacheKey = `quote:${symbol}`
-    const cached = quoteCache.get(cacheKey)
-    if (cached) {
-      return setCORSHeaders(NextResponse.json({ ok: true, data: cached }))
+    // Validate symbol
+    const validation = quoteSchema.safeParse({ symbol })
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid symbol format' },
+        { status: 400 }
+      )
     }
 
-    // Fetch quote
-    const quote = await fetchQuote(symbol)
-    
-    // Cache it
-    quoteCache.set(cacheKey, quote)
-
-    const latency = Date.now() - startTime
-    console.log(`Quote fetched for ${symbol} in ${latency}ms from ${quote.source}`)
-
-    return setCORSHeaders(NextResponse.json({ ok: true, data: quote }))
+    try {
+      const data = await getComprehensiveQuote(validation.data.symbol)
+      return NextResponse.json({
+        symbol: validation.data.symbol,
+        price: data.price,
+        change: data.change,
+        changePercent: data.changePct,
+        high: data.high,
+        low: data.low,
+        open: data.open,
+        previousClose: data.previousClose,
+        volume: data.volume,
+        marketCap: data.marketCap,
+        peRatio: data.peRatio,
+        week52High: data.week52High,
+        week52Low: data.week52Low,
+        source: data.source,
+      })
+    } catch (error: any) {
+      console.error('Quote fetch failed:', error.message)
+      return NextResponse.json(
+        { error: 'Failed to fetch quote', symbol: validation.data.symbol },
+        { status: 502 }
+      )
+    }
   } catch (error: any) {
-    console.error('Quote API error:', error)
-    return setCORSHeaders(NextResponse.json(
-      { ok: false, error: error.message || 'Failed to fetch quote' },
-      { status: 200 } // Return 200 so Botpress doesn't treat it as an error
-    ))
+    console.error('Quote API error:', error.message)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
-}
-
-export async function OPTIONS() {
-  return setCORSHeaders(new NextResponse(null, { status: 204 }))
 }

@@ -71,7 +71,7 @@ export function InlineAIChat({ isLoggedIn }: InlineAIChatProps) {
       setMessages([
         {
           id: '1',
-          text: "Hey there 👋, I'm BullishAI — your real-time market analyst. Ask me about any stock, sector, or investment trend and I'll pull live data for you.",
+          text: "**BullishAI Market Analyst** here 👋\n\nI provide real-time stock data, prices, news, and market insights. Ask me about any ticker or market topic.\n\n*Try: \"AAPL price\", \"NVDA news\", or \"trending stocks\"*",
           sender: 'bot',
           timestamp: new Date(),
         },
@@ -132,6 +132,22 @@ export function InlineAIChat({ isLoggedIn }: InlineAIChatProps) {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  // Simple markdown renderer
+  const renderMarkdown = (text: string) => {
+    return text
+      .split(/(\*\*.*?\*\*|\*.*?\*|\n)/)
+      .map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>
+        } else if (part.startsWith('*') && part.endsWith('*') && part.length > 1) {
+          return <em key={i} className="italic">{part.slice(1, -1)}</em>
+        } else if (part === '\n') {
+          return <br key={i} />
+        }
+        return part
+      })
   }
 
   const handleExpand = () => {
@@ -215,7 +231,7 @@ export function InlineAIChat({ isLoggedIn }: InlineAIChatProps) {
                         : 'bg-slate-800 text-white border border-slate-700'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                    <p className="text-sm whitespace-pre-wrap">{renderMarkdown(message.text)}</p>
                     {message.data && message.data.symbol && (
                       <div className="mt-3 flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
                         <div>

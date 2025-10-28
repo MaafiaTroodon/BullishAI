@@ -1,132 +1,145 @@
-# Botpress Setup Instructions
+# Botpress Integration Steps
 
-Follow these steps to configure BullishAI's Botpress agent:
+Follow these steps to configure BullishAI Market Analyst in Botpress.
 
 ## Prerequisites
-- Botpress account with webchat access
-- API endpoints deployed at https://bullishai.netlify.app
-- Tools configured: getQuote, getNews, getFundamentals
 
-## Step 1: Configure Knowledge Bases
+- Botpress account with webchat configured
+- Tools enabled and named exactly: `getQuote`, `getNews`, `getFundamentals`
+- HTTP tools configured to call your API endpoints:
+  - `/api/quote` (returns quote data)
+  - `/api/news` (returns news articles)
+  - `/api/fundamentals` (returns fundamental data)
 
-### A. Add Rich Text Documents
+## Step-by-Step Setup
 
-1. Go to Botpress → **Knowledge Bases**
-2. Click **Add Document** → Select **Rich Text**
-3. Name it: "Style Guide"
-4. Paste contents of `bot/style_guide.md`
-5. Click **Save**
+### 1. Knowledge Bases
 
-Repeat for:
-- Name: "Scope Policy" → paste `bot/scope_policy.md`
+Go to Botpress → Knowledge Bases.
 
-### B. Add CSV Document
+#### Add Rich Text Document — Style Guide
+- Click "Add Knowledge" → Rich Text
+- Title: "Style Guide"
+- Content: Paste contents of `bot/style_guide.md`
+- Save
 
-1. Click **Add Document** → Select **Document**
-2. Name it: "Ticker Map"
-3. Upload `bot/ticker_map.csv`
-4. Set chunking: 400-600, overlap: 60-100
-5. Enable Re-ranking
-6. Click **Save**
+#### Add Rich Text Document — Scope Policy  
+- Click "Add Knowledge" → Rich Text
+- Title: "Scope Policy"
+- Content: Paste contents of `bot/scope_policy.md`
+- Save
 
-## Step 2: Configure System Instructions
+#### Add CSV Document — Ticker Map
+- Click "Add Knowledge" → Document
+- Title: "Ticker Map"
+- Upload: `bot/ticker_map.csv`
+- Save
 
-1. Go to Botpress → **Instructions**
-2. Delete existing content
-3. Paste contents of `bot/instructions.md`
-4. Scroll to bottom
-5. Add section: "## Examples"
-6. Paste contents of `bot/few_shots.md` under Examples
-7. Click **Save**
+### 2. Instructions
 
-## Step 3: Verify Tools
+Go to Botpress → Instructions.
 
-1. Go to Botpress → **Tools**
-2. Verify three HTTP Tools exist:
-   - **getQuote**: GET https://bullishai.netlify.app/api/quote?ticker={{inputs.ticker}}
-   - **getNews**: GET https://bullishai.netlify.app/api/news?ticker={{inputs.ticker}}&limit={{inputs.limit||5}}
-   - **getFundamentals**: GET https://bullishai.netlify.app/api/fundamentals?ticker={{inputs.ticker}}
+#### Main Instructions
+- Clear existing content
+- Paste full contents of `bot/instructions.md`
+- Save
 
-3. Ensure Tools are **Enabled**
-4. If missing, create them with correct URLs and input schemas
+#### Add Examples Section
+- Scroll to bottom of Instructions
+- Add new section "## Examples"
+- Paste full contents of `bot/few_shots.md`
+- Save
 
-## Step 4: Create Variables
+### 3. Variables
 
-1. Go to Botpress → **Variables**
-2. Click **Create Variable**
-3. Name: `conversation.lastTicker`
-4. Type: String
-5. Default: "" (empty)
-6. Click **Save**
+Go to Botpress → Variables.
 
-## Step 5: Test Queries
+#### Create conversation.lastTicker
+- Click "Add Variable"
+- Name: `lastTicker`
+- Parent: `conversation`
+- Type: `string`
+- Default: `""`
+- Save
 
-Use these test queries to verify behavior:
+### 4. Verify Tools
 
-### Test 1: Price Query
-**User:** what's the current price of aapl
-**Expected:** Bot calls getQuote(AAPL) and returns formatted quote
+Go to Botpress → Tools.
 
-### Test 2: News by Alias
-**User:** show me amazon news
-**Expected:** Bot normalizes "amazon" → AMZN, calls getNews(AMZN), returns headlines
+Ensure these three tools exist and are enabled:
+- ✅ `getQuote` → calls `/api/quote`
+- ✅ `getNews` → calls `/api/news`
+- ✅ `getFundamentals` → calls `/api/fundamentals`
 
-### Test 3: Overbought Check
-**User:** is nvda overbought
-**Expected:** Bot calls getQuote(NVDA), provides analysis with disclaimer
+### 5. Test Queries
 
-### Test 4: Follow-up
-**User:** what about news?
-**Expected:** Bot uses conversation.lastTicker (NVDA) and returns news
+Use Botpress → Preview to test:
 
-### Test 5: Fundamentals
-**User:** tesla fundamentals
-**Expected:** Bot calls getFundamentals(TSLA) and returns formatted data
+1. **Price query**: "what's the current price of AAPL"
+   - Should call `getQuote(AAPL)`
+   - Should show formatted price with day range and 52W
 
-### Test 6: Off-Scope
-**User:** book me a flight
-**Expected:** Bot politely declines and redirects to allowed topics
+2. **News query**: "show me amazon news"
+   - Should detect AMZN alias
+   - Should call `getNews(AMZN, 5)`
+   - Should list 3-5 headlines
+
+3. **Technical query**: "is NVDA overbought"
+   - Should call `getQuote(NVDA)`
+   - Should analyze from %change + 52W
+   - Should include disclaimer
+
+4. **Follow-up**: "what about news?"
+   - Should reuse `conversation.lastTicker` (NVDA)
+   - Should call `getNews(NVDA, 5)`
+
+5. **Fundamentals**: "tesla fundamentals"
+   - Should call `getFundamentals(TSLA)`
+   - Should show P/E, EPS, Mkt Cap, metrics
+
+6. **Off-scope**: "book me a flight"
+   - Should politely refuse
+   - Should suggest market topics
 
 ## Troubleshooting
 
-### Bot Doesn't Call Tools
-1. Verify Tools are enabled in Botpress
-2. Check API endpoint URLs are correct
-3. Test endpoints manually (e.g., curl https://bullishai.netlify.app/api/quote?ticker=AAPL)
-4. Check Instructions mention tool names explicitly
+### Replies Don't Call Tools
 
-### Wrong Responses
-1. Verify Knowledge Bases are activated
-2. Check chunking settings in Ticker Map
-3. Review Instructions for formatting rules
-4. Check few-shot examples match desired output
+1. Check Tool mappings in Botpress are correct
+2. Verify `/api/*` routes return expected JSON
+3. Re-check Instructions for tool invocation syntax
+4. Test HTTP tools independently in Botpress
 
-### Missing Variables
-1. Ensure conversation.lastTicker is created
-2. Verify it's accessible in Instructions
-3. Check variable is updated in tool responses
+### Incorrect Ticker Detection
 
-## Post-Setup Checklist
-- [ ] Knowledge bases uploaded (Style Guide, Scope Policy, Ticker Map)
-- [ ] Instructions updated with system prompt and examples
-- [ ] Three HTTP Tools configured and enabled
-- [ ] conversation.lastTicker variable created
-- [ ] All 6 test queries pass
-- [ ] Bot declines off-topic requests politely
-- [ ] Bot includes disclaimers for buy/sell questions
-- [ ] Output formatting matches style guide
+1. Update `ticker_map.csv` with more aliases
+2. Re-upload to Knowledge Bases
+3. Check ticker inference logic in Instructions
 
-## Deployment Notes
-- API endpoints cache responses 15-60s
-- Rate limits: ~60 calls/min (Finnhub), ~8/day (TwelveData)
-- Fallback chain: Finnhub → TwelveData → Yahoo
-- All endpoints return { ok: boolean, data?, error? }
+### Off-scope Responses
 
-## Support
-If bot still doesn't work after following all steps:
-1. Check Botpress logs for errors
-2. Verify API endpoints are responding
-3. Review few-shot examples match Instructions format
-4. Test variable assignment in conversation flow
-5. Check KB re-ranking is enabled
+1. Verify Scope Policy is in Knowledge Bases
+2. Check scope guardrails in Instructions
+3. Add more off-scope examples in few_shots.md
+
+### Memory Not Persisting
+
+1. Verify `conversation.lastTicker` variable exists
+2. Check Variable scope (conversation vs user)
+3. Ensure Instructions reference `conversation.lastTicker` correctly
+
+## Final Checklist
+
+- ✅ Instructions.md pasted to Botpress Instructions
+- ✅ few_shots.md added to Instructions as "Examples" section
+- ✅ style_guide.md added as Rich Text KB
+- ✅ scope_policy.md added as Rich Text KB
+- ✅ ticker_map.csv uploaded as Document KB
+- ✅ conversation.lastTicker variable created
+- ✅ Three tools enabled: getQuote, getNews, getFundamentals
+- ✅ All test queries pass
+- ✅ Disclaimers appear on investment advice
+- ✅ Off-scope handled politely
+
+You're done! The Botpress chat is now configured as BullishAI Market Analyst.
 

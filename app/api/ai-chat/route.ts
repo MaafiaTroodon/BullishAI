@@ -35,54 +35,76 @@ export async function POST(request: NextRequest) {
       
       if (data) {
         stockData = data
-        const trend = data.changePct && data.changePct >= 0 ? 'up' : 'down'
-        response = `${stockSymbolMatch} is currently trading at $${data.price?.toFixed(2) || 'N/A'}, ${trend} ${Math.abs(data.changePct || 0).toFixed(2)}% from the previous close. `
+        const isPositive = (data.changePct || 0) >= 0
+        const arrow = isPositive ? '↑' : '↓'
         
+        // One-line summary
+        response = `**${stockSymbolMatch} — $${data.price?.toFixed(2) || 'N/A'} (${isPositive ? '+' : ''}${data.changePct?.toFixed(2) || '0.00'}%)** ${arrow}\n\n`
+        
+        // Compact bullet list
+        response += `**Key Stats:**\n`
         if (data.high && data.low) {
-          response += `Today's range: $${data.low.toFixed(2)} - $${data.high.toFixed(2)}. `
+          response += `• Day Range: $${data.low.toFixed(2)} - $${data.high.toFixed(2)}\n`
+        }
+        if (data.volume) {
+          response += `• Volume: ${formatVolume(data.volume)}\n`
         }
         
-        if (data.volume) {
-          response += `Volume: ${formatVolume(data.volume)}. `
+        // Add brief analysis
+        if (Math.abs(data.changePct || 0) > 3) {
+          response += `\n*Significant ${isPositive ? 'rally' : 'pullback'} — check recent news for catalysts.*\n`
+        } else if (Math.abs(data.changePct || 0) > 1) {
+          response += `\n*${isPositive ? 'Moderate' : 'Light'} ${isPositive ? 'momentum' : 'pressure'} — normal market activity.*\n`
         }
 
-        // Add market sentiment
-        if (Math.abs(data.changePct || 0) > 3) {
-          response += "Significant price movement detected - check recent news for catalysts."
-        } else if (Math.abs(data.changePct || 0) > 1) {
-          response += "Moderate activity - normal market movement."
+        // Add buy/sell insight (without advice)
+        if (lowerQuery.includes('buy') || lowerQuery.includes('sell') || lowerQuery.includes('should i')) {
+          response += `\n**Market Position:**\n`
+          if (isPositive && Math.abs(data.changePct || 0) > 2) {
+            response += `• Trading with strong momentum — consider risk management\n`
+          } else if (!isPositive && Math.abs(data.changePct || 0) > 2) {
+            response += `• Near-term volatility — monitor support levels\n`
+          } else {
+            response += `• Stable trading pattern — assess fundamentals\n`
+          }
+          response += `*Note: This is market information only, not investment advice.*\n`
         }
+        
+        // Timestamp
+        const now = new Date()
+        response += `\n*Updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Source: Live market data*`
+        
+        // Next steps
+        response += `\n\n💡 *Want 5-day chart, recent headlines, or fundamentals?*`
       } else {
-        response = `I couldn't find live data for ${stockSymbolMatch}. Please verify the ticker symbol or try asking about a different stock.`
+        response = `Unable to fetch live data for ${stockSymbolMatch}. Verify the ticker or try: MSFT, NVDA, TSLA, GOOGL.`
       }
-    } else if (lowerQuery.includes('trending') || lowerQuery.includes('popular') || lowerQuery.includes('ai stocks')) {
-      response = "Based on current market activity, here are some trending AI and tech stocks:"
+    } else if (lowerQuery.includes('trending') || lowerQuery.includes('popular')) {
+      response = `**Trending Tech & AI Stocks** (as of ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}):\n\n`
       const trendingStocks = ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMD']
       
-      for (const symbol of trendingStocks.slice(0, 3)) {
+      for (const symbol of trendingStocks) {
         const data = await fetchStockData(symbol)
-        if (data) {
-          response += ` ${symbol} is at $${data.price?.toFixed(2) || 'N/A'} (${data.changePct && data.changePct >= 0 ? '+' : ''}${data.changePct?.toFixed(2) || '0.00'}%).`
+        if (data && data.price) {
+          const change = data.changePct && data.changePct >= 0 ? '+' : ''
+          response += `• **${symbol}**: $${data.price.toFixed(2)} (${change}${data.changePct?.toFixed(2) || '0.00'}%)\n`
         }
       }
+      response += `\n*Want details on any? Just ask.*`
     } else if (lowerQuery.includes('news') || lowerQuery.includes('update')) {
       const symbolMatch = query.match(/\b[A-Z]{1,5}\b/g)?.[0]
       if (symbolMatch) {
         response = await getStockNews(symbolMatch)
       } else {
-        response = "I can fetch the latest news for a stock. Please mention a ticker symbol, like 'AAPL news' or 'TSLA updates'."
+        response = `**Latest Headlines:**\n\nSpecify a ticker like 'AAPL news' or 'TSLA updates' for targeted news.`
       }
-    } else if (lowerQuery.includes('help') || lowerQuery.includes('what can you do')) {
-      response = "I'm your AI market analyst! I can help you with:\n\n• Live stock prices and data (e.g., 'AAPL price')\n• Market trends and analysis\n• Company information and metrics\n• News summaries for specific stocks\n• Investment insights and guidance\n\nJust ask me about any stock or market topic!"
-    } else if (lowerQuery.includes('market') || lowerQuery.includes('overview')) {
-      response = await getMarketOverview()
+    } else if (lowerQuery.includes('buy') || lowerQuery.includes('sell') || lowerQuery.includes('should i invest')) {
+      response = `**Market Analysis Available:**\n\nI provide market information and data, not personalized advice. Ask me about:\n• Current prices and trends\n• Fundamental metrics (P/E, EPS, revenue)\n• Recent news and catalysts\n• Sector comparisons\n\n*Always consult a qualified financial advisor for investment decisions.*`
+    } else if (lowerQuery.includes('help')) {
+      response = `**BullishAI Market Analyst** — I track stocks, ETFs, indices, and market data.\n\n**Ask me:**\n• "AAPL price" or "Apple stock"\n• "NVDA news" or "show Tesla news"\n• "MSFT fundamentals" or "what's trending"\n• "Is GOOGL overbought?" or market analysis\n\n**Out of scope:** Politics, health, non-finance topics.\n\n*Always reference live data with timestamps.*`
     } else {
-      // Generic response for non-stock questions
-      if (lowerQuery.includes('weather') || lowerQuery.includes('food') || lowerQuery.includes('joke')) {
-        response = "I'm trained only for market and finance topics — try asking about a company, stock, or sector."
-      } else {
-        response = "I'm here to help with stock-related questions! Try asking about a specific company, stock, sector, or market trend. For example: 'What's the current price of AAPL?' or 'Tell me about NVDA trends.'"
-      }
+      // Generic response
+      response = `I'm BullishAI — focused on stocks and markets only.\n\nTry: "AAPL price", "TSLA news", "trending stocks", or ask about any ticker.\n\n*Ticker symbols help me give you precise, live data.*`
     }
 
     return NextResponse.json({
@@ -92,7 +114,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('AI Chat API error:', error)
     return NextResponse.json({
-      response: "I'm having trouble processing that request right now. Please try again or ask about a different stock.",
+      response: "System temporarily unavailable. Try again in a moment or ask about a different stock.",
       error: error.message,
     }, { status: 500 })
   }

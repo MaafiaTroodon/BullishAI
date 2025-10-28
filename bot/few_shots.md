@@ -1,20 +1,18 @@
 # Examples
 
-## Example 1 — Price Query
+## Example 1 — Price
 
 **User:** what's the current price of aapl
 
 **Assistant (Plan):** ticker=AAPL → getQuote(AAPL) → format
 
-**Assistant:**
+**Assistant (Answer):**
 
-AAPL — $267.75 (+1.87%) as of 2025-10-27T15:45:10.000Z  • Source: yahoo
+AAPL — $268.73 (+1.28%) as of 20:45 EST • Source: Yahoo Finance
+Day: O 265.50 • H 270.12 • L 264.89 • Prev 265.45 • Vol 52.3M
+52W: H 285.90 • L 164.08
 
-Day: O $265.95 • H $267.79 • L $264.65 • Prev $262.82 • Vol 28.4M
-
-52W: H $267.79 • L $169.21
-
-Want 5-day view or latest headlines?
+Apple is up today on strong iPhone 15 demand expectations. Momentum looks solid. Want 5-day view or latest headlines?
 
 ---
 
@@ -24,17 +22,17 @@ Want 5-day view or latest headlines?
 
 **Assistant (Plan):** alias "amazon" → AMZN → getNews(AMZN,5)
 
-**Assistant:**
+**Assistant (Answer):**
 
-Latest for AMZN:
+AMZN — Latest Headlines (top 5):
 
-• **Amazon beats Q3 earnings expectations** — Reuters (2025-10-27) [link] positive
+• AWS launches new AI inference chips — TechCrunch (2h) [link] bullish
+• E-commerce revenue beats analyst estimates — Reuters (5h) [link] bullish  
+• FTC investigates cloud pricing practices — WSJ (1d) [link] neutral
+• Prime Video drops ad-free tier — The Verge (1d) [link] bearish
+• Amazon expands same-day delivery to 50 cities — CNBC (2d) [link] bullish
 
-• **Prime Day boosts AWS growth** — Bloomberg (2025-10-27) [link] neutral
-
-• **Amazon expands drone delivery** — TechCrunch (2025-10-26) [link] positive
-
-Want a 1-paragraph summary?
+Want a 1-paragraph summary of recent AMZN earnings? Or check fundamentals?
 
 ---
 
@@ -42,15 +40,17 @@ Want a 1-paragraph summary?
 
 **User:** is nvda overbought
 
-**Assistant (Plan):** getQuote(NVDA); reason from recent %change + 52W range
+**Assistant (Plan):** getQuote(NVDA); if RSI unavailable, reason from recent %change + 52W range
 
-**Assistant:**
+**Assistant (Answer):**
 
-NVDA — $432.18 (+2.34%) as of 2025-10-27 • Source: finnhub
+NVDA — $498.21 (-2.15%) as of 20:45 EST
+Day: O 508.90 • H 512.00 • L 495.20 • Prev 509.30 • Vol 48.2M
+52W: H 505.89 • L 262.20
 
-52W range: $380.75 — $512.89. Price is near middle range, but trending up 2.34% today on high volume. Strong momentum; consider checking recent news for catalysts.
+Recent momentum down 2.15%. Trading near 52W high (H $505.89). Elevated volatility suggests some profit-taking. Not investment advice.
 
-Not investment advice.
+Want a longer-term chart or fundamentals check?
 
 ---
 
@@ -60,15 +60,15 @@ Not investment advice.
 
 **Assistant (Plan):** use conversation.lastTicker or ask to confirm
 
-**Assistant:**
+**Assistant (Answer):**
 
-Using NVDA from earlier:
+Using NVDA from earlier — here are the latest headlines:
 
-• **NVIDIA unveils new AI chip** — Tech Times (2025-10-27) [link] positive
+• CEO outlines AI chip roadmap for 2024 — Reuters (3h) [link] bullish
+• Supplier warns of H100 shortage — Bloomberg (6h) [link] bearish
+• Strong Q4 datacenter revenue — Forbes (1d) [link] bullish
 
-• **Analysts raise NVDA target price** — Market Watch (2025-10-27) [link] positive
-
-Want fundamentals or a technical deep-dive?
+Want NVDA fundamentals or compare with AMD?
 
 ---
 
@@ -78,23 +78,24 @@ Want fundamentals or a technical deep-dive?
 
 **Assistant (Plan):** getFundamentals(TSLA)
 
-**Assistant:**
+**Assistant (Answer):**
 
-TSLA Fundamentals (2025-10-27T15:40:00.000Z) — Source: twelvedata
+TSLA Fundamentals (2024-01-15) — Source: FMP
+P/E 65.8 • EPS $3.20 • Mkt Cap $812.5B
+TTM Revenue $96.8B • Profit Margin 9.2%
+Sector Automobiles • Industry Auto Manufacturers
 
-P/E 68.4 • EPS $4.21 • Mkt Cap $780B
-
-Sector: Consumer Discretionary • Industry: Auto Manufacturers
-
-Want revenue trend or analyst headlines?
+Valuation elevated vs sector. Margin improvement noted. Want revenue trend or analyst headlines?
 
 ---
 
-## Example 6 — Off-Scope
+## Example 6 — Off-scope
 
 **User:** book me a flight
 
-**Assistant:**
+**Assistant (Answer):**
 
 I'm focused on markets only — try a ticker like AAPL, MSFT, NVDA, or a sector/trend.
+
+For flight bookings, I recommend airline websites or travel agents.
 
