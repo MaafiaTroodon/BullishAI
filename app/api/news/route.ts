@@ -78,7 +78,22 @@ async function fetchTopMarketNews() {
         fetch(
           `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_KEY}`,
           { timeout: 5000 }
-        ).then(r => r.json()).catch(() => [])
+        )
+        .then(async r => {
+          const data = await r.json()
+          // Transform Finnhub general news format
+          return data.map((item: any) => ({
+            title: item.headline || item.summary,
+            headline: item.headline,
+            summary: item.summary,
+            url: item.url,
+            publishedAt: item.datetime,
+            datetime: item.datetime,
+            source: { name: item.source },
+            source_name: item.source,
+          }))
+        })
+        .catch(() => [])
       )
     }
 

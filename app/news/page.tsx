@@ -37,8 +37,23 @@ export default function NewsPage() {
   const isLoading = searchQuery ? isLoadingSearch : isLoadingTopNews
   const news: NewsItem[] = newsData?.articles || newsData?.news || []
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+  const formatDate = (dateInput: string | number) => {
+    let date: Date
+    
+    // Handle Unix timestamp (seconds or milliseconds)
+    if (typeof dateInput === 'number') {
+      // If timestamp is in seconds (less than 10000000000), convert to milliseconds
+      date = new Date(dateInput < 10000000000 ? dateInput * 1000 : dateInput)
+    } else {
+      date = new Date(dateInput)
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      // Return current date if invalid
+      date = new Date()
+    }
+    
     return {
       date: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -99,7 +114,9 @@ export default function NewsPage() {
         ) : news.length > 0 ? (
           <div className="grid gap-4">
             {news.slice(0, 20).map((item: any, index: number) => {
-              const formatted = formatDate(item.publishedAt || item.datetime || new Date().toISOString())
+              // Handle different date formats
+              const dateValue = item.publishedAt || item.datetime || item.time_published || Date.now()
+              const formatted = formatDate(dateValue)
               return (
                 <Link
                   key={index}
@@ -113,9 +130,9 @@ export default function NewsPage() {
                       <h3 className="text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition">
                         {item.title || item.headline}
                       </h3>
-                      {item.summary && (
+                      {(item.summary || item.description) && (
                         <p className="text-slate-400 mb-3 line-clamp-2">
-                          {item.summary}
+                          {item.summary || item.description}
                         </p>
                       )}
                       <div className="flex items-center gap-4 text-sm text-slate-500">
@@ -124,7 +141,7 @@ export default function NewsPage() {
                           <span>{formatted.date} • {formatted.time}</span>
                         </div>
                         <span className="text-blue-500">
-                          {item.source?.name || item.source}
+                          {item.source?.name || item.source || item.provider}
                         </span>
                       </div>
                     </div>
