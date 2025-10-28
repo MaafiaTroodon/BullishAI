@@ -303,7 +303,7 @@ export default function Home() {
                 <TradingViewTopStories 
                   displayMode="regular" 
                   width="100%" 
-                  height="850px"
+                  height="1000px"
                 />
               </div>
             </div>
