@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { GlobalNavbar } from '@/components/GlobalNavbar'
+import { StockAIInsights } from '@/components/StockAIInsights'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import useSWR from 'swr'
 
@@ -158,6 +159,17 @@ export default function StockPage() {
           <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
             <div className="text-center text-slate-400">Chart data not available</div>
           </div>
+        )}
+
+        {/* AI Insights */}
+        {quote && (
+          <StockAIInsights 
+            symbol={symbol} 
+            quote={quote} 
+            candles={candles || []} 
+            news={news || []}
+            changePctOverRange={changePctOverRange}
+          />
         )}
 
         {/* News */}
