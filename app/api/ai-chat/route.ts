@@ -38,8 +38,16 @@ export async function POST(request: NextRequest) {
         const isPositive = (data.changePct || 0) >= 0
         const arrow = isPositive ? '↑' : '↓'
         
+        // Get company name if available
+        const companyEntry = Object.entries(COMPANY_TO_TICKER).find(([, ticker]) => ticker === stockSymbolMatch)
+        const companyName = companyEntry ? companyEntry[0].charAt(0).toUpperCase() + companyEntry[0].slice(1) : null
+        
         // One-line summary
-        response = `**${stockSymbolMatch} — $${data.price?.toFixed(2) || 'N/A'} (${isPositive ? '+' : ''}${data.changePct?.toFixed(2) || '0.00'}%)** ${arrow}\n\n`
+        if (companyName) {
+          response = `**${companyName} (${stockSymbolMatch}) — $${data.price?.toFixed(2) || 'N/A'} (${isPositive ? '+' : ''}${data.changePct?.toFixed(2) || '0.00'}%)** ${arrow}\n\n`
+        } else {
+          response = `**${stockSymbolMatch} — $${data.price?.toFixed(2) || 'N/A'} (${isPositive ? '+' : ''}${data.changePct?.toFixed(2) || '0.00'}%)** ${arrow}\n\n`
+        }
         
         // Compact bullet list
         response += `**Key Stats:**\n`
@@ -211,6 +219,71 @@ const COMPANY_TO_TICKER: Record<string, string> = {
   'rivian': 'RIVN',
   'nio': 'NIO',
   'lucid': 'LCID',
+  // Crypto
+  'bitcoin': 'BTC-USD',
+  'btc': 'BTC-USD',
+  'ethereum': 'ETH-USD',
+  'eth': 'ETH-USD',
+  'cardano': 'ADA-USD',
+  'ada': 'ADA-USD',
+  'solana': 'SOL-USD',
+  'sol': 'SOL-USD',
+  'polygon': 'MATIC-USD',
+  'matic': 'MATIC-USD',
+  'polkadot': 'DOT-USD',
+  'dot': 'DOT-USD',
+  'litecoin': 'LTC-USD',
+  'ltc': 'LTC-USD',
+  'ripple': 'XRP-USD',
+  'xrp': 'XRP-USD',
+  'chainlink': 'LINK-USD',
+  'link': 'LINK-USD',
+  'avalanche': 'AVAX-USD',
+  'avax': 'AVAX-USD',
+  'uniswap': 'UNI-USD',
+  'uni': 'UNI-USD',
+  // More tech
+  'qualcomm': 'QCOM',
+  'qcom': 'QCOM',
+  'broadcom': 'AVGO',
+  'avgo': 'AVGO',
+  'cisco': 'CSCO',
+  'csco': 'CSCO',
+  'nvidia': 'NVDA',
+  'nvidia corp': 'NVDA',
+  // Pharma & Healthcare
+  'moderna': 'MRNA',
+  'mrna': 'MRNA',
+  'gilead': 'GILD',
+  'gild': 'GILD',
+  'abbvie': 'ABBV',
+  'abbv': 'ABBV',
+  'bristol myers': 'BMY',
+  'bmy': 'BMY',
+  'eli lilly': 'LLY',
+  'lly': 'LLY',
+  // Energy
+  'next era': 'NEE',
+  'nee': 'NEE',
+  'southern co': 'SO',
+  'so': 'SO',
+  'american electric': 'AEP',
+  'aep': 'AEP',
+  // Finance
+  'blackrock': 'BLK',
+  'blk': 'BLK',
+  'charles schwab': 'SCHW',
+  'schw': 'SCHW',
+  'alphabet': 'GOOGL',
+  // Industrial
+  'deere': 'DE',
+  'de': 'DE',
+  'honeywell': 'HON',
+  'hon': 'HON',
+  'ge': 'GE',
+  'general electric': 'GE',
+  '3m': 'MMM',
+  'mmm': 'MMM',
 }
 
 function extractStockSymbol(query: string, lowerQuery: string): string | null {
@@ -221,14 +294,51 @@ function extractStockSymbol(query: string, lowerQuery: string): string | null {
     }
   }
 
-  // Match common stock ticker patterns
+  // Create a list of all tickers to match
+  const allTickers = Object.values(COMPANY_TO_TICKER).concat([
+    'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC',
+    'IBM', 'ORCL', 'CRM', 'PYPL', 'ADBE', 'SHOP', 'UBER', 'LYFT', 'ABNB', 'DIS', 'WMT',
+    'COST', 'TGT', 'NKE', 'SBUX', 'V', 'MA', 'AXP', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C',
+    'BRK.B', 'UNH', 'JNJ', 'PFE', 'MRK', 'XOM', 'CVX', 'BA', 'CAT', 'GM', 'F', 'KO', 'PEP',
+    'MCD', 'T', 'VZ', 'HD', 'LOW', 'BABA', 'BIDU', 'TCEHY', 'SHEL', 'BP', 'TTE'
+  ])
+
+  // Check for any ticker symbol (uppercase) in the query
+  for (const ticker of allTickers) {
+    // Check for ticker in both uppercase and lowercase
+    if (query.includes(ticker) || lowerQuery.includes(ticker.toLowerCase())) {
+      return ticker
+    }
+  }
+
+  // Match common stock ticker patterns (uppercase)
   const tickerPattern = /\b[A-Z]{1,5}\b/g
   const tickers = query.match(tickerPattern)
+  
+  // Also try to extract potential ticker from lowercase (e.g., "tsla" -> "TSLA")
+  const lowerTickerPattern = /\b[a-z]{2,5}\b/g
+  const lowerTickers = lowerQuery.match(lowerTickerPattern)
+  
+  if (lowerTickers) {
+    for (const ticker of lowerTickers) {
+      if (ticker.length >= 2 && ticker.length <= 5) {
+        const upperTicker = ticker.toUpperCase()
+        // Check if it's a known ticker
+        if (allTickers.includes(upperTicker)) {
+          return upperTicker
+        }
+        // Check if it looks like a ticker (all letters, reasonable length)
+        if (/^[A-Z]{2,5}$/.test(upperTicker)) {
+          return upperTicker
+        }
+      }
+    }
+  }
   
   if (!tickers) return null
 
   // Common words to ignore
-  const ignoreWords = ['AI', 'BY', 'TO', 'IT', 'AT', 'THE', 'YOU', 'ME', 'IS', 'AM', 'MY', 'US', 'AS', 'OR', 'ON', 'DO', 'AN', 'IN', 'BE', 'SO']
+  const ignoreWords = ['AI', 'BY', 'TO', 'IT', 'AT', 'THE', 'YOU', 'ME', 'IS', 'AM', 'MY', 'US', 'AS', 'OR', 'ON', 'DO', 'AN', 'IN', 'BE', 'SO', 'WE', 'OF']
   
   for (const ticker of tickers) {
     if (ticker.length >= 2 && ticker.length <= 5 && !ignoreWords.includes(ticker.toUpperCase())) {
@@ -238,7 +348,8 @@ function extractStockSymbol(query: string, lowerQuery: string): string | null {
           lowerQuery.includes(`${ticker.toLowerCase()} quote`) ||
           lowerQuery.includes(`what is ${ticker.toLowerCase()}`) ||
           lowerQuery.includes(`tell me about ${ticker.toLowerCase()}`) ||
-          lowerQuery.includes(`current ${ticker.toLowerCase()}`)) {
+          lowerQuery.includes(`current ${ticker.toLowerCase()}`) ||
+          lowerQuery.includes(`price of ${ticker.toLowerCase()}`)) {
         return ticker
       }
       
