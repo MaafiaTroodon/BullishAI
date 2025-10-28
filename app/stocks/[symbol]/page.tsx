@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
-import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { GlobalNavbar } from '@/components/GlobalNavbar'
 import { StockAIInsights } from '@/components/StockAIInsights'
 import { TradingViewTechnicalAnalysis } from '@/components/TradingViewTechnicalAnalysis'
 import { TradingViewFinancials } from '@/components/TradingViewFinancials'
+import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 
@@ -174,31 +174,12 @@ export default function StockPage() {
       </div>
 
       <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Chart Range Selector */}
-        <div className="flex gap-2 mb-6">
-          {['1D', '5D', '1M', '6M', '1Y', '5Y'].map((r) => (
-            <button
-              key={r}
-              onClick={() => setChartRange(r.toLowerCase())}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${
-                chartRange === r.toLowerCase()
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-
-        {/* Chart */}
-        {candles && candles.length > 0 ? (
-          <StockChart data={candles} symbol={symbol} range={chartRange} source={chartSource} />
-        ) : (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
-            <div className="text-center text-slate-400">Chart data not available</div>
+        {/* TradingView Advanced Chart */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-8">
+          <div className="h-[600px]">
+            <TradingViewAdvancedChart symbol={symbol} />
           </div>
-        )}
+        </div>
 
         {/* AI Insights, Financials, and Technical Analysis */}
         {quote && (

@@ -304,28 +304,17 @@ export default function WatchlistPage() {
             </div>
           </div>
 
-          {/* Mini Charts Grid - Only Starred Stocks */}
+          {/* Mini Chart - Only Selected Stock */}
           <div className="lg:col-span-6">
-            <h2 className="text-xl font-bold text-white mb-4">Starred Stocks - Mini Charts</h2>
-            {starredItems.length === 0 ? (
-              <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
-                <p className="text-slate-400">Star stocks to see their mini charts here</p>
-                <p className="text-sm text-slate-500 mt-2">Click the star icon next to any stock in the list</p>
+            <h2 className="text-xl font-bold text-white mb-4">Selected Stock Chart</h2>
+            <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 h-[400px]">
+              <div className="mb-2">
+                <span className="font-bold text-white">{selectedSymbol}</span>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                {starredItems.map((symbol) => (
-                  <div key={symbol} className="bg-slate-800 rounded-lg border border-slate-700 p-4 h-[280px]">
-                    <div className="mb-2">
-                      <span className="font-bold text-white">{symbol}</span>
-                    </div>
-                    <div className="h-[240px]">
-                      <TradingViewMiniChart symbol={symbol} />
-                    </div>
-                  </div>
-                ))}
+              <div className="h-[360px]">
+                <TradingViewMiniChart symbol={selectedSymbol} />
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
