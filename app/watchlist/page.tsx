@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus, Trash2, TrendingUp, TrendingDown, Star, MoreVertical, Bell } from 'lucide-react'
 import useSWR from 'swr'
 import { StockChart } from '@/components/charts/StockChart'
+import { GlobalNavbar } from '@/components/GlobalNavbar'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -12,6 +13,7 @@ const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA',
 
 export default function WatchlistPage() {
   const [watchlistItems, setWatchlistItems] = useState(DEFAULT_STOCKS)
+  const [starredItems, setStarredItems] = useState<string[]>([])
   const [isClient, setIsClient] = useState(false)
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
   const [newSymbol, setNewSymbol] = useState('')
@@ -26,6 +28,10 @@ export default function WatchlistPage() {
       if (saved) {
         setWatchlistItems(JSON.parse(saved))
       }
+      const savedStars = localStorage.getItem('starredItems')
+      if (savedStars) {
+        setStarredItems(JSON.parse(savedStars))
+      }
     }
   }, [])
 
@@ -35,6 +41,13 @@ export default function WatchlistPage() {
       localStorage.setItem('watchlistItems', JSON.stringify(watchlistItems))
     }
   }, [watchlistItems, isClient])
+
+  // Save starred items to localStorage
+  useEffect(() => {
+    if (isClient && typeof window !== 'undefined') {
+      localStorage.setItem('starredItems', JSON.stringify(starredItems))
+    }
+  }, [starredItems, isClient])
 
   const { data: quotesData, isLoading: isLoadingQuotes } = useSWR(
     `/api/quotes?symbols=${watchlistItems.join(',')}`,
@@ -100,10 +113,31 @@ export default function WatchlistPage() {
     setShowSuggestions(false)
   }
 
+  const handleStarToggle = (symbol: string) => {
+    setStarredItems(prev => {
+      if (prev.includes(symbol)) {
+        return prev.filter(s => s !== symbol)
+      } else {
+        return [...prev, symbol]
+      }
+    })
+  }
+
+  // Sort watchlist: starred items first, then alphabetical
+  const sortedWatchlistItems = [...watchlistItems].sort((a, b) => {
+    const aStarred = starredItems.includes(a)
+    const bStarred = starredItems.includes(b)
+    
+    if (aStarred && !bStarred) return -1
+    if (!aStarred && bStarred) return 1
+    return a.localeCompare(b)
+  })
+
   const quotes = quotesData?.quotes || []
 
   return (
     <div className="min-h-screen bg-slate-900">
+      <GlobalNavbar />
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -173,10 +207,11 @@ export default function WatchlistPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {watchlistItems.map((symbol) => {
+                    {sortedWatchlistItems.map((symbol) => {
                       const quote = quotes.find((q: any) => q.symbol === symbol)
                       const isLoading = isLoadingQuotes
                       const isSelected = selectedSymbol === symbol
+                      const isStarred = starredItems.includes(symbol)
 
                       return (
                         <tr
@@ -188,8 +223,14 @@ export default function WatchlistPage() {
                         >
                           <td className="p-4">
                             <div className="flex items-center gap-2">
-                              <button className="hover:text-yellow-500 transition">
-                                <Star className="h-4 w-4 text-slate-400" />
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleStarToggle(symbol)
+                                }}
+                                className="hover:text-yellow-500 transition"
+                              >
+                                <Star className={`h-4 w-4 ${isStarred ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
                               </button>
                               <span className="font-semibold text-white">{symbol}</span>
                             </div>
