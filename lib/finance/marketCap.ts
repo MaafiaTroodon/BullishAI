@@ -75,19 +75,19 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
     )
 
     if (yahooResponse.data?.quoteSummary?.result?.[0]) {
-      const result = yahooResponse.data.quoteSummary.result[0]
+      const yahooData = yahooResponse.data.quoteSummary.result[0]
       
       // Try marketCap from price module first
-      let marketCapRaw = result.price?.marketCap?.raw
+      let marketCapRaw = yahooData.price?.marketCap?.raw
       
       // Fallback to summaryDetail
       if (!marketCapRaw) {
-        marketCapRaw = result.summaryDetail?.marketCap?.raw
+        marketCapRaw = yahooData.summaryDetail?.marketCap?.raw
       }
 
       // Fallback: calculate from shares outstanding
-      if (!marketCapRaw && priceUSD && result.summaryDetail?.sharesOutstanding?.raw) {
-        marketCapRaw = priceUSD * result.summaryDetail.sharesOutstanding.raw
+      if (!marketCapRaw && priceUSD && yahooData.summaryDetail?.sharesOutstanding?.raw) {
+        marketCapRaw = priceUSD * yahooData.summaryDetail.sharesOutstanding.raw
       }
 
       if (marketCapRaw && marketCapRaw > 0) {
