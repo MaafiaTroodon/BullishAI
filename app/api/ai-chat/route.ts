@@ -58,11 +58,20 @@ export async function POST(request: NextRequest) {
           response += `• Volume: ${formatVolume(data.volume)}\n`
         }
         
+        // Check if market is open (roughly 9:30 AM - 4:00 PM EST)
+        const now = new Date()
+        const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}))
+        const marketOpen = estTime.getHours() >= 9 && estTime.getHours() < 16 && estTime.getMinutes() >= 30
+        
         // Add brief market analysis
         if (Math.abs(data.changePct || 0) > 3) {
           response += `\n*📊 Significant ${isPositive ? 'rally' : 'pullback'} — check recent news for catalysts.*\n`
         } else if (Math.abs(data.changePct || 0) > 1) {
           response += `\n*📊 ${isPositive ? 'Moderate' : 'Light'} ${isPositive ? 'momentum' : 'pressure'} — normal market activity.*\n`
+        } else if (Math.abs(data.changePct || 0) === 0 && marketOpen) {
+          response += `\n*📊 Flat session — minimal price movement.*\n`
+        } else if (!marketOpen) {
+          response += `\n*📊 After-hours data — markets closed. Last session movement was minimal.*\n`
         } else {
           response += `\n*📊 Trading near previous close — stable session.*\n`
         }
@@ -82,7 +91,11 @@ export async function POST(request: NextRequest) {
         
         // Timestamp and source
         const now = new Date()
-        response += `\n\n*Updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} EST • Source: Live market data*`
+        const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}))
+        const isMarketOpen = estTime.getHours() >= 9 && estTime.getHours() < 16
+        const marketStatus = isMarketOpen ? '🟢 Market Open' : '🔴 After Hours'
+        
+        response += `\n\n*${marketStatus} • Updated: ${estTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} EST • Source: Live market data*`
         
         // Next steps
         response += `\n\n💡 *Need more? Ask for: 5-day chart, recent headlines, fundamentals, or sector comparison.*`
@@ -365,24 +378,31 @@ function extractStockSymbol(query: string, lowerQuery: string): string | null {
 
 async function fetchStockData(symbol: string): Promise<StockData | null> {
   try {
-    // Use our existing comprehensive quote API
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    // Determine base URL
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    if (!baseUrl) {
+      // Try to determine if we're in production
+      const isProduction = process.env.NODE_ENV === 'production'
+      baseUrl = isProduction ? 'https://bullish-ai.vercel.app' : 'http://localhost:3000'
+    }
     
     try {
       const response = await axios.get(`${baseUrl}/api/quote`, {
         params: { symbol },
-        timeout: 5000,
+        timeout: 8000,
       })
 
       if (response.data && response.data.price) {
+        const changePct = response.data.changePct || response.data.changePercent || 0
+        
         return {
           symbol: response.data.symbol || symbol,
           price: response.data.price,
-          change: response.data.change,
-          changePct: response.data.changePct,
-          high: response.data.high,
-          low: response.data.low,
-          volume: response.data.volume,
+          change: response.data.change || (response.data.price * changePct / 100),
+          changePct: changePct,
+          high: response.data.high || response.data.dayHigh,
+          low: response.data.low || response.data.dayLow,
+          volume: response.data.volume || response.data.marketVolume,
         }
       }
     } catch (apiError) {
