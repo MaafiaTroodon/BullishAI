@@ -273,7 +273,7 @@ export default function Home() {
           {/* Chart and Top Stories Side by Side */}
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
             {/* Advanced Chart */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px]">
               {topQuotes && (
                 <div className="p-4">
                   <h3 className="text-2xl font-bold text-white mb-2">{selectedSymbol}</h3>
@@ -289,13 +289,13 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              <div className="h-[500px]">
+              <div className="h-[calc(700px-100px)]">
                 <TradingViewAdvancedChart symbol={selectedSymbol} />
               </div>
             </div>
 
             {/* Top Stories Widget */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[500px] flex flex-col">
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px] flex flex-col">
               <div className="p-4 border-b border-slate-700 flex-shrink-0">
                 <h3 className="text-2xl font-bold text-white">Top Stories</h3>
               </div>
