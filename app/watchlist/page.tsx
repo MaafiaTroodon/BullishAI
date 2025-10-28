@@ -153,9 +153,9 @@ export default function WatchlistPage() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-12 gap-8">
           {/* Watchlist Table */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-7">
             {/* Add Symbol Input */}
             <form onSubmit={handleAddSymbol} className="mb-4 relative">
               <div className="flex gap-2">
@@ -328,7 +328,7 @@ export default function WatchlistPage() {
           </div>
 
           {/* Chart Sidebar */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-5">
             <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 sticky top-4">
               <h2 className="text-xl font-bold text-white mb-4">{selectedSymbol}</h2>
               
