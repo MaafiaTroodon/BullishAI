@@ -90,10 +90,8 @@ export async function POST(request: NextRequest) {
         }
         
         // Timestamp and source
-        const now = new Date()
-        const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}))
-        const isMarketOpen = estTime.getHours() >= 9 && estTime.getHours() < 16
-        const marketStatus = isMarketOpen ? '🟢 Market Open' : '🔴 After Hours'
+        const isMarketOpenStatus = estTime.getHours() >= 9 && estTime.getHours() < 16
+        const marketStatus = isMarketOpenStatus ? '🟢 Market Open' : '🔴 After Hours'
         
         response += `\n\n*${marketStatus} • Updated: ${estTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} EST • Source: Live market data*`
         
