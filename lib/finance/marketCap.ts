@@ -1,156 +1,184 @@
 import axios from 'axios'
 
-// In-memory cache (15 minutes TTL)
-const cache = new Map<string, { value: number | null; source: string; timestamp: number }>()
+const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.NEXT_PUBLIC_FINNHUB_KEY
+const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY || process.env.NEXT_PUBLIC_TWELVEDATA_KEY
+const FMP_KEY = process.env.FINANCIALMODELINGPREP_API_KEY
+
+export interface MarketCapResult {
+  raw: number | null
+  source: string
+  note?: string
+}
+
+// In-memory cache (15 minutes)
+const cache = new Map<string, { value: MarketCapResult; timestamp: number }>()
 const CACHE_TTL = 15 * 60 * 1000 // 15 minutes
 
-function shortenMarketCap(billions: number): string {
-  if (billions < 0.001) {
-    return `${(billions * 1000).toFixed(1)}M`
-  } else if (billions < 1) {
-    return `${billions.toFixed(2)}B`
-  } else if (billions < 1000) {
-    return `${billions.toFixed(2)}B`
+// Formatter utility
+export function formatMarketCapShort(raw: number): string {
+  const abs = Math.abs(raw)
+  
+  if (abs < 1_000_000) {
+    return `${(raw / 1_000).toFixed(0)}K`
+  } else if (abs < 1_000_000_000) {
+    return `${(raw / 1_000_000).toFixed(2)}M`
+  } else if (abs < 1_000_000_000_000) {
+    return `${(raw / 1_000_000_000).toFixed(2)}B`
   } else {
-    return `${(billions / 1000).toFixed(2)}T`
+    return `${(raw / 1_000_000_000_000).toFixed(2)}T`
   }
 }
 
-export async function resolveMarketCap(
-  symbol: string,
-  price?: number
-): Promise<{ raw: number | null; short: string | null; source: string }> {
-  // Check cache first
+export function formatMarketCapFull(raw: number): string {
+  const abs = Math.abs(raw)
+  
+  if (abs < 1_000_000) {
+    return new Intl.NumberFormat('en-US', { 
+      minimumFractionDigits: 0, 
+      maximumFractionDigits: 0 
+    }).format(raw)
+  } else if (abs < 1_000_000_000) {
+    return `${new Intl.NumberFormat('en-US', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(raw / 1_000_000)}M`
+  } else if (abs < 1_000_000_000_000) {
+    return `${new Intl.NumberFormat('en-US', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(raw / 1_000_000_000)}B`
+  } else {
+    return `${new Intl.NumberFormat('en-US', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(raw / 1_000_000_000_000)}T`
+  }
+}
+
+// Known large caps (sanity check)
+const LARGE_CAPS = new Set(['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'GOOG', 'META', 'TSLA', 'AMD', 'NFLX', 'ORCL', 'CRM', 'AVGO', 'ADBE'])
+
+export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Promise<MarketCapResult> {
+  // Check cache
   const cached = cache.get(symbol)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return {
-      raw: cached.value,
-      short: cached.value ? shortenMarketCap(cached.value / 1e9) : null,
-      source: cached.source,
-    }
+    return cached.value
   }
 
-  const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.NEXT_PUBLIC_FINNHUB_KEY
-  const TWELVE_DATA_KEY = process.env.TWELVEDATA_API_KEY
-  const FMP_KEY = process.env.FINANCIALMODELINGPREP_API_KEY
+  let result: MarketCapResult = { raw: null, source: 'none' }
 
-  let source = 'none'
-  let marketCapValue: number | null = null
+  // 1. Try Yahoo Finance
+  try {
+    const yahooResponse = await axios.get(
+      `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail,price`,
+      { timeout: 3000 }
+    )
 
-  // Try 1: Finnhub
-  if (FINNHUB_KEY && !marketCapValue) {
-    try {
-      const response = await axios.get(
-        `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${FINNHUB_KEY}`,
-        { timeout: 3000 }
-      )
-      const metric = response.data?.metric?.marketCapitalization
-      if (metric && typeof metric === 'number' && metric > 0) {
-        marketCapValue = metric * 1e9 // Finnhub returns in billions
-        source = 'finnhub'
+    if (yahooResponse.data?.quoteSummary?.result?.[0]) {
+      const result = yahooResponse.data.quoteSummary.result[0]
+      
+      // Try marketCap from price module first
+      let marketCapRaw = result.price?.marketCap?.raw
+      
+      // Fallback to summaryDetail
+      if (!marketCapRaw) {
+        marketCapRaw = result.summaryDetail?.marketCap?.raw
       }
-    } catch (error) {
-      console.log(`Finnhub market cap failed for ${symbol}:`, error)
-    }
-  }
 
-  // Try 2: TwelveData
-  if (!marketCapValue && TWELVE_DATA_KEY) {
-    try {
-      const response = await axios.get(
-        `https://api.twelvedata.com/quote?symbol=${symbol}&apikey=${TWELVE_DATA_KEY}`,
-        { timeout: 3000 }
-      )
-      const capStr = response.data?.market_cap
-      if (capStr) {
-        const parsed = parseFloat(capStr.replace(/,/g, ''))
-        if (parsed && !isNaN(parsed)) {
-          marketCapValue = parsed
-          source = 'twelvedata'
+      // Fallback: calculate from shares outstanding
+      if (!marketCapRaw && priceUSD && result.summaryDetail?.sharesOutstanding?.raw) {
+        marketCapRaw = priceUSD * result.summaryDetail.sharesOutstanding.raw
+      }
+
+      if (marketCapRaw && marketCapRaw > 0) {
+        result = {
+          raw: marketCapRaw,
+          source: 'yahoo'
         }
       }
-    } catch (error) {
-      console.log(`TwelveData market cap failed for ${symbol}:`, error)
     }
+  } catch (error) {
+    console.log(`Yahoo market cap failed for ${symbol}`)
   }
 
-  // Try 3: Yahoo Finance
-  if (!marketCapValue) {
+  // 2. If not found or sanity failed, try Finnhub
+  if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
     try {
-      const response = await axios.get(
-        `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=price,summaryDetail,defaultKeyStatistics`,
-        { timeout: 3000 }
-      )
-      
-      if (response.data?.quoteSummary?.result?.[0]) {
-        const data = response.data.quoteSummary.result[0]
-        
-        // Try multiple sources in Yahoo
-        if (data.price?.marketCap?.raw) {
-          marketCapValue = data.price.marketCap.raw
-          source = 'yahoo'
-        } else if (data.summaryDetail?.marketCap?.raw) {
-          marketCapValue = data.summaryDetail.marketCap.raw
-          source = 'yahoo'
-        } else if (data.defaultKeyStatistics?.marketCap?.raw) {
-          marketCapValue = data.defaultKeyStatistics.marketCap.raw
-          source = 'yahoo'
-        }
-      }
-    } catch (error) {
-      console.log(`Yahoo Finance market cap failed for ${symbol}:`, error)
-    }
-  }
-
-  // Try 4: Financial Modeling Prep
-  if (!marketCapValue && FMP_KEY) {
-    try {
-      const response = await axios.get(
-        `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${FMP_KEY}`,
-        { timeout: 3000 }
-      )
-      
-      if (response.data && response.data[0]?.mktCap && response.data[0].mktCap > 0) {
-        marketCapValue = response.data[0].mktCap
-        source = 'fmp'
-      }
-    } catch (error) {
-      console.log(`FMP market cap failed for ${symbol}:`, error)
-    }
-  }
-
-  // Try 5: Computed fallback
-  if (!marketCapValue && price && price > 0) {
-    try {
-      // Try to get shares outstanding from Finnhub
       if (FINNHUB_KEY) {
-        const response = await axios.get(
-          `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_KEY}`,
+        const finnhubResponse = await axios.get(
+          `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${FINNHUB_KEY}`,
           { timeout: 3000 }
         )
-        
-        const sharesOutstanding = response.data?.shareOutstanding
-        if (sharesOutstanding && sharesOutstanding > 0) {
-          marketCapValue = sharesOutstanding * price
-          source = 'computed'
+
+        if (finnhubResponse.data?.metric?.marketCapitalization) {
+          // Finnhub returns in billions
+          const marketCapBillions = finnhubResponse.data.metric.marketCapitalization
+          const marketCapRaw = marketCapBillions * 1e9
+
+          if (marketCapRaw > 0 && (!LARGE_CAPS.has(symbol) || marketCapRaw >= 5e9)) {
+            result = {
+              raw: marketCapRaw,
+              source: 'finnhub'
+            }
+          }
         }
       }
     } catch (error) {
-      console.log(`Computed market cap failed for ${symbol}:`, error)
+      console.log(`Finnhub market cap failed for ${symbol}`)
+    }
+  }
+
+  // 3. If still not found, try Financial Modeling Prep
+  if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
+    try {
+      if (FMP_KEY) {
+        const fmpResponse = await axios.get(
+          `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${FMP_KEY}`,
+          { timeout: 3000 }
+        )
+
+        if (fmpResponse.data && fmpResponse.data[0]?.mktCap) {
+          const marketCapRaw = fmpResponse.data[0].mktCap
+          if (marketCapRaw > 0 && (!LARGE_CAPS.has(symbol) || marketCapRaw >= 5e9)) {
+            result = {
+              raw: marketCapRaw,
+              source: 'fmp'
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`FMP market cap failed for ${symbol}`)
+    }
+  }
+
+  // 4. Last resort: Try Twelve Data
+  if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
+    try {
+      if (TWELVE_DATA_KEY) {
+        const twelveResponse = await axios.get(
+          `https://api.twelvedata.com/quote?symbol=${symbol}&apikey=${TWELVE_DATA_KEY}`,
+          { timeout: 3000 }
+        )
+
+        if (twelveResponse.data?.market_cap) {
+          const marketCapRaw = parseFloat(twelveResponse.data.market_cap)
+          if (marketCapRaw > 0) {
+            result = {
+              raw: marketCapRaw,
+              source: 'twelvedata'
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`Twelve Data market cap failed for ${symbol}`)
     }
   }
 
   // Cache the result
-  cache.set(symbol, {
-    value: marketCapValue,
-    source,
-    timestamp: Date.now(),
-  })
+  cache.set(symbol, { value: result, timestamp: Date.now() })
 
-  return {
-    raw: marketCapValue,
-    short: marketCapValue ? shortenMarketCap(marketCapValue / 1e9) : null,
-    source,
-  }
+  return result
 }
 
