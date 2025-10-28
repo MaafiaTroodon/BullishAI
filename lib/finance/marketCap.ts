@@ -60,6 +60,24 @@ export function formatMarketCapFull(raw: number): string {
 // Known large caps (sanity check)
 const LARGE_CAPS = new Set(['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'GOOG', 'META', 'TSLA', 'AMD', 'NFLX', 'ORCL', 'CRM', 'AVGO', 'ADBE'])
 
+// Hardcoded market cap data as absolute last resort (approximate values, will be replaced by API data if available)
+const HARDCODED_MARKET_CAPS: Record<string, number> = {
+  'AAPL': 4_000_000_000_000,  // ~$4T
+  'MSFT': 3_800_000_000_000,  // ~$3.8T
+  'NVDA': 2_400_000_000_000,  // ~$2.4T
+  'AMZN': 2_000_000_000_000,  // ~$2T
+  'GOOGL': 1_900_000_000_000, // ~$1.9T
+  'GOOG': 1_900_000_000_000,  // ~$1.9T
+  'META': 1_300_000_000_000,  // ~$1.3T
+  'TSLA': 600_000_000_000,    // ~$600B
+  'AMD': 300_000_000_000,      // ~$300B
+  'NFLX': 250_000_000_000,     // ~$250B
+  'ORCL': 500_000_000_000,     // ~$500B
+  'CRM': 250_000_000_000,      // ~$250B
+  'AVGO': 800_000_000_000,     // ~$800B
+  'ADBE': 250_000_000_000,     // ~$250B
+}
+
 export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Promise<MarketCapResult> {
   // Check cache
   const cached = cache.get(symbol)
@@ -250,6 +268,29 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
       }
     } catch (error) {
       console.log(`Yahoo shares outstanding failed for ${symbol}`)
+    }
+  }
+
+  // 7. ABSOLUTE LAST RESORT: Use hardcoded values if everything fails
+  if (!result.raw && HARDCODED_MARKET_CAPS[symbol]) {
+    const hardcodedValue = HARDCODED_MARKET_CAPS[symbol]
+    // Scale it based on current price if available
+    if (priceUSD) {
+      // Get approximate shares from hardcoded value
+      const approximateShares = hardcodedValue / 150 // Rough share price estimate
+      const calculatedFromHardcoded = priceUSD * approximateShares
+      
+      result = {
+        raw: calculatedFromHardcoded > 100_000_000 ? calculatedFromHardcoded : hardcodedValue,
+        source: 'hardcoded-fallback',
+        note: 'Hardcoded fallback with price scaling'
+      }
+    } else {
+      result = {
+        raw: hardcodedValue,
+        source: 'hardcoded',
+        note: 'Hardcoded fallback'
+      }
     }
   }
 
