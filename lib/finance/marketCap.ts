@@ -4,6 +4,7 @@ import { fetchMarketCapFromGoogle } from '../google-finance'
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.NEXT_PUBLIC_FINNHUB_KEY
 const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY || process.env.NEXT_PUBLIC_TWELVEDATA_KEY
 const FMP_KEY = process.env.FINANCIALMODELINGPREP_API_KEY
+const ALPHAVANTAGE_KEY = process.env.ALPHAVANTAGE_API_KEY
 
 export interface MarketCapResult {
   raw: number | null
@@ -161,7 +162,7 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
     }
   }
 
-  // 4. Last resort: Try Twelve Data
+  // 4. Try Twelve Data
   if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
     try {
       if (TWELVE_DATA_KEY) {
@@ -185,6 +186,30 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
     }
   }
 
+  // 4.5. Try Alpha Vantage
+  if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
+    try {
+      if (ALPHAVANTAGE_KEY) {
+        const avResponse = await axios.get(
+          `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${ALPHAVANTAGE_KEY}`,
+          { timeout: 3000 }
+        )
+
+        if (avResponse.data?.MarketCapitalization) {
+          const marketCapRaw = parseFloat(avResponse.data.MarketCapitalization)
+          if (marketCapRaw > 0 && (!LARGE_CAPS.has(symbol) || marketCapRaw >= 5e9)) {
+            result = {
+              raw: marketCapRaw,
+              source: 'alphavantage'
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`Alpha Vantage market cap failed for ${symbol}`)
+    }
+  }
+
   // 5. Final fallback: Try Google Finance
   if (!result.raw || (LARGE_CAPS.has(symbol) && result.raw < 5e9)) {
     try {
@@ -197,6 +222,34 @@ export async function resolveMarketCapUSD(symbol: string, priceUSD?: number): Pr
       }
     } catch (error) {
       console.log(`Google Finance market cap failed for ${symbol}`)
+    }
+  }
+
+  // 6. Ultimate fallback: Calculate from shares outstanding via multiple sources
+  if (!result.raw && priceUSD) {
+    try {
+      // Try Yahoo Finance for shares outstanding
+      const yahooResponse = await axios.get(
+        `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryDetail`,
+        { timeout: 3000 }
+      )
+
+      if (yahooResponse.data?.quoteSummary?.result?.[0]) {
+        const sharesOutstanding = yahooResponse.data.quoteSummary.result[0].summaryDetail?.sharesOutstanding?.raw
+        
+        if (sharesOutstanding && sharesOutstanding > 0) {
+          const calculatedMarketCap = priceUSD * sharesOutstanding
+          if (calculatedMarketCap > 100_000_000) { // Minimum $100M
+            result = {
+              raw: calculatedMarketCap,
+              source: 'calculated-yahoo',
+              note: 'Calculated from shares outstanding'
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`Yahoo shares outstanding failed for ${symbol}`)
     }
   }
 
