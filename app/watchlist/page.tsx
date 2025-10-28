@@ -153,9 +153,9 @@ export default function WatchlistPage() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-12 gap-8">
+        <div className="grid lg:grid-cols-12 gap-6">
           {/* Watchlist Table */}
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-6">
             {/* Add Symbol Input */}
             <form onSubmit={handleAddSymbol} className="mb-4 relative">
               <div className="flex gap-2">
@@ -221,8 +221,8 @@ export default function WatchlistPage() {
                             isSelected ? 'bg-blue-600/10' : ''
                           }`}
                         >
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
+                          <td className="p-5">
+                            <div className="flex items-center gap-3">
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -230,27 +230,27 @@ export default function WatchlistPage() {
                                 }}
                                 className="hover:text-yellow-500 transition"
                               >
-                                <Star className={`h-4 w-4 ${isStarred ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
+                                <Star className={`h-5 w-5 ${isStarred ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
                               </button>
-                              <span className="font-semibold text-white">{symbol}</span>
+                              <span className="font-bold text-white text-lg">{symbol}</span>
                             </div>
                           </td>
-                          <td className="text-right p-4">
+                          <td className="text-right p-5">
                             {isLoading ? (
                               <div className="animate-pulse bg-slate-700 h-4 w-16 rounded mx-auto"></div>
                             ) : quote && quote.data.price ? (
-                              <span className="font-semibold text-white">
+                              <span className="font-bold text-white text-lg">
                                 ${quote.data.price.toFixed(2)}
                               </span>
                             ) : quote && quote.data.c ? (
-                              <span className="font-semibold text-white">
+                              <span className="font-bold text-white text-lg">
                                 ${quote.data.c.toFixed(2)}
                               </span>
                             ) : (
                               <span className="text-slate-500">--</span>
                             )}
                           </td>
-                          <td className="text-right p-4">
+                          <td className="text-right p-5">
                             {isLoading ? (
                               <div className="animate-pulse bg-slate-700 h-4 w-16 rounded mx-auto"></div>
                             ) : quote ? (
@@ -262,7 +262,7 @@ export default function WatchlistPage() {
                                 ) : (
                                   <TrendingDown className="h-4 w-4" />
                                 )}
-                                <span className="font-medium">
+                                <span className="font-semibold text-base">
                                   {quote.data.dp >= 0 ? '+' : ''}{quote.data.dp?.toFixed(2) || '0.00'}%
                                 </span>
                               </div>
@@ -270,7 +270,7 @@ export default function WatchlistPage() {
                               <span className="text-slate-500">--                              </span>
                             )}
                           </td>
-                          <td className="text-right p-4 text-xs">
+                          <td className="text-right p-5 text-sm">
                             {quote && quote.data.week52Low && quote.data.week52High ? (
                               <span className="text-slate-400">
                                 ${quote.data.week52Low?.toFixed(2)} - ${quote.data.week52High?.toFixed(2)}
@@ -279,7 +279,7 @@ export default function WatchlistPage() {
                               <span className="text-slate-500">--</span>
                             )}
                           </td>
-                          <td className="text-right p-4 text-xs">
+                          <td className="text-right p-5 text-sm">
                             {quote && quote.data.marketCapShort ? (
                               <span 
                                 className="text-slate-400"
@@ -295,7 +295,7 @@ export default function WatchlistPage() {
                               <span className="text-slate-500">--</span>
                             )}
                           </td>
-                          <td className="text-center p-4">
+                          <td className="text-center p-5">
                             <div className="flex justify-center gap-2">
                               <button
                                 onClick={(e) => {
@@ -328,8 +328,8 @@ export default function WatchlistPage() {
           </div>
 
           {/* Chart Sidebar */}
-          <div className="lg:col-span-5">
-            <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 sticky top-4">
+          <div className="lg:col-span-6">
+            <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 sticky top-4">
               <h2 className="text-xl font-bold text-white mb-4">{selectedSymbol}</h2>
               
               {quotes.find((q: any) => q.symbol === selectedSymbol) && (
