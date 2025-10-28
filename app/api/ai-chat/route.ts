@@ -50,32 +50,34 @@ export async function POST(request: NextRequest) {
           response += `• Volume: ${formatVolume(data.volume)}\n`
         }
         
-        // Add brief analysis
+        // Add brief market analysis
         if (Math.abs(data.changePct || 0) > 3) {
-          response += `\n*Significant ${isPositive ? 'rally' : 'pullback'} — check recent news for catalysts.*\n`
+          response += `\n*📊 Significant ${isPositive ? 'rally' : 'pullback'} — check recent news for catalysts.*\n`
         } else if (Math.abs(data.changePct || 0) > 1) {
-          response += `\n*${isPositive ? 'Moderate' : 'Light'} ${isPositive ? 'momentum' : 'pressure'} — normal market activity.*\n`
+          response += `\n*📊 ${isPositive ? 'Moderate' : 'Light'} ${isPositive ? 'momentum' : 'pressure'} — normal market activity.*\n`
+        } else {
+          response += `\n*📊 Trading near previous close — stable session.*\n`
         }
 
         // Add buy/sell insight (without advice)
         if (lowerQuery.includes('buy') || lowerQuery.includes('sell') || lowerQuery.includes('should i')) {
-          response += `\n**Market Position:**\n`
+          response += `\n**Market Analysis:**\n`
           if (isPositive && Math.abs(data.changePct || 0) > 2) {
-            response += `• Trading with strong momentum — consider risk management\n`
+            response += `• Strong momentum observed — monitor for overbought signals\n`
           } else if (!isPositive && Math.abs(data.changePct || 0) > 2) {
-            response += `• Near-term volatility — monitor support levels\n`
+            response += `• Near-term selling pressure — watch support levels\n`
           } else {
-            response += `• Stable trading pattern — assess fundamentals\n`
+            response += `• Stable price action — assess company fundamentals\n`
           }
-          response += `*Note: This is market information only, not investment advice.*\n`
+          response += `\n*⚠️ This is market information only, not investment advice. Always do your own research.*\n`
         }
         
-        // Timestamp
+        // Timestamp and source
         const now = new Date()
-        response += `\n*Updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Source: Live market data*`
+        response += `\n\n*Updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} EST • Source: Live market data*`
         
         // Next steps
-        response += `\n\n💡 *Want 5-day chart, recent headlines, or fundamentals?*`
+        response += `\n\n💡 *Need more? Ask for: 5-day chart, recent headlines, fundamentals, or sector comparison.*`
       } else {
         response = `Unable to fetch live data for ${stockSymbolMatch}. Verify the ticker or try: MSFT, NVDA, TSLA, GOOGL.`
       }
@@ -120,7 +122,105 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Company name to ticker mapping
+const COMPANY_TO_TICKER: Record<string, string> = {
+  'amazon': 'AMZN',
+  'apple': 'AAPL',
+  'microsoft': 'MSFT',
+  'google': 'GOOGL',
+  'alphabet': 'GOOGL',
+  'meta': 'META',
+  'facebook': 'META',
+  'tesla': 'TSLA',
+  'nvidia': 'NVDA',
+  'netflix': 'NFLX',
+  'amd': 'AMD',
+  'intel': 'INTC',
+  'oracle': 'ORCL',
+  'ibm': 'IBM',
+  'salesforce': 'CRM',
+  'paypal': 'PYPL',
+  'adobe': 'ADBE',
+  'shopify': 'SHOP',
+  'uber': 'UBER',
+  'lyft': 'LYFT',
+  'airbnb': 'ABNB',
+  'disney': 'DIS',
+  'walmart': 'WMT',
+  'costco': 'COST',
+  'target': 'TGT',
+  'nike': 'NKE',
+  'starbucks': 'SBUX',
+  'visa': 'V',
+  'mastercard': 'MA',
+  'american express': 'AXP',
+  'jpmorgan': 'JPM',
+  'jp morgan': 'JPM',
+  'chase': 'JPM',
+  'bank of america': 'BAC',
+  'bofa': 'BAC',
+  'wells fargo': 'WFC',
+  'goldman sachs': 'GS',
+  'morgan stanley': 'MS',
+  'citigroup': 'C',
+  'berkshire hathaway': 'BRK.B',
+  'johnson & johnson': 'JNJ',
+  'pfizer': 'PFE',
+  'merck': 'MRK',
+  'exxon': 'XOM',
+  'exxon mobil': 'XOM',
+  'chevron': 'CVX',
+  'boeing': 'BA',
+  'caterpillar': 'CAT',
+  'general motors': 'GM',
+  'gm': 'GM',
+  'ford': 'F',
+  'coca cola': 'KO',
+  'coke': 'KO',
+  'pepsi': 'PEP',
+  'mcdonalds': 'MCD',
+  'at&t': 'T',
+  'att': 'T',
+  'verizon': 'VZ',
+  'home depot': 'HD',
+  'lowes': 'LOW',
+  'samsung': '005930.KS',
+  'alibaba': 'BABA',
+  'baidu': 'BIDU',
+  'tencent': 'TCEHY',
+  'shell': 'SHEL',
+  'bp': 'BP',
+  'total': 'TTE',
+  'shell': 'SHEL',
+  'morgan stanley': 'MS',
+  'duke energy': 'DUK',
+  'pg&e': 'PCG',
+  'american airlines': 'AAL',
+  'delta': 'DAL',
+  'united': 'UAL',
+  'spotify': 'SPOT',
+  'zoom': 'ZM',
+  'peloton': 'PTON',
+  'snowflake': 'SNOW',
+  'datadog': 'DDOG',
+  'mongodb': 'MDB',
+  'cloudflare': 'NET',
+  'splunk': 'SPLK',
+  'crowdstrike': 'CRWD',
+  'palantir': 'PLTR',
+  'rivian': 'RIVN',
+  'nio': 'NIO',
+  'lucid': 'LCID',
+}
+
 function extractStockSymbol(query: string, lowerQuery: string): string | null {
+  // First check for company names in the query
+  for (const [company, ticker] of Object.entries(COMPANY_TO_TICKER)) {
+    if (lowerQuery.includes(company)) {
+      return ticker
+    }
+  }
+
   // Match common stock ticker patterns
   const tickerPattern = /\b[A-Z]{1,5}\b/g
   const tickers = query.match(tickerPattern)
@@ -128,21 +228,22 @@ function extractStockSymbol(query: string, lowerQuery: string): string | null {
   if (!tickers) return null
 
   // Common words to ignore
-  const ignoreWords = ['AI', 'BY', 'TO', 'IT', 'AT', 'THE', 'YOU', 'ME', 'IS', 'AM', 'MY', 'US', 'AS', 'OR', 'ON']
+  const ignoreWords = ['AI', 'BY', 'TO', 'IT', 'AT', 'THE', 'YOU', 'ME', 'IS', 'AM', 'MY', 'US', 'AS', 'OR', 'ON', 'DO', 'AN', 'IN', 'BE', 'SO']
   
   for (const ticker of tickers) {
-    if (ticker.length >= 1 && ticker.length <= 5 && !ignoreWords.includes(ticker)) {
+    if (ticker.length >= 2 && ticker.length <= 5 && !ignoreWords.includes(ticker.toUpperCase())) {
       // If the word appears after keywords like "price", "stock", etc.
       if (lowerQuery.includes(`${ticker.toLowerCase()} price`) || 
           lowerQuery.includes(`${ticker.toLowerCase()} stock`) ||
           lowerQuery.includes(`${ticker.toLowerCase()} quote`) ||
           lowerQuery.includes(`what is ${ticker.toLowerCase()}`) ||
-          lowerQuery.includes(`tell me about ${ticker.toLowerCase()}`)) {
+          lowerQuery.includes(`tell me about ${ticker.toLowerCase()}`) ||
+          lowerQuery.includes(`current ${ticker.toLowerCase()}`)) {
         return ticker
       }
       
       // If it's a standalone capital letters query
-      if (ticker.length === tickers.length && ticker.length <= 5 && ticker.length >= 1) {
+      if (ticker.length <= 5 && ticker.length >= 2) {
         return ticker
       }
     }
@@ -153,10 +254,35 @@ function extractStockSymbol(query: string, lowerQuery: string): string | null {
 
 async function fetchStockData(symbol: string): Promise<StockData | null> {
   try {
-    // Try Finnhub first
+    // Use our existing comprehensive quote API
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    
+    try {
+      const response = await axios.get(`${baseUrl}/api/quote`, {
+        params: { symbol },
+        timeout: 5000,
+      })
+
+      if (response.data && response.data.price) {
+        return {
+          symbol: response.data.symbol || symbol,
+          price: response.data.price,
+          change: response.data.change,
+          changePct: response.data.changePct,
+          high: response.data.high,
+          low: response.data.low,
+          volume: response.data.volume,
+        }
+      }
+    } catch (apiError) {
+      console.error('Quote API failed, trying direct fetch:', apiError)
+    }
+
+    // Fallback: Try Finnhub directly
     if (FINNHUB_KEY) {
       const response = await axios.get(`https://finnhub.io/api/v1/quote`, {
         params: { symbol, token: FINNHUB_KEY },
+        timeout: 5000,
       })
 
       if (response.data && response.data.c !== null) {
@@ -175,24 +301,27 @@ async function fetchStockData(symbol: string): Promise<StockData | null> {
       }
     }
 
-    // Fallback to Yahoo Finance
-    const yahooResponse = await axios.get(`https://query1.finance.yahoo.com/v7/finance/quote`, {
-      params: {
-        symbols: symbol,
-      },
-    })
+    // Last resort: Yahoo Finance
+    try {
+      const yahooResponse = await axios.get(`https://query1.finance.yahoo.com/v7/finance/quote`, {
+        params: { symbols: symbol },
+        timeout: 5000,
+      })
 
-    const quote = yahooResponse.data?.quoteResponse?.result?.[0]
-    if (quote) {
-      return {
-        symbol,
-        price: quote.regularMarketPrice,
-        change: quote.regularMarketChange,
-        changePct: quote.regularMarketChangePercent,
-        high: quote.regularMarketDayHigh,
-        low: quote.regularMarketDayLow,
-        volume: quote.regularMarketVolume,
+      const quote = yahooResponse.data?.quoteResponse?.result?.[0]
+      if (quote && quote.regularMarketPrice) {
+        return {
+          symbol,
+          price: quote.regularMarketPrice,
+          change: quote.regularMarketChange,
+          changePct: (quote.regularMarketChangePercent || 0) * 100,
+          high: quote.regularMarketDayHigh,
+          low: quote.regularMarketDayLow,
+          volume: quote.regularMarketVolume,
+        }
       }
+    } catch (yahooError) {
+      console.error('Yahoo Finance failed:', yahooError)
     }
 
     return null
