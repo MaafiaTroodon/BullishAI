@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
 import { getCandles } from '@/lib/market-data'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
+import { resolveMarketCapUSD, formatMarketCapShort, formatMarketCapFull } from '@/lib/finance/marketCap'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,6 +30,12 @@ export async function GET(
         { status: 502 }
       )
     }
+
+    // Resolve market cap with all fallbacks including hardcoded values
+    const marketCapResult = await resolveMarketCapUSD(symbol, quote.price)
+    const marketCap = marketCapResult.raw || quote.marketCap || 0
+    const marketCapShort = marketCap ? formatMarketCapShort(marketCap) : null
+    const marketCapFull = marketCap ? formatMarketCapFull(marketCap) : null
 
     // Fetch candles for chart
     let candlesResult
@@ -70,7 +77,10 @@ export async function GET(
         low: quote.low,
         previousClose: quote.previousClose,
         volume: quote.volume,
-        marketCap: quote.marketCap,
+        marketCap: marketCap,
+        marketCapShort: marketCapShort,
+        marketCapFull: marketCapFull,
+        marketCapSource: marketCapResult.source,
         peRatio: quote.peRatio,
         week52High: quote.week52High,
         week52Low: quote.week52Low,
