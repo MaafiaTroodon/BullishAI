@@ -12,11 +12,75 @@ const GetFinancialsArgs = z.object({ symbol: z.string(), period: z.enum(['annual
 const GetSentimentArgs = z.object({ symbol: z.string(), lookbackHours: z.number().default(48) })
 
 const tools: any[] = [
-  { type: 'function', function: { name: 'getQuote', description: 'Get real-time price, change%, volume, market cap, P/E ratio, and 52-week range for a stock ticker symbol', parameters: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getNews', description: 'Get recent headlines and news articles for a stock from the last 24-72 hours. Returns headline titles and sources. Use this to explain why a stock moved.', parameters: { type: 'object', properties: { symbol: { type: 'string' }, lookbackHours: { type: 'number', default: 48 } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getProfile', description: 'Get company profile information including CEO, headquarters, sector, industry, website, and business summary', parameters: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getFinancials', description: 'Get quarterly or annual financial statements including revenue, EPS, profit margins, cash reserves', parameters: { type: 'object', properties: { symbol: { type: 'string' }, period: { type: 'string', enum: ['annual', 'quarter'] } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getSentiment', description: 'Get aggregated sentiment score (-1 to +1) from recent news and headlines', parameters: { type: 'object', properties: { symbol: { type: 'string' }, lookbackHours: { type: 'number', default: 48 } }, required: ['symbol'] } } },
+  { 
+    type: 'function', 
+    function: { 
+      name: 'getQuote', 
+      description: 'Get real-time price, change%, volume, market cap, P/E ratio, and 52-week range for a stock ticker symbol', 
+      parameters: { 
+        type: 'object', 
+        properties: { symbol: { type: 'string', description: 'Stock ticker symbol (e.g., MSFT, AAPL)' } }, 
+        required: ['symbol'] 
+      } 
+    } 
+  },
+  { 
+    type: 'function', 
+    function: { 
+      name: 'getNews', 
+      description: 'Get recent headlines and news articles for a stock from the last 24-72 hours. Returns headline titles and sources. Use this to explain why a stock moved.', 
+      parameters: { 
+        type: 'object', 
+        properties: { 
+          symbol: { type: 'string', description: 'Stock ticker symbol' }, 
+          lookbackHours: { type: 'integer', description: 'Hours to look back (default: 48)' } 
+        }, 
+        required: ['symbol'] 
+      } 
+    } 
+  },
+  { 
+    type: 'function', 
+    function: { 
+      name: 'getProfile', 
+      description: 'Get company profile information including CEO, headquarters, sector, industry, website, and business summary', 
+      parameters: { 
+        type: 'object', 
+        properties: { symbol: { type: 'string', description: 'Stock ticker symbol' } }, 
+        required: ['symbol'] 
+      } 
+    } 
+  },
+  { 
+    type: 'function', 
+    function: { 
+      name: 'getFinancials', 
+      description: 'Get quarterly or annual financial statements including revenue, EPS, profit margins, cash reserves', 
+      parameters: { 
+        type: 'object', 
+        properties: { 
+          symbol: { type: 'string', description: 'Stock ticker symbol' }, 
+          period: { type: 'string', enum: ['annual', 'quarter'], description: 'Time period' } 
+        }, 
+        required: ['symbol'] 
+      } 
+    } 
+  },
+  { 
+    type: 'function', 
+    function: { 
+      name: 'getSentiment', 
+      description: 'Get aggregated sentiment score (-1 to +1) from recent news and headlines', 
+      parameters: { 
+        type: 'object', 
+        properties: { 
+          symbol: { type: 'string', description: 'Stock ticker symbol' }, 
+          lookbackHours: { type: 'integer', description: 'Hours to look back (default: 48)' } 
+        }, 
+        required: ['symbol'] 
+      } 
+    } 
+  },
 ]
 
 export async function POST(req: NextRequest) {
@@ -35,16 +99,16 @@ export async function POST(req: NextRequest) {
 
 📋 OUTPUT TEMPLATE (use EXACTLY this for "why did X move" queries):
 
-📈 {Company} ({Symbol}) — ${Price} ({Change%})
+📈 {Company} ({Symbol}) — $XX.XX (+X.XX%)
 Key Metrics
-• Volume: {volume}
-• Market Cap: {cap}
-• 52W Range: {low}–{high}
+• Volume: XX.X M
+• Market Cap: $X.XX T
+• 52W Range: $XX–$XX
 Drivers / News
 • {headline 1} — {reason} (Source, Time)
 • {headline 2} — {reason} (Source, Time)
 Sentiment
-• {Bullish / Neutral / Bearish} ({score})
+• {Bullish / Neutral / Bearish} (score)
 Brief Take
 {1–2 sentences interpreting why price moved.}
 Updated: {time EST}
@@ -72,7 +136,7 @@ User provided symbol context: ${symbol || 'none'}`
     ]
 
     const first = await groq.chat.completions.create({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       temperature: 0.2,
       messages,
       tools,
@@ -91,7 +155,7 @@ User provided symbol context: ${symbol || 'none'}`
       }
 
       const follow = await groq.chat.completions.create({
-        model: 'llama-3.1-70b-versatile',
+        model: 'llama-3.3-70b-versatile',
         temperature: 0.2,
         messages: [
           ...messages,
