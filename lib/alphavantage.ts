@@ -54,7 +54,7 @@ export async function getTimeSeries(symbol: string, interval = 'TIME_SERIES_INTR
     if (!timeSeries) return null
 
     const chartData = []
-    for (const [timestamp, values] of Object.entries(timeSeries)) {
+    for (const [timestamp, values] of Object.entries(timeSeries as Record<string, any>)) {
       const data: any = values
       chartData.push({
         timestamp: new Date(timestamp).getTime(),
