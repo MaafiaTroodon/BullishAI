@@ -77,7 +77,7 @@ async function fetchTopMarketNews() {
       newsPromises.push(
         fetch(
           `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_KEY}`,
-          { timeout: 5000 }
+          {}
         )
         .then(async r => {
           const data = await r.json()
