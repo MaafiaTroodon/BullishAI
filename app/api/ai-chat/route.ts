@@ -16,11 +16,59 @@ interface StockData {
 
 export async function POST(request: NextRequest) {
   try {
-    const { query } = await request.json()
+    const { query, context } = await request.json()
     if (!query) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 })
     }
 
+    const lowerQuery = query.toLowerCase()
+    
+    // If context is provided (from stock page), use it
+    if (context && context.symbol) {
+      const contextSymbol = context.symbol.toUpperCase()
+      const data = await fetchStockData(contextSymbol)
+      
+      if (data) {
+        const isPositive = (data.changePct || 0) >= 0
+        const arrow = isPositive ? '↑' : '↓'
+        
+        // Get company name if available
+        const companyEntry = Object.entries(COMPANY_TO_TICKER).find(([, ticker]) => ticker === contextSymbol)
+        const companyName = companyEntry ? companyEntry[0].charAt(0).toUpperCase() + companyEntry[0].slice(1) : null
+        
+        let response = `**${companyName || contextSymbol} (${contextSymbol}) — $${data.price?.toFixed(2) || 'N/A'} (${isPositive ? '+' : ''}${data.changePct?.toFixed(2) || '0.00'}%)** ${arrow}\n\n`
+        
+        // Add context-aware response
+        response += `**Key Metrics:**\n`
+        if (context.volume) response += `• Volume: ${formatVolume(context.volume)}\n`
+        if (context.marketCap) response += `• Market Cap: ${formatMarketCap(context.marketCap)}\n`
+        if (context.peRatio) response += `• P/E Ratio: ${context.peRatio.toFixed(2)}\n`
+        
+        // Add recent news if available
+        if (context.recentNews && context.recentNews.length > 0) {
+          response += `\n**Recent News:**\n`
+          context.recentNews.slice(0, 3).forEach((article: any) => {
+            response += `• ${article.title || article.headline}\n`
+          })
+        }
+        
+        // Market analysis
+        if (Math.abs(data.changePct || 0) > 3) {
+          response += `\n*📊 Significant ${isPositive ? 'rally' : 'pullback'} — check recent news for catalysts.*\n`
+        } else {
+          response += `\n*📊 ${isPositive ? 'Moderate momentum' : 'Light pressure'} — normal market activity.*\n`
+        }
+        
+        const now = new Date()
+        const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}))
+        const isMarketOpen = estTime.getHours() >= 9 && estTime.getHours() < 16 && estTime.getMinutes() >= 30
+        const marketStatus = isMarketOpen ? '🟢 Market Open' : '🔴 After Hours'
+        response += `\n*${marketStatus} • Updated: ${estTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} EST*`
+        
+        return NextResponse.json({ response, stockData: data })
+      }
+    }
+    
     const lowerQuery = query.toLowerCase()
 
     // Check if query is asking about a specific stock
@@ -511,6 +559,18 @@ function formatVolume(volume: number): string {
     return `${(volume / 1_000).toFixed(2)}K`
   }
   return volume.toFixed(0)
+}
+
+function formatMarketCap(marketCap: number | undefined): string {
+  if (!marketCap) return 'N/A'
+  if (marketCap >= 1_000_000_000_000) {
+    return `${(marketCap / 1_000_000_000_000).toFixed(2)}T`
+  } else if (marketCap >= 1_000_000_000) {
+    return `${(marketCap / 1_000_000_000).toFixed(2)}B`
+  } else if (marketCap >= 1_000_000) {
+    return `${(marketCap / 1_000_000).toFixed(2)}M`
+  }
+  return marketCap.toFixed(0)
 }
 
 export const runtime = 'nodejs'
