@@ -28,8 +28,16 @@ export default function StockPage() {
     refreshInterval: 15000,
   })
 
-  // Fetch chart data for custom StockChart
-  const { data: chartData } = useSWR(`/api/chart?symbol=${symbol}&range=${chartRange}`, fetcher)
+  // Fetch chart data for custom StockChart - SWR will automatically cache and update
+  const { data: chartData, isLoading: chartLoading } = useSWR(
+    `/api/chart?symbol=${symbol}&range=${chartRange}`, 
+    fetcher,
+    {
+      keepPreviousData: true, // Keep previous data while loading new data
+      revalidateOnFocus: false, // Don't revalidate on window focus
+      dedupingInterval: 5000, // Dedupe requests within 5 seconds
+    }
+  )
 
   // Load watchlist on mount
   useEffect(() => {
@@ -186,32 +194,6 @@ export default function StockPage() {
           </div>
         </div>
 
-        {/* Custom StockChart with Range Selection */}
-        {chartData && (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-8">
-            <div className="flex flex-wrap gap-2 mb-4">
-              {['1d', '5d', '1m', '3m', '6m', '1y'].map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setChartRange(range)}
-                  className={`px-4 py-2 rounded-lg font-semibold transition ${
-                    chartRange === range
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  {range.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <StockChart 
-              data={chartData.data || []} 
-              range={chartRange} 
-              source={chartData.source}
-            />
-          </div>
-        )}
-
         {/* AI Insights, Financials, and Technical Analysis */}
         {quote && (
           <div className="grid lg:grid-cols-2 gap-6 mt-8">
@@ -230,6 +212,38 @@ export default function StockPage() {
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
                 <h3 className="text-xl font-bold text-white mb-4">Fundamental Data</h3>
                 <TradingViewFinancials symbol={symbol} />
+              </div>
+
+              {/* Custom StockChart with Range Selection - Below Fundamental Data */}
+              <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {['1d', '5d', '1m', '3m', '6m', '1y'].map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setChartRange(range)}
+                      disabled={chartLoading && chartRange !== range}
+                      className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                        chartRange === range
+                          ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      } ${chartLoading && chartRange !== range ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {range.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                {chartData && (
+                  <StockChart 
+                    data={chartData.data || []} 
+                    range={chartRange} 
+                    source={chartData.source}
+                  />
+                )}
+                {chartLoading && !chartData && (
+                  <div className="h-[500px] flex items-center justify-center">
+                    <div className="text-slate-400">Loading chart...</div>
+                  </div>
+                )}
               </div>
             </div>
             
