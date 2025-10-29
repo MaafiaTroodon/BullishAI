@@ -22,15 +22,28 @@ const tools: any[] = [
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { query, symbol } = (body || {}) as { query: string; symbol?: string }
+    const { query, symbol, sessionId } = (body || {}) as { query: string; symbol?: string; sessionId?: string }
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 })
 
-    const systemPrompt = process.env.BULLISHAI_SYSTEM_PROMPT ||
-      'You are BullishAI, a real-time equity analyst. Always be factual, cite sources, include a disclaimer.'
+    const systemPrompt = process.env.BULLISHAI_SYSTEM_PROMPT || `You are BullishAI, a real-time market analyst. Always:
+1) Detect tickers/company names and timeframe (today, this week, etc.)
+2) Fetch live metrics (price, % change, volume, 52W range, market cap)
+3) Pull last 24-72h headlines and compute sentiment
+4) Be factual, cite sources (provider + headline/title), include timestamps
+5) If uncertain, say so. Never fabricate data.
+
+Return sections:
+• Price & Change (with arrow ↑↓)
+• Key Metrics (volume, market cap, P/E if available)
+• Drivers / News (2-5 headlines with sources + times)
+• Sentiment Snapshot (score + label: bullish/neutral/bearish)
+• Brief Take (1-2 sentences)
+
+Always end with: "Not investment advice."`
 
     const messages: any[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: JSON.stringify({ query, symbol }) },
+      { role: 'user', content: query },
     ]
 
     const first = await groq.chat.completions.create({
@@ -58,13 +71,16 @@ export async function POST(req: NextRequest) {
         messages: [
           ...messages,
           msg,
-          ...toolResults.map(r => ({ role: 'tool' as const, tool_call_id: r.id, content: JSON.stringify({ name: r.name, data: r.data }) })),
+          ...toolResults.map(r => ({ role: 'tool' as const, tool_call_id: r.id, content: JSON.stringify({ name: r.name, data: r.data }, null, 2) })),
         ],
       })
       msg = follow.choices[0]?.message
     }
 
-    return NextResponse.json({ answer: msg?.content || 'No answer' })
+    return NextResponse.json({ 
+      answer: msg?.content || 'No answer',
+      usage: first.usage 
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'ai_error' }, { status: 500 })
   }

@@ -3,9 +3,9 @@ import { getMultiSourceNews } from '@/lib/news-multi-source'
 
 export async function getQuote(symbol: string) {
   try {
-    const res = await getComprehensiveQuote(symbol)
+    const res = await getComprehensiveQuote(symbol.toUpperCase())
     return {
-      symbol,
+      symbol: res?.symbol || symbol.toUpperCase(),
       price: res?.price ?? res?.data?.price ?? null,
       change: res?.change ?? res?.data?.change ?? null,
       changePct: res?.changePercent ?? res?.data?.dp ?? null,
@@ -14,9 +14,13 @@ export async function getQuote(symbol: string) {
       low: res?.low ?? res?.data?.low ?? null,
       prevClose: res?.prevClose ?? res?.data?.prevClose ?? null,
       volume: res?.volume ?? res?.data?.volume ?? null,
+      marketCap: res?.marketCap,
+      peRatio: res?.peRatio,
+      week52High: res?.week52High,
+      week52Low: res?.week52Low,
     }
   } catch {
-    return { error: 'quote_unavailable' }
+    return { error: 'quote_unavailable', symbol: symbol.toUpperCase() }
   }
 }
 
