@@ -117,10 +117,10 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
 
     // Call API for intelligent response
     try {
-      const response = await fetch('/api/ai-chat', {
+      const response = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, sessionId: 'inline-home' }),
       })
 
       const data = await response.json()
@@ -143,7 +143,6 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         text: data.answer || data.response || "Unable to generate response at this time.",
         sender: 'bot',
         timestamp: new Date(),
-        data: data.stockData,
       }
 
       setMessages((prev) => [...prev, botMessage])
