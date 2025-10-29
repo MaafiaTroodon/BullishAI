@@ -275,7 +275,7 @@ export default function Home() {
             {/* Advanced Chart */}
             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px]">
               {topQuotes && (
-                <div className="p-4">
+                <div className="p-4 pb-2">
                   <h3 className="text-2xl font-bold text-white mb-2">{selectedSymbol}</h3>
                   <div className="flex items-center gap-4">
                     <span className="text-4xl font-bold text-white">
@@ -289,7 +289,7 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              <div className="h-[calc(700px-100px)]">
+              <div className="h-[calc(700px-160px)] pb-4">
                 <TradingViewAdvancedChart symbol={selectedSymbol} />
               </div>
             </div>
