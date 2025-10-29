@@ -113,7 +113,6 @@ Brief Take
 {1–2 sentences interpreting why price moved.}
 Updated: {time EST}
 Sources: {provider names}
-_Not financial advice._
 
 For "what is X" queries, show sector, CEO, HQ, market cap, 52W range, and recent news.
 For screeners, list top matches with prices and brief reasons.
@@ -129,6 +128,8 @@ IMPORTANT: When no recent news is available, you MUST still provide plausible ex
 5. **Company-specific factors**: "earnings beat confidence", "new product launch enthusiasm", "market share gains"
 
 NEVER just say "no clear catalyst" — always provide AT LEAST 2-3 plausible reasons even if speculative. Be specific about potential catalysts (e.g., "strength in AWS cloud segment", "holiday retail momentum", "AI integration optimism").
+
+_Not financial advice._
 
 User provided symbol context: ${symbol || 'none'}`
 
