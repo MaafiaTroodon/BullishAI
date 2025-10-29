@@ -9,6 +9,7 @@ import { TradingViewTechnicalAnalysis } from '@/components/TradingViewTechnicalA
 import { TradingViewFinancials } from '@/components/TradingViewFinancials'
 import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import { StockAIChat } from '@/components/StockAIChat'
+import { StockChart } from '@/components/charts/StockChart'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 
@@ -26,6 +27,9 @@ export default function StockPage() {
   const { data, isLoading, error } = useSWR(`/api/stocks/${symbol}?range=${chartRange}`, fetcher, {
     refreshInterval: 15000,
   })
+
+  // Fetch chart data for custom StockChart
+  const { data: chartData } = useSWR(`/api/chart?symbol=${symbol}&range=${chartRange}`, fetcher)
 
   // Load watchlist on mount
   useEffect(() => {
@@ -181,6 +185,32 @@ export default function StockPage() {
             <TradingViewAdvancedChart symbol={symbol} />
           </div>
         </div>
+
+        {/* Custom StockChart with Range Selection */}
+        {chartData && (
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-8">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['1d', '5d', '1m', '3m', '6m', '1y'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setChartRange(range)}
+                  className={`px-4 py-2 rounded-lg font-semibold transition ${
+                    chartRange === range
+                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  {range.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <StockChart 
+              data={chartData.data || []} 
+              range={chartRange} 
+              source={chartData.source}
+            />
+          </div>
+        )}
 
         {/* AI Insights, Financials, and Technical Analysis */}
         {quote && (
