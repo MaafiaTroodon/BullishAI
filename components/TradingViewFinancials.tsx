@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { normalizeTradingViewSymbol } from '@/lib/tradingview'
 
 interface TradingViewFinancialsProps {
   symbol: string
@@ -16,12 +17,14 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     const currentContainer = container.current
     currentContainer.innerHTML = ''
 
+    const n = normalizeTradingViewSymbol(symbol)
+
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-financials.js'
     script.type = 'text/javascript'
     script.async = true
     script.innerHTML = JSON.stringify({
-      symbol: `${exchange}:${symbol}`,
+      symbol: n.tvSymbol,
       colorTheme: 'dark',
       displayMode: 'regular',
       isTransparent: false,
@@ -42,7 +45,7 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
       <div className="tradingview-widget-container__widget"></div>
       <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
         <a 
-          href={`https://www.tradingview.com/symbols/${exchange}-${symbol}/financials-overview/`} 
+          href={`https://www.tradingview.com/symbols/${normalizeTradingViewSymbol(symbol).tvSymbol.replace(':','-')}/financials-overview/`} 
           rel="noopener nofollow" 
           target="_blank"
           className="text-blue-500 hover:text-blue-400"

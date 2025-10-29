@@ -19,11 +19,36 @@ type Alert = {
 export default function AlertsPage() {
   const { data, mutate, isLoading } = useSWR('/api/alerts', fetcher)
   const items: Alert[] = data?.items || []
+  const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all')
+  const filteredItems = items.filter(a => filter === 'all' ? true : filter === 'active' ? a.active : !a.active)
   const [open, setOpen] = useState(false)
   const [symbol, setSymbol] = useState('AAPL')
   const [type, setType] = useState<Alert['type']>('price_above')
   const [value, setValue] = useState<number>(0)
   const [notes, setNotes] = useState('')
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
+
+  // Fetch current price for convenience
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!symbol) return
+      setPriceLoading(true)
+      try {
+        const r = await fetch(`/api/quote?symbol=${encodeURIComponent(symbol)}`)
+        const j = await r.json()
+        const p = j?.data?.price ?? j?.price
+        if (!cancelled) setCurrentPrice(typeof p === 'number' ? p : null)
+      } catch {
+        if (!cancelled) setCurrentPrice(null)
+      } finally {
+        if (!cancelled) setPriceLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [symbol])
 
   async function createAlert() {
     if (!symbol || !value) return
@@ -39,8 +64,11 @@ export default function AlertsPage() {
   }
 
   async function toggleActive(id: string, active: boolean) {
-    await fetch(`/api/alerts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active }) })
-    mutate()
+    // optimistic update
+    mutate((prev: any) => ({ items: (prev?.items || []).map((i: Alert) => i.id === id ? { ...i, active } : i) }), false)
+    fetch(`/api/alerts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active }) })
+      .then(() => mutate())
+      .catch(() => mutate())
   }
 
   async function removeAlert(id: string) {
@@ -57,7 +85,14 @@ export default function AlertsPage() {
             <h1 className="text-2xl font-bold text-white">Price Alerts</h1>
             <p className="text-slate-400 text-sm">Get notified when stocks hit your target prices</p>
           </div>
-          <button onClick={() => setOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">+ Create Alert</button>
+          <div className="flex items-center gap-3">
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-1">
+              {(['all','active','paused'] as const).map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-md text-sm font-semibold ${filter===f ? 'bg-slate-700 text-white' : 'text-slate-300 hover:text-white'}`}>{f[0].toUpperCase()+f.slice(1)}</button>
+              ))}
+            </div>
+            <button onClick={() => setOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">+ Create Alert</button>
+          </div>
         </div>
 
         {isLoading || items.length === 0 ? (
@@ -68,7 +103,7 @@ export default function AlertsPage() {
         ) : (
           <div className="bg-slate-800 rounded-lg border border-slate-700">
             <div className="divide-y divide-slate-700">
-              {items.map(a => (
+              {filteredItems.map(a => (
                 <div key={a.id} className="flex items-center justify-between px-4 py-4">
                   <div className="flex items-center gap-4">
                     <div className="text-white font-semibold">{a.symbol}</div>
@@ -108,7 +143,20 @@ export default function AlertsPage() {
                 </div>
                 <div>
                   <label className="block text-slate-300 text-sm mb-1">Value</label>
-                  <input type="number" value={value} onChange={(e) => setValue(Number(e.target.value))} className="w-full bg-slate-700 text-white rounded-md px-3 py-2 outline-none" placeholder="e.g., 250" />
+                  <input type="number" value={value} onChange={(e) => setValue(Number(e.target.value))} className="w-full bg-slate-700 text-white rounded-md px-3 py-2 outline-none" placeholder={currentPrice ? currentPrice.toFixed(2) : 'e.g., 250'} />
+                  <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
+                    <span>Current:</span>
+                    <span className="text-white font-semibold">{priceLoading ? 'Loading…' : currentPrice ? `$${currentPrice.toFixed(2)}` : 'N/A'}</span>
+                    {currentPrice && (
+                      <>
+                        <button onClick={() => setValue(Number(currentPrice.toFixed(2)))} className="px-2 py-1 bg-slate-700 text-slate-200 rounded">Use</button>
+                        <button onClick={() => setValue(Number((currentPrice * 1.01).toFixed(2)))} className="px-2 py-1 bg-slate-700 text-slate-200 rounded">+1%</button>
+                        <button onClick={() => setValue(Number((currentPrice * 0.99).toFixed(2)))} className="px-2 py-1 bg-slate-700 text-slate-200 rounded">-1%</button>
+                        <button onClick={() => setValue(Number((currentPrice * 1.05).toFixed(2)))} className="px-2 py-1 bg-slate-700 text-slate-200 rounded">+5%</button>
+                        <button onClick={() => setValue(Number((currentPrice * 0.95).toFixed(2)))} className="px-2 py-1 bg-slate-700 text-slate-200 rounded">-5%</button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-slate-300 text-sm mb-1">Notes (optional)</label>
@@ -126,41 +174,3 @@ export default function AlertsPage() {
     </div>
   )
 }
-
-'use client'
-
-import { useState } from 'react'
-import { Bell, Plus, Trash2, AlertCircle } from 'lucide-react'
-
-export default function AlertsPage() {
-  return (
-    <div className="min-h-screen bg-slate-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Price Alerts</h1>
-            <p className="text-slate-400">Get notified when stocks hit your target prices</p>
-          </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-            <Plus className="h-5 w-5" />
-            Create Alert
-          </button>
-        </div>
-
-        {/* Alerts List */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-          <div className="flex flex-col items-center justify-center py-12">
-            <Bell className="h-16 w-16 text-slate-500 mb-4" />
-            <p className="text-slate-400 text-lg mb-2">No alerts yet</p>
-            <p className="text-slate-500 text-sm mb-6">Create your first price alert</p>
-            <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-              Create Alert
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-

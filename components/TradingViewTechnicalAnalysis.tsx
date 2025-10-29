@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { normalizeTradingViewSymbol } from '@/lib/tradingview'
 
 interface TradingViewTechnicalAnalysisProps {
   symbol: string
@@ -17,6 +18,8 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
     const currentContainer = container.current
     currentContainer.innerHTML = ''
 
+    const n = normalizeTradingViewSymbol(symbol)
+
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js'
     script.type = 'text/javascript'
@@ -30,7 +33,7 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
       disableInterval: false,
       width: 425,
       height: 450,
-      symbol: `${exchange}:${symbol}`,
+      symbol: n.tvSymbol,
       showIntervalTabs: true
     })
     
@@ -47,7 +50,7 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
       <div className="tradingview-widget-container__widget"></div>
       <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
         <a 
-          href={`https://www.tradingview.com/symbols/${exchange}-${symbol}/technicals/`} 
+          href={`https://www.tradingview.com/symbols/${normalizeTradingViewSymbol(symbol).tvSymbol.replace(':','-')}/technicals/`} 
           rel="noopener nofollow" 
           target="_blank"
           className="text-blue-500 hover:text-blue-400"
