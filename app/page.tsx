@@ -21,6 +21,20 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [focusSymbol, setFocusSymbol] = useState<string | undefined>(undefined)
+
+  // Check URL for focusSymbol parameter
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const symbol = params.get('focusSymbol')
+      if (symbol) {
+        setFocusSymbol(symbol.toUpperCase())
+        // Clean up URL
+        window.history.replaceState({}, '', '/')
+      }
+    }
+  }, [])
 
   // Simulate login state for demo
   useEffect(() => {
@@ -235,7 +249,7 @@ export default function Home() {
 
       {/* AI Chat Section */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <InlineAIChat isLoggedIn={isLoggedIn} />
+        <InlineAIChat isLoggedIn={isLoggedIn} focusSymbol={focusSymbol} />
       </section>
 
       {/* Stock Heatmap */}

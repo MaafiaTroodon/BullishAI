@@ -18,9 +18,10 @@ interface Message {
 
 interface InlineAIChatProps {
   isLoggedIn: boolean
+  focusSymbol?: string
 }
 
-export function InlineAIChat({ isLoggedIn }: InlineAIChatProps) {
+export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -65,6 +66,22 @@ export function InlineAIChat({ isLoggedIn }: InlineAIChatProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Auto-expand and set focus symbol if provided
+  useEffect(() => {
+    if (focusSymbol) {
+      setIsExpanded(true)
+      setInputValue(`Tell me about ${focusSymbol}`)
+      // Focus the input after a brief delay
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+      // Auto-send the message
+      setTimeout(() => {
+        handleSend(`${focusSymbol} current price and analysis`)
+      }, 200)
+    }
+  }, [focusSymbol])
+
   // Initialize greeting message
   useEffect(() => {
     if (messages.length === 0) {
@@ -79,19 +96,22 @@ export function InlineAIChat({ isLoggedIn }: InlineAIChatProps) {
     }
   }, [])
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || !isLoggedIn) return
+  const handleSend = async (customMessage?: string) => {
+    const messageToSend = customMessage || inputValue
+    if (!messageToSend.trim() || !isLoggedIn) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputValue,
+      text: messageToSend,
       sender: 'user',
       timestamp: new Date(),
     }
 
     setMessages((prev) => [...prev, userMessage])
-    const query = inputValue
-    setInputValue('')
+    const query = messageToSend
+    if (!customMessage) {
+      setInputValue('')
+    }
     setIsTyping(true)
 
     // Call API for intelligent response
