@@ -71,9 +71,22 @@ export function StockAIChat({ symbol, quote, news }: StockAIChatProps) {
 
       const data = await response.json()
 
+      if (!response.ok || data.error) {
+        console.error('AI API error:', data.error || 'Unknown error')
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `Error: ${data.error || 'Failed to get AI response'}`,
+          sender: 'bot',
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, botMessage])
+        setIsTyping(false)
+        return
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.answer || "I'm here to help with stock analysis!",
+        text: data.answer || "Unable to generate response at this time.",
         sender: 'bot',
         timestamp: new Date(),
       }

@@ -125,9 +125,22 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
 
       const data = await response.json()
 
+      if (!response.ok || data.error) {
+        console.error('AI API error:', data.error || 'Unknown error')
+        const botMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `Error: ${data.error || 'Failed to get AI response'}`,
+          sender: 'bot',
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, botMessage])
+        setIsTyping(false)
+        return
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response || "I'm here to help with stock-related questions! Try asking about a specific company, stock, or sector.",
+        text: data.answer || data.response || "Unable to generate response at this time.",
         sender: 'bot',
         timestamp: new Date(),
         data: data.stockData,
