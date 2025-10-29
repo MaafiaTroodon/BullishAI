@@ -21,8 +21,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 })
     }
 
-    const lowerQuery = query.toLowerCase()
-    
     // If context is provided (from stock page), use it
     if (context && context.symbol) {
       const contextSymbol = context.symbol.toUpperCase()
