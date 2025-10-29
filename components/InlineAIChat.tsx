@@ -80,6 +80,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         handleSend(`${focusSymbol} current price and analysis`)
       }, 200)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSymbol])
 
   // Initialize greeting message
