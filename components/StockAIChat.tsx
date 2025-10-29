@@ -58,23 +58,14 @@ export function StockAIChat({ symbol, quote, news }: StockAIChatProps) {
     setInputValue('')
     setIsTyping(true)
 
-    // Call API for intelligent response
+    // Call the new AI orchestrator endpoint with Groq Llama-3 function calling
     try {
-      const response = await fetch('/api/ai-chat', {
+      const response = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           query,
-          context: {
-            symbol,
-            price: quote?.price,
-            change: quote?.change,
-            changePct: quote?.changePct,
-            volume: quote?.volume,
-            marketCap: quote?.marketCap,
-            peRatio: quote?.peRatio,
-            recentNews: news?.slice(0, 5) || [],
-          }
+          symbol: symbol,
         }),
       })
 
@@ -82,7 +73,7 @@ export function StockAIChat({ symbol, quote, news }: StockAIChatProps) {
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response || "I'm here to help with stock analysis!",
+        text: data.answer || "I'm here to help with stock analysis!",
         sender: 'bot',
         timestamp: new Date(),
       }

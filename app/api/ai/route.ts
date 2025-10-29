@@ -12,11 +12,11 @@ const GetFinancialsArgs = z.object({ symbol: z.string(), period: z.enum(['annual
 const GetSentimentArgs = z.object({ symbol: z.string(), lookbackHours: z.number().default(48) })
 
 const tools: any[] = [
-  { type: 'function', function: { name: 'getQuote', description: 'Latest quote for a symbol', parameters: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getNews', description: 'Recent headlines', parameters: { type: 'object', properties: { symbol: { type: 'string' }, lookbackHours: { type: 'number' } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getProfile', description: 'Company profile', parameters: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getFinancials', description: 'Financial statements', parameters: { type: 'object', properties: { symbol: { type: 'string' }, period: { type: 'string', enum: ['annual', 'quarter'] } }, required: ['symbol'] } } },
-  { type: 'function', function: { name: 'getSentiment', description: 'Aggregated sentiment', parameters: { type: 'object', properties: { symbol: { type: 'string' }, lookbackHours: { type: 'number' } }, required: ['symbol'] } } },
+  { type: 'function', function: { name: 'getQuote', description: 'Get real-time price, change%, volume, market cap, P/E ratio, and 52-week range for a stock ticker symbol', parameters: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] } } },
+  { type: 'function', function: { name: 'getNews', description: 'Get recent headlines and news articles for a stock from the last 24-72 hours. Returns headline titles and sources. Use this to explain why a stock moved.', parameters: { type: 'object', properties: { symbol: { type: 'string' }, lookbackHours: { type: 'number', default: 48 } }, required: ['symbol'] } } },
+  { type: 'function', function: { name: 'getProfile', description: 'Get company profile information including CEO, headquarters, sector, industry, website, and business summary', parameters: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] } } },
+  { type: 'function', function: { name: 'getFinancials', description: 'Get quarterly or annual financial statements including revenue, EPS, profit margins, cash reserves', parameters: { type: 'object', properties: { symbol: { type: 'string' }, period: { type: 'string', enum: ['annual', 'quarter'] } }, required: ['symbol'] } } },
+  { type: 'function', function: { name: 'getSentiment', description: 'Get aggregated sentiment score (-1 to +1) from recent news and headlines', parameters: { type: 'object', properties: { symbol: { type: 'string' }, lookbackHours: { type: 'number', default: 48 } }, required: ['symbol'] } } },
 ]
 
 export async function POST(req: NextRequest) {
@@ -26,18 +26,21 @@ export async function POST(req: NextRequest) {
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 })
 
     const systemPrompt = process.env.BULLISHAI_SYSTEM_PROMPT || `You are BullishAI, a real-time market analyst. Always:
-1) Detect tickers/company names and timeframe (today, this week, etc.)
-2) Fetch live metrics (price, % change, volume, 52W range, market cap)
-3) Pull last 24-72h headlines and compute sentiment
-4) Be factual, cite sources (provider + headline/title), include timestamps
-5) If uncertain, say so. Never fabricate data.
+1) Detect tickers/company names and timeframe from user query
+2) For "why did X rise/fall today" → fetch live quote + 24-72h news + sentiment
+3) For "what is X" → fetch company profile + quote + key metrics
+4) For stock screeners → use runScreener to filter
+5) Be factual, cite sources (provider + headline/title), include timestamps
+6) If uncertain, say so. Never fabricate data.
+
+ALWAYS call getQuote, getNews, and getSentiment tools when user asks "why did X move" to get actual drivers.
 
 Return sections:
 • Price & Change (with arrow ↑↓)
-• Key Metrics (volume, market cap, P/E if available)
-• Drivers / News (2-5 headlines with sources + times)
+• Key Metrics (volume, market cap, P/E if available)  
+• Drivers / News (2-5 headlines with sources + times) - THIS IS CRITICAL
 • Sentiment Snapshot (score + label: bullish/neutral/bearish)
-• Brief Take (1-2 sentences)
+• Brief Take (1-2 sentences explaining the movement)
 
 Always end with: "Not investment advice."`
 
