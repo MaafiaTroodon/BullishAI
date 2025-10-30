@@ -9,6 +9,8 @@ import { TradingViewTechnicalAnalysis } from '@/components/TradingViewTechnicalA
 import { TradingViewFinancials } from '@/components/TradingViewFinancials'
 import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import { StockAIChat } from '@/components/StockAIChat'
+import { DemoTradeBox } from '@/components/DemoTradeBox'
+import { PositionSummary } from '@/components/PositionSummary'
 import { StockChart } from '@/components/charts/StockChart'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
@@ -213,14 +215,22 @@ export default function StockPage() {
                 <h3 className="text-xl font-bold text-white mb-4">Fundamental Data</h3>
                 <TradingViewFinancials symbol={symbol} />
               </div>
+
+              {/* Demo Trade Box */}
+              <div>
+                <DemoTradeBox symbol={symbol} price={quote.price} />
+              </div>
             </div>
             
             {/* Right Column */}
             <div className="space-y-6">
-              {/* Technical Analysis */}
-              <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-                <h3 className="text-xl font-bold text-white mb-4">Technical Analysis</h3>
-                <TradingViewTechnicalAnalysis symbol={symbol} />
+              {/* Technical Analysis + Holding side-by-side */}
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+                  <h3 className="text-xl font-bold text-white mb-4">Technical Analysis</h3>
+                  <TradingViewTechnicalAnalysis symbol={symbol} width={360} height={360} />
+                </div>
+                <PositionSummary symbol={symbol} currentPrice={quote.price} />
               </div>
 
               {/* Custom StockChart with Range Selection - Below Technical Analysis */}

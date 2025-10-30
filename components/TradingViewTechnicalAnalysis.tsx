@@ -6,9 +6,11 @@ import { normalizeTradingViewSymbol } from '@/lib/tradingview'
 interface TradingViewTechnicalAnalysisProps {
   symbol: string
   exchange?: string
+  width?: number
+  height?: number
 }
 
-export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: TradingViewTechnicalAnalysisProps) {
+export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', width = 360, height = 360 }: TradingViewTechnicalAnalysisProps) {
   const container = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -31,8 +33,8 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
       locale: 'en',
       interval: '1m',
       disableInterval: false,
-      width: 425,
-      height: 450,
+      width,
+      height,
       symbol: n.tvSymbol,
       showIntervalTabs: true
     })
@@ -46,7 +48,7 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ' }: Tr
   }, [symbol, exchange])
 
   return (
-    <div className="tradingview-widget-container h-[450px] w-full" ref={container}>
+    <div className="tradingview-widget-container" style={{height, width: '100%'}} ref={container}>
       <div className="tradingview-widget-container__widget"></div>
       <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
         <a 
