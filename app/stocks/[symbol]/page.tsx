@@ -212,7 +212,10 @@ export default function StockPage() {
               
               {/* Financials */}
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-                <h3 className="text-xl font-bold text-white mb-4">Fundamental Data</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white">Fundamental Data</h3>
+                  <div className="text-sm text-slate-400">Symbol: {symbol}</div>
+                </div>
                 <TradingViewFinancials symbol={symbol} />
               </div>
 

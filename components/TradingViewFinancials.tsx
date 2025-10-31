@@ -16,14 +16,31 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     if (!container.current) return
 
     const currentContainer = container.current
-    currentContainer.innerHTML = ''
     setError(false)
+
+    // Clean up safely
+    const cleanup = () => {
+      if (currentContainer) {
+        // Remove all child nodes safely
+        while (currentContainer.firstChild) {
+          try {
+            currentContainer.removeChild(currentContainer.firstChild)
+          } catch (e) {
+            // If node was already removed, just clear innerHTML
+            currentContainer.innerHTML = ''
+            break
+          }
+        }
+      }
+    }
+
+    cleanup()
 
     const n = normalizeTradingViewSymbol(symbol)
 
     // Set a timeout to detect if widget fails to load
     const timeout = setTimeout(() => {
-      if (currentContainer.innerHTML.trim() === '' || !currentContainer.querySelector('.tradingview-widget-container__widget iframe')) {
+      if (currentContainer && (!currentContainer.querySelector('.tradingview-widget-container__widget iframe'))) {
         setError(true)
       }
     }, 5000)
@@ -47,11 +64,13 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
       clearTimeout(timeout)
     }
     
-    currentContainer.appendChild(script)
+    if (currentContainer) {
+      currentContainer.appendChild(script)
+    }
 
     return () => {
       clearTimeout(timeout)
-      currentContainer.innerHTML = ''
+      cleanup()
     }
   }, [symbol, exchange])
 
@@ -74,19 +93,23 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     )
   }
 
+  const tvSymbol = normalizeTradingViewSymbol(symbol).tvSymbol
+
   return (
-    <div className="tradingview-widget-container h-[550px] w-full" ref={container}>
-      <div className="tradingview-widget-container__widget w-full h-full"></div>
+    <div className="w-full">
+      <div className="tradingview-widget-container h-[550px] w-full" ref={container}>
+        <div className="tradingview-widget-container__widget w-full h-full"></div>
+      </div>
       <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
+        <div className="text-slate-400 mb-1">Symbol: {symbol} ({tvSymbol})</div>
         <a 
-          href={`https://www.tradingview.com/symbols/${normalizeTradingViewSymbol(symbol).tvSymbol.replace(':','-')}/financials-overview/`} 
+          href={`https://www.tradingview.com/symbols/${tvSymbol.replace(':','-')}/financials-overview/`} 
           rel="noopener nofollow" 
           target="_blank"
           className="text-blue-500 hover:text-blue-400"
         >
-          {symbol} fundamentals
-        </a>{' '}
-        <span> by TradingView</span>
+          View {symbol} fundamentals on TradingView →
+        </a>
       </div>
     </div>
   )

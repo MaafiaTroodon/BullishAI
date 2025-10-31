@@ -17,16 +17,32 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
   useEffect(() => {
     if (!container.current) return
 
-    // Clear previous content
     const currentContainer = container.current
-    currentContainer.innerHTML = ''
     setError(false)
+
+    // Clean up safely
+    const cleanup = () => {
+      if (currentContainer) {
+        // Remove all child nodes safely
+        while (currentContainer.firstChild) {
+          try {
+            currentContainer.removeChild(currentContainer.firstChild)
+          } catch (e) {
+            // If node was already removed, just clear innerHTML
+            currentContainer.innerHTML = ''
+            break
+          }
+        }
+      }
+    }
+
+    cleanup()
 
     const n = normalizeTradingViewSymbol(symbol)
 
     // Set timeout to detect loading failure
     const timeout = setTimeout(() => {
-      if (currentContainer.innerHTML.trim() === '' || !currentContainer.querySelector('.tradingview-widget-container__widget iframe')) {
+      if (currentContainer && (!currentContainer.querySelector('.tradingview-widget-container__widget iframe'))) {
         setError(true)
       }
     }, 5000)
@@ -53,12 +69,13 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
       clearTimeout(timeout)
     }
     
-    currentContainer.appendChild(script)
+    if (currentContainer) {
+      currentContainer.appendChild(script)
+    }
 
     return () => {
       clearTimeout(timeout)
-      // Cleanup on unmount
-      currentContainer.innerHTML = ''
+      cleanup()
     }
   }, [symbol, exchange, height])
 
