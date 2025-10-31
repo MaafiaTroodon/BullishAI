@@ -235,7 +235,8 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft"), always use 
     const isPriceQuery = lowerQuery.includes('price') || lowerQuery.includes('quote')
     const isNewsQuery = lowerQuery.includes('news')
     const isStockQuery = querySymbol || symbol || lowerQuery.match(/[A-Z]{1,5}/)
-    const isTrendingQuery = lowerQuery.includes('trending') || lowerQuery.includes('gainer') || lowerQuery.includes('biggest') || lowerQuery.includes('top')
+        const isTrendingQuery = lowerQuery.includes('trending') || lowerQuery.includes('gainer') || lowerQuery.includes('biggest') || lowerQuery.includes('top')
+        const isEarningsQuery = lowerQuery.includes('earnings') || lowerQuery.includes('report') || lowerQuery.includes('eps')
     
     let manualToolResults: any[] = []
     
@@ -251,8 +252,8 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft"), always use 
       }
     }
     
-    // For individual stock queries, get quote and news
-    if ((isWhyQuery || isPriceQuery || isNewsQuery || isStockQuery) && !isTrendingQuery) {
+        // For individual stock queries, get quote and news
+        if ((isWhyQuery || isPriceQuery || isNewsQuery || isStockQuery || isEarningsQuery) && !isTrendingQuery) {
       const targetSymbol = querySymbol || symbol
       if (targetSymbol) {
         try {
@@ -267,6 +268,14 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft"), always use 
           if (newsResult.data && !newsResult.error) {
             manualToolResults.push({ name: 'get_news', data: newsResult.data })
           }
+
+              // If earnings-related, also fetch earnings (next window)
+              if (isEarningsQuery) {
+                const earningsResult = await Tools.getEarnings(normalizeToTicker(targetSymbol), 'next')
+                if (earningsResult.data && !earningsResult.error) {
+                  manualToolResults.push({ name: 'get_earnings', data: earningsResult.data })
+                }
+              }
         } catch (manualError: any) {
           console.error('Manual tool execution error:', manualError)
         }
