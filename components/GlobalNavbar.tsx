@@ -140,10 +140,10 @@ export function GlobalNavbar() {
                 </ul>
               </nav>
               {/* Wallet balance pill */}
-              <div className="hidden lg:flex items-center bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-slate-200 font-semibold">
+              <Link href="/wallet" className="hidden lg:flex items-center bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-slate-200 font-semibold hover:bg-slate-700 transition">
                 <span className="text-slate-400 mr-2">Wallet</span>
                 <span>${(wallet?.balance ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-              </div>
+              </Link>
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}

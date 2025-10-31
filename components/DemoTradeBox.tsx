@@ -60,7 +60,14 @@ export function DemoTradeBox({ symbol, price }: Props) {
       })
       const j = await res.json()
       if (!res.ok) {
-        showToast(j?.error === 'insufficient_funds' ? 'Insufficient wallet balance' : j?.error === 'insufficient_shares' ? 'Not enough shares to sell' : 'Trade failed', 'error')
+        if (j?.error === 'insufficient_funds') {
+          showToast('Insufficient wallet balance. Top up your wallet and try again.', 'error')
+          try { window.location.href = '/wallet' } catch {}
+        } else if (j?.error === 'insufficient_shares') {
+          showToast('Not enough shares to sell.', 'error')
+        } else {
+          showToast('Trade failed', 'error')
+        }
         return
       }
       if (res.ok) {

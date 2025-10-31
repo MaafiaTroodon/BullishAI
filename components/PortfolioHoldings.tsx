@@ -47,7 +47,7 @@ export function PortfolioHoldings() {
       if (items[0]?.currentPrice != null) { setEnriched(items); return }
       try {
         const out: any[] = []
-        await Promise.all(items.map(async (p:any) => {
+        await Promise.all(items.filter((p:any)=> (p.totalShares||0) > 0).map(async (p:any) => {
           try {
             const r = await fetch(`/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { cache: 'no-store' })
             const j = await r.json()
@@ -81,7 +81,7 @@ export function PortfolioHoldings() {
         <div className="text-slate-400">No positions yet. <button onClick={() => router.push('/stocks/AAPL')} className="text-blue-400 hover:text-blue-300 underline">Buy stocks</button> to get started.</div>
       ) : (
         <div className="space-y-3">
-          {enriched.map((p:any)=>{
+          {enriched.filter((p:any)=> (p.totalShares||0) > 0).map((p:any)=>{
             const price = p.currentPrice || 0
             const totalValue = price * p.totalShares
             const base = p.avgPrice * p.totalShares
