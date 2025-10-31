@@ -9,6 +9,7 @@ import { TradingViewHeatmap } from '@/components/TradingViewHeatmap'
 import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import TradingViewTopStories from '@/components/TradingViewTopStories'
 import { HeadlineRotator } from '@/components/HeadlineRotator'
+import { TiltCard } from '@/components/TiltCard'
 import useSWR from 'swr'
 
 const fetcher = async (url: string) => {
@@ -96,24 +97,24 @@ export default function Home() {
       {/* Navbar removed here; GlobalNavbar renders via app/layout.tsx */}
 
       {/* Hero Section */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="text-center">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-once="true" data-anim-stagger="60">
+        <div className="text-center" data-anim="fade-up" data-anim-delay="50">
           <HeadlineRotator className="mb-6" />
           <p className="text-xl md:text-2xl text-slate-300 mb-8 max-w-3xl mx-auto">
             Track your portfolio in real-time with AI-driven analysis, automated alerts, 
             and intelligent market insights powered by Groq's Llama-3.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center" data-anim="fade-up" data-anim-delay="120">
             <Link
               href="/dashboard"
-              className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition shadow-lg hover:shadow-xl"
+              className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition shadow-lg hover:shadow-xl hover-card"
             >
               Launch Dashboard →
             </Link>
             {!isLoggedIn && (
               <Link
                 href="/auth/signup"
-                className="inline-block bg-slate-800 border border-slate-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-slate-700 transition"
+                className="inline-block bg-slate-800 border border-slate-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-slate-700 transition hover-card"
               >
                 Get Started Free
               </Link>
@@ -143,12 +144,12 @@ export default function Home() {
       </section>
 
       {/* AI Chat Section */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
         <InlineAIChat isLoggedIn={isLoggedIn} focusSymbol={focusSymbol} />
       </section>
 
       {/* Stock Heatmap */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
         <h2 className="text-3xl font-bold text-white mb-6 text-center">Market Heatmap</h2>
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
           <TradingViewHeatmap />
@@ -156,19 +157,20 @@ export default function Home() {
       </section>
 
       {/* Popular Today Stocks */}
-      <PopularToday />
+      <div data-anim="fade-up" data-anim-stagger="40">
+        <PopularToday />
+      </div>
 
       {/* Live Market Preview */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
         <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
-          
           {/* Top Stocks */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8" data-anim="fade-up" data-anim-stagger="40">
             {TOP_STOCKS.map((symbol) => (
               <button
                 key={symbol}
                 onClick={() => setSelectedSymbol(symbol)}
-                className={`p-4 rounded-lg border transition ${
+                className={`p-4 rounded-lg border transition hover-card ${
                   selectedSymbol === symbol
                     ? 'bg-blue-600 border-blue-500'
                     : 'bg-slate-800 border-slate-700 hover:border-blue-500/50'
@@ -180,9 +182,9 @@ export default function Home() {
           </div>
 
           {/* Chart and Top Stories Side by Side */}
-          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6" data-anim="fade-up" data-anim-stagger="60">
             {/* Advanced Chart */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px]">
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px] hover-card">
               {topQuotes && (
                 <div className="p-4 pb-2">
                   <h3 className="text-2xl font-bold text-white mb-2">{selectedSymbol}</h3>
@@ -204,7 +206,7 @@ export default function Home() {
             </div>
 
             {/* Top Stories Widget */}
-            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px] flex flex-col">
+            <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px] flex flex-col hover-card">
               <div className="p-4 border-b border-slate-700 flex-shrink-0">
                 <h3 className="text-2xl font-bold text-white">Top Stories</h3>
               </div>
@@ -222,13 +224,14 @@ export default function Home() {
         </section>
 
       {/* Features */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="text-center mb-16">
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-stagger="40">
+        <div className="text-center mb-16" data-anim="fade-up">
           <h2 className="text-4xl font-bold text-white mb-4">Everything You Need</h2>
           <p className="text-xl text-slate-400">Powerful tools for informed trading decisions</p>
         </div>
         
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8" data-anim="fade-up" data-anim-stagger="40">
+          <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-blue-500/50 transition group">
             <div className="h-16 w-16 bg-blue-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-blue-500/20 transition">
               <Search className="h-8 w-8 text-blue-500" />
@@ -239,7 +242,9 @@ export default function Home() {
               Never miss a price movement.
             </p>
           </div>
+          </TiltCard>
           
+          <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-purple-500/50 transition group">
             <div className="h-16 w-16 bg-purple-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-purple-500/20 transition">
               <Brain className="h-8 w-8 text-purple-500" />
@@ -250,7 +255,9 @@ export default function Home() {
               powered by Groq's Llama-3.
             </p>
           </div>
+          </TiltCard>
 
+          <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-green-500/50 transition group">
             <div className="h-16 w-16 bg-green-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-green-500/20 transition">
               <Bell className="h-8 w-8 text-green-500" />
@@ -261,7 +268,9 @@ export default function Home() {
               Stay on top of your portfolio 24/7.
             </p>
           </div>
+          </TiltCard>
 
+          <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-blue-500/50 transition group">
             <div className="h-16 w-16 bg-blue-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-blue-500/20 transition">
               <BarChart3 className="h-8 w-8 text-blue-500" />
@@ -272,7 +281,9 @@ export default function Home() {
               and volume data.
             </p>
           </div>
+          </TiltCard>
 
+          <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-yellow-500/50 transition group">
             <div className="h-16 w-16 bg-yellow-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-yellow-500/20 transition">
               <Shield className="h-8 w-8 text-yellow-500" />
@@ -283,7 +294,9 @@ export default function Home() {
               Bank-level security.
             </p>
           </div>
+          </TiltCard>
 
+          <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-pink-500/50 transition group">
             <div className="h-16 w-16 bg-pink-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-pink-500/20 transition">
               <Zap className="h-8 w-8 text-pink-500" />
@@ -294,6 +307,7 @@ export default function Home() {
               caching and background updates.
             </p>
           </div>
+          </TiltCard>
         </div>
       </section>
 

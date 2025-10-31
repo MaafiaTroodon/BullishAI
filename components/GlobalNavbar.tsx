@@ -96,19 +96,47 @@ export function GlobalNavbar() {
               </div>
             </form>
 
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="hidden md:block mask-btn">
-                Dashboard
-              </Link>
-              <Link href="/watchlist" className="hidden md:block mask-btn">
-                Watchlist
-              </Link>
-              <Link href="/news" className="hidden md:block mask-btn">
-                News
-              </Link>
-              <Link href="/alerts" className="hidden md:block mask-btn">
-                Alerts
-              </Link>
+            <div className="hidden md:flex items-center space-x-4 pill-nav-container">
+              <nav className="pill-nav-items" aria-label="Primary">
+                <ul className="pill-list">
+                  <li>
+                    <Link href="/dashboard" className="pill">
+                      <span className="hover-circle" aria-hidden="true" />
+                      <span className="label-stack">
+                        <span className="pill-label">Dashboard</span>
+                        <span className="pill-label-hover" aria-hidden="true">Dashboard</span>
+                      </span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/watchlist" className="pill">
+                      <span className="hover-circle" aria-hidden="true" />
+                      <span className="label-stack">
+                        <span className="pill-label">Watchlist</span>
+                        <span className="pill-label-hover" aria-hidden="true">Watchlist</span>
+                      </span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/news" className="pill">
+                      <span className="hover-circle" aria-hidden="true" />
+                      <span className="label-stack">
+                        <span className="pill-label">News</span>
+                        <span className="pill-label-hover" aria-hidden="true">News</span>
+                      </span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/alerts" className="pill">
+                      <span className="hover-circle" aria-hidden="true" />
+                      <span className="label-stack">
+                        <span className="pill-label">Alerts</span>
+                        <span className="pill-label-hover" aria-hidden="true">Alerts</span>
+                      </span>
+                    </Link>
+                  </li>
+                </ul>
+              </nav>
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}

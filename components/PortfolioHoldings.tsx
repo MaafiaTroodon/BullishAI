@@ -88,7 +88,7 @@ export function PortfolioHoldings() {
             const u = totalValue - base
             const up = base>0 ? (u/base)*100 : 0
             return (
-              <div key={p.symbol} className="bg-slate-700/30 rounded-lg p-4">
+              <div key={p.symbol} className="bg-slate-700/30 rounded-lg p-4 hover-card" data-anim="fade-up" data-anim-distance="16">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6">
                     <button

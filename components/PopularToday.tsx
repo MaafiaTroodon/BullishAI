@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import useSWR from 'swr'
 import Link from 'next/link'
+import { TiltCard } from '@/components/TiltCard'
 import { useRouter } from 'next/navigation'
 
 const fetcher = async (url: string) => {
@@ -98,29 +99,30 @@ export function PopularToday() {
           const changeColor = isPositive ? 'text-green-600' : 'text-red-600'
 
           return (
-            <Link
-              key={stock.symbol}
-              href={`/stocks/${stock.symbol}`}
-              className="bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 p-4 transition cursor-pointer"
-            >
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-xs text-slate-400 uppercase">{stock.category}</span>
-                <span className="text-xs font-semibold text-slate-300">${stock.price.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xl font-bold text-white">{stock.symbol}</span>
-                <div className={`flex items-center gap-1 ${changeColor}`}>
-                  {isPositive ? (
-                    <TrendingUp className="h-4 w-4" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4" />
-                  )}
-                  <span className="text-sm font-semibold">
-                    {isPositive ? '+' : ''}{stock.changePct.toFixed(2)}%
-                  </span>
+            <TiltCard className="rounded-lg" hoverScale={1.05} rotateAmplitude={10} key={stock.symbol}>
+              <Link
+                href={`/stocks/${stock.symbol}`}
+                className="bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 p-4 transition cursor-pointer block"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <span className="text-xs text-slate-400 uppercase">{stock.category}</span>
+                  <span className="text-xs font-semibold text-slate-300">${stock.price.toFixed(2)}</span>
                 </div>
-              </div>
-            </Link>
+                <div className="flex justify-between items-center">
+                  <span className="text-xl font-bold text-white">{stock.symbol}</span>
+                  <div className={`flex items-center gap-1 ${changeColor}`}>
+                    {isPositive ? (
+                      <TrendingUp className="h-4 w-4" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4" />
+                    )}
+                    <span className="text-sm font-semibold">
+                      {isPositive ? '+' : ''}{stock.changePct.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            </TiltCard>
           )
         })}
       </div>
