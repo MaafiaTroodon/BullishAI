@@ -20,18 +20,36 @@ export const PositionSchema = z.object({
   realizedPnl: z.number().default(0),
 })
 
+export const TransactionSchema = z.object({
+  id: z.string(),
+  symbol: z.string(),
+  action: TradeAction,
+  price: z.number(),
+  quantity: z.number(),
+  timestamp: z.number(), // Unix timestamp in milliseconds
+  note: z.string().optional(),
+})
+
+export type Transaction = z.infer<typeof TransactionSchema>
+
 export type TradeInput = z.infer<typeof TradeInputSchema>
 export type Position = z.infer<typeof PositionSchema>
 
 type Portfolio = {
   positions: Record<string, Position>
+  transactions: Transaction[] // Store all buy/sell transactions with timestamps
 }
 
 const store: Record<string, Portfolio> = {}
 
 function getPf(userId: string): Portfolio {
-  if (!store[userId]) store[userId] = { positions: {} }
+  if (!store[userId]) store[userId] = { positions: {}, transactions: [] }
   return store[userId]
+}
+
+export function listTransactions(userId: string): Transaction[] {
+  const pf = getPf(userId)
+  return pf.transactions.sort((a, b) => b.timestamp - a.timestamp) // Most recent first
 }
 
 export function listPositions(userId: string): Position[] {
@@ -43,6 +61,20 @@ export function upsertTrade(userId: string, input: TradeInput): Position {
   const pf = getPf(userId)
   const s = input.symbol.toUpperCase()
   const existing = pf.positions[s] || { symbol: s, totalShares: 0, avgPrice: 0, marketValue: 0, totalCost: 0, realizedPnl: 0 }
+
+  // Create transaction record with timestamp
+  const transaction: Transaction = {
+    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    symbol: s,
+    action: input.action,
+    price: input.price,
+    quantity: input.quantity,
+    timestamp: Date.now(), // Store current timestamp
+    note: input.note,
+  }
+  
+  // Add transaction to history
+  pf.transactions.push(transaction)
 
   if (input.action === 'buy') {
     const newTotalCost = existing.totalCost + input.price * input.quantity

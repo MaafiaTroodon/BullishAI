@@ -9,6 +9,10 @@ import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { DevStatus } from '@/components/DevStatus'
 import { AIInsights } from '@/components/AIInsights'
+import dynamic from 'next/dynamic'
+const PortfolioChartComp = dynamic(() => import('@/components/PortfolioChart').then(m => m.PortfolioChart), { ssr: false })
+const PortfolioHoldingsComp = dynamic(() => import('@/components/PortfolioHoldings').then(m => m.PortfolioHoldings), { ssr: false })
+const PortfolioSummaryComp = dynamic(() => import('@/components/PortfolioSummary').then(m => m.PortfolioSummary), { ssr: false })
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX']
@@ -212,198 +216,18 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Price Card */}
-        {isLoadingQuote ? (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700 animate-pulse">
-            <div className="h-8 bg-slate-700 rounded w-24 mb-4"></div>
-            <div className="h-12 bg-slate-700 rounded w-32"></div>
-          </div>
-        ) : quote && quote.price ? (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-white">{quote.symbol}</h2>
-              {quote.changePercent !== undefined && (
-                quote.changePercent >= 0 ? (
-                  <div className="flex items-center text-green-500">
-                    <TrendingUp className="h-5 w-5 mr-2" />
-                    <span className="text-xl font-semibold">
-                      {quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)} ({quote.changePercent >= 0 ? '+' : ''}{quote.changePercent.toFixed(2)}%)
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center text-red-500">
-                    <TrendingDown className="h-5 w-5 mr-2" />
-                    <span className="text-xl font-semibold">
-                      {quote.change.toFixed(2)} ({quote.changePercent.toFixed(2)}%)
-                    </span>
-                  </div>
-                )
-              )}
-            </div>
-            <div className="text-4xl font-bold text-white mb-6">
-              ${quote.price.toFixed(2)}
-            </div>
-            
-            {/* Full Stock Info Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm">
-              <div>
-                <div className="text-slate-400 mb-1">Open</div>
-                <div className="text-white font-semibold">${quote.open?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">High</div>
-                <div className="text-white font-semibold">${quote.high?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Low</div>
-                <div className="text-white font-semibold">${quote.low?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Prev Close</div>
-                <div className="text-white font-semibold">${quote.previousClose?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Volume</div>
-                <div className="text-white font-semibold">{quote.volume ? (quote.volume / 1000000).toFixed(1) + 'M' : 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">Market Cap</div>
-                <div className="text-white font-semibold">{quote.marketCap ? (quote.marketCap / 1000000000).toFixed(1) + 'B' : 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">P/E Ratio</div>
-                <div className="text-white font-semibold">{quote.peRatio?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">52W High</div>
-                <div className="text-white font-semibold">${quote.week52High?.toFixed(2) || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1">52W Low</div>
-                <div className="text-white font-semibold">${quote.week52Low?.toFixed(2) || 'N/A'}</div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Chart Section */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {['1d', '5d', '1m', '6m', '1y', '5y'].map((range) => (
-              <button
-                key={range}
-                onClick={() => setChartRange(range)}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  chartRange === range
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                {range.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          {isLoadingChart ? (
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 h-[400px] flex items-center justify-center">
-              <p className="text-slate-400">Loading chart...</p>
-            </div>
-          ) : chartApiData && chartApiData.data && Array.isArray(chartApiData.data) && chartApiData.data.length >= 2 ? (
-            <StockChart data={chartApiData.data} symbol={selectedSymbol} range={chartRange} source={chartApiData.source} />
-          ) : chartApiData && chartApiData.data && chartApiData.data.length < 2 ? (
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 h-[400px] flex items-center justify-center">
-              <p className="text-slate-400">No chart data available (free-tier limit)</p>
-            </div>
-          ) : (
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 h-[400px] flex items-center justify-center">
-              <p className="text-slate-400">Chart data loading...</p>
-            </div>
-          )}
+        {/* Portfolio Overview - Wealthsimple style */}
+        <div className="space-y-6">
+          {/* Summary Card at top - shows total balance and return */}
+          <PortfolioSummaryComp />
+          
+          {/* Large prominent chart */}
+          <PortfolioChartComp />
+          
+          {/* Holdings list below */}
+          <PortfolioHoldingsComp />
         </div>
-
-        {/* News Section */}
-        <div className="mb-8">
-          {isLoadingNews ? (
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <p className="text-slate-400">Loading news...</p>
-            </div>
-          ) : newsData && newsData.items && newsData.items.length > 0 ? (
-            <NewsFeed news={newsData.items.map((item: any) => ({
-              headline: item.headline,
-              summary: item.summary,
-              source: item.source,
-              url: item.url,
-              image: item.image,
-              datetime: item.datetime,
-            }))} symbol={selectedSymbol} />
-          ) : (
-            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-              <p className="text-slate-400">No recent news available</p>
-            </div>
-          )}
-        </div>
-
-        {/* Watchlist & AI Insights */}
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">My Watchlist</h3>
-              <Link 
-                href="/watchlist" 
-                className="text-blue-500 hover:text-blue-400 text-sm font-medium"
-              >
-                View All →
-              </Link>
-            </div>
-            {watchlistItems.length > 0 ? (
-              <div className="space-y-3">
-                {watchlistItems.slice(0, 5).map((symbol) => {
-                  const quote = batchQuotes.find((q: any) => q.symbol === symbol)
-                  return (
-                    <div 
-                      key={symbol}
-                      className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer transition"
-                      onClick={() => setSelectedSymbol(symbol)}
-                    >
-                      <div>
-                        <div className="font-semibold text-white">{symbol}</div>
-                        {quote && quote.data && !isLoadingBatchQuotes ? (
-                          <div className="text-sm text-slate-400">
-                            ${quote.data.price?.toFixed(2) || 'N/A'}
-                          </div>
-                        ) : (
-                          <div className="h-4 w-16 bg-slate-600 rounded animate-pulse"></div>
-                        )}
-                      </div>
-                      {quote && quote.data && !isLoadingBatchQuotes && (
-                        <div className={`flex items-center ${quote.data.dp >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {quote.data.dp >= 0 ? (
-                            <TrendingUp className="h-4 w-4" />
-                          ) : (
-                            <TrendingDown className="h-4 w-4" />
-                          )}
-                          <span className="ml-1 text-sm font-medium">
-                            {quote.data.dp >= 0 ? '+' : ''}{quote.data.dp?.toFixed(2) || '0.00'}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-slate-400 mb-4">Your watchlist is empty</p>
-                <Link 
-                  href="/watchlist"
-                  className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-                >
-                  Add Stocks
-                </Link>
-              </div>
-            )}
-          </div>
-          <AIInsights watchlistItems={watchlistItems} quotes={batchQuotes} />
-        </div>
+        
       </main>
     </div>
   )

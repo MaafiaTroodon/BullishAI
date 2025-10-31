@@ -1,5 +1,6 @@
 import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
+import { summarizeNews } from '@/lib/gemini'
 
 export async function getQuote(symbol: string) {
   try {
@@ -28,9 +29,34 @@ export async function getNews(symbol: string, lookbackHours = 48) {
   try {
     const items = await getMultiSourceNews(symbol)
     const cutoff = Date.now() - lookbackHours * 60 * 60 * 1000
-    return { items: items.filter(n => (n.datetime || 0) >= cutoff) }
+    const filtered = items.filter(n => (n.datetime || 0) >= cutoff)
+    
+    // Summarize top news using Gemini for 1-2 line summaries
+    let summaries: string[] = []
+    if (filtered.length > 0) {
+      try {
+        summaries = await summarizeNews(
+          filtered.slice(0, 5).map(item => ({
+            headline: item.headline,
+            summary: item.summary,
+            source: item.source,
+            datetime: item.datetime
+          })),
+          3 // Top 3 most breaking/relevant
+        )
+      } catch (err) {
+        console.error('News summarization failed:', err)
+        // Fallback to headlines
+        summaries = filtered.slice(0, 3).map(n => `${n.headline} (${n.source})`)
+      }
+    }
+    
+    return { 
+      items: filtered,
+      summaries: summaries.length > 0 ? summaries : (filtered.slice(0, 3).map(n => `${n.headline} (${n.source})`))
+    }
   } catch {
-    return { items: [] }
+    return { items: [], summaries: [] }
   }
 }
 

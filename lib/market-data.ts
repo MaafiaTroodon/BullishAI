@@ -37,9 +37,12 @@ async function fetchWithRetry(url: string, maxRetries = 3, timeout = 6000): Prom
 // Yahoo Finance (no key required, very reliable)
 async function fetchYahoo(symbol: string, range: string): Promise<Candle[]> {
   const rangeMap: Record<string, string> = {
+    '1h': '1d&interval=1m',
     '1d': '1d&interval=5m',
-    '5d': '5d&interval=15m',
+    '3d': '5d&interval=15m',
+    '1week': '5d&interval=1h',
     '1m': '1mo&interval=1d',
+    '3m': '3mo&interval=1d',
     '6m': '6mo&interval=1d',
     '1y': '1y&interval=1d',
     '5y': '5y&interval=1wk',
@@ -70,9 +73,12 @@ async function fetchTwelveData(symbol: string, range: string): Promise<Candle[]>
   if (!TWELVEDATA_KEY) throw new Error('No Twelve Data key')
   
   const intervalMap: Record<string, string> = {
+    '1h': '1min',
     '1d': '1min',
-    '5d': '5min',
+    '3d': '5min',
+    '1week': '1hour',
     '1m': '1day',
+    '3m': '1day',
     '6m': '1day',
     '1y': '1day',
     '5y': '1week',

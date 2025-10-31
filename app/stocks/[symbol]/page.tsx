@@ -226,9 +226,11 @@ export default function StockPage() {
             <div className="space-y-6">
               {/* Technical Analysis + Holding side-by-side */}
               <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+                <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 flex flex-col">
                   <h3 className="text-xl font-bold text-white mb-4">Technical Analysis</h3>
-                  <TradingViewTechnicalAnalysis symbol={symbol} width={360} height={360} />
+                  <div className="flex-1 min-h-0">
+                    <TradingViewTechnicalAnalysis symbol={symbol} width={360} height={360} />
+                  </div>
                 </div>
                 <PositionSummary symbol={symbol} currentPrice={quote.price} />
               </div>

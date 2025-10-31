@@ -6,9 +6,78 @@ export const dynamic = 'force-dynamic'
 
 function getUserId() { return 'demo-user' }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const userId = getUserId()
-  return NextResponse.json({ items: listPositions(userId) })
+  const url = new URL(req.url)
+  const enrich = url.searchParams.get('enrich') === '1'
+  const includeTransactions = url.searchParams.get('transactions') === '1'
+  const items = listPositions(userId)
+  
+  const response: any = { items }
+  
+  // Include transaction history if requested
+  if (includeTransactions) {
+    const { listTransactions } = await import('@/lib/portfolio')
+    response.transactions = listTransactions(userId)
+  }
+  
+  if (!enrich || items.length === 0) return NextResponse.json(response)
+
+  // Enrich with fast concurrent quotes from our own quote endpoint
+  const enriched = await Promise.all(items.map(async (p) => {
+    try {
+      // Determine base URL dynamically
+      const protocol = req.headers.get('x-forwarded-proto') || 'http'
+      const host = req.headers.get('host') || 'localhost:3000'
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
+      
+      const r = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { 
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      if (!r.ok) {
+        throw new Error(`Quote API returned ${r.status}`)
+      }
+      
+      const contentType = r.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Quote API returned non-JSON response')
+      }
+      
+      const j = await r.json()
+      const price = j?.data?.price ?? j?.price ?? null
+      const totalValue = price ? price * p.totalShares : 0
+      const base = (p.totalCost || p.avgPrice * p.totalShares) || 0
+      const unreal = price ? (price - p.avgPrice) * p.totalShares : 0
+      const unrealPct = base > 0 ? (unreal / base) * 100 : 0
+      return { 
+        ...p, 
+        currentPrice: price, 
+        totalValue, 
+        unrealizedPnl: unreal, 
+        unrealizedPnlPct: unrealPct,
+        totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
+      }
+    } catch (err: any) {
+      console.error(`Error enriching position ${p.symbol}:`, err.message)
+      return { 
+        ...p, 
+        currentPrice: null, 
+        totalValue: 0, 
+        unrealizedPnl: 0, 
+        unrealizedPnlPct: 0,
+        totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
+      }
+    }
+  }))
+  return NextResponse.json({ items: enriched }, {
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  })
 }
 
 export async function POST(req: NextRequest) {

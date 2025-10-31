@@ -11,6 +11,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export function DemoTradeBox({ symbol, price }: Props) {
   const [mode, setMode] = useState<'buy'|'sell'>('buy')
+  const [subType, setSubType] = useState<'market'|'fraction'>('fraction')
   const [orderType, setOrderType] = useState<'dollars'|'shares'>('dollars')
   const [amount, setAmount] = useState<number>(0)
   const [isSubmitting, setSubmitting] = useState(false)
@@ -23,9 +24,11 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const pos = useMemo(()=> (positions||[]).find((p:any)=>p.symbol===symbol.toUpperCase()), [positions, symbol])
   const currentPrice = price ?? null
   const estShares = useMemo(() => {
-    if (!currentPrice || amount<=0) return 0
+    if (!currentPrice) return 0
+    if (subType==='market') return 1
+    if (amount<=0) return 0
     return orderType==='dollars' ? amount / currentPrice : amount
-  }, [amount, orderType, currentPrice])
+  }, [amount, orderType, currentPrice, subType])
   const estCost = useMemo(() => {
     if (!currentPrice || amount<=0) return 0
     return orderType==='dollars' ? amount : amount * currentPrice
@@ -45,6 +48,30 @@ export function DemoTradeBox({ symbol, price }: Props) {
           const others = (prev||[]).filter(p=>p.symbol!==j.item.symbol)
           return [j.item, ...others]
         })
+        // Persist to localStorage for cross-widget visibility
+        try {
+          const key = 'bullish_demo_pf_positions'
+          const raw = localStorage.getItem(key)
+          const map = raw ? JSON.parse(raw) : {}
+          map[j.item.symbol] = j.item
+          localStorage.setItem(key, JSON.stringify(map))
+          
+          // Also persist transaction history
+          const txKey = 'bullish_demo_transactions'
+          const txRaw = localStorage.getItem(txKey)
+          const transactions = txRaw ? JSON.parse(txRaw) : []
+          transactions.push({
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            symbol: symbol.toUpperCase(),
+            action: mode,
+            price: currentPrice,
+            quantity: estShares,
+            timestamp: Date.now(),
+          })
+          localStorage.setItem(txKey, JSON.stringify(transactions))
+          
+          window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: j.item.symbol } }))
+        } catch {}
         setAmount(0)
       }
     } finally {
@@ -61,21 +88,28 @@ export function DemoTradeBox({ symbol, price }: Props) {
           <button onClick={()=>setMode('sell')} className={`px-3 py-1 rounded ${mode==='sell'?'bg-red-600 text-white':'text-slate-300'}`}>Sell</button>
         </div>
       </div>
-      <div className="text-slate-300 text-sm mb-4">Market {mode}. Stored locally on the server (demo portfolio).</div>
+      <div className="text-slate-300 text-sm mb-4">{subType==='market'?'Market': 'Fraction'} {mode}. Stored locally on the server (demo portfolio).</div>
 
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Order in</label>
-          <select value={orderType} onChange={(e)=>setOrderType(e.target.value as any)} className="w-full bg-slate-700 text-white rounded-md px-3 py-2 outline-none">
-            <option value="dollars">Dollars</option>
-            <option value="shares">Shares</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">{orderType==='dollars'?'Amount ($)':'Quantity (shares)'}</label>
-          <input type="number" value={amount} onChange={e=>setAmount(Number(e.target.value))} className="w-full bg-slate-700 text-white rounded-md px-3 py-2 outline-none" placeholder="0" />
-        </div>
+      <div className="flex items-center gap-2 mb-4 bg-slate-900 rounded-md p-1 w-fit">
+        <button onClick={()=>setSubType('market')} className={`px-3 py-1 rounded ${subType==='market'?'bg-slate-700 text-white':'text-slate-300'}`}>Market (1 share)</button>
+        <button onClick={()=>setSubType('fraction')} className={`px-3 py-1 rounded ${subType==='fraction'?'bg-slate-700 text-white':'text-slate-300'}`}>Fraction</button>
       </div>
+
+      {subType==='fraction' && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-slate-400 text-xs mb-1">Order in</label>
+            <select value={orderType} onChange={(e)=>setOrderType(e.target.value as any)} className="w-full bg-slate-700 text-white rounded-md px-3 py-2 outline-none">
+              <option value="dollars">Dollars</option>
+              <option value="shares">Shares</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-slate-400 text-xs mb-1">{orderType==='dollars'?'Amount ($)':'Quantity (shares)'}</label>
+            <input type="number" value={amount} onChange={e=>setAmount(Number(e.target.value))} className="w-full bg-slate-700 text-white rounded-md px-3 py-2 outline-none" placeholder="0" />
+          </div>
+        </div>
+      )}
 
       <div className="text-slate-400 text-sm mb-4 flex items-center gap-3">
         <span>

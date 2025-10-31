@@ -8,7 +8,7 @@ export const revalidate = 0
 
 const chartSchema = z.object({
   symbol: z.string().min(1).max(10).toUpperCase(),
-  range: z.enum(['1d', '5d', '1m', '6m', '1y', '5y', 'max']).optional(),
+  range: z.enum(['1h', '1d', '3d', '1week', '1m', '3m', '6m', '1y', '5y', 'max']).optional(),
 })
 
 export async function GET(request: NextRequest) {
