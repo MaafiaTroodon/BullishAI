@@ -123,7 +123,16 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         body: JSON.stringify({ query, sessionId: 'inline-home' }),
       })
 
-      const data = await response.json()
+      // Check content type before parsing JSON
+      const contentType = response.headers.get('content-type')
+      let data: any
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json()
+      } else {
+        const text = await response.text()
+        console.error('Non-JSON response from /api/ai:', text.substring(0, 200))
+        throw new Error('Invalid response format from API')
+      }
 
       if (!response.ok || data.error) {
         console.error('AI API error:', data.error || 'Unknown error')
