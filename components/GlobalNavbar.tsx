@@ -14,7 +14,12 @@ export function GlobalNavbar() {
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const { data: wallet } = useSWR('/api/wallet', (url)=>fetch(url).then(r=>r.json()), { refreshInterval: 10000 })
+  const { data: wallet, mutate: mutateWallet } = useSWR('/api/wallet', (url)=>fetch(url).then(r=>r.json()), { refreshInterval: 10000 })
+  useEffect(() => {
+    function onWalletUpd() { mutateWallet() }
+    window.addEventListener('walletUpdated', onWalletUpd as any)
+    return () => window.removeEventListener('walletUpdated', onWalletUpd as any)
+  }, [mutateWallet])
 
   // Handle search
   const handleSearchChange = async (value: string) => {

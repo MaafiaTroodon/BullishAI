@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const includeTransactions = url.searchParams.get('transactions') === '1'
   const items = listPositions(userId)
   
-  const response: any = { items, wallet: { balance: getWalletBalance(userId), cap: 1_000_000 } }
+  const bal = getWalletBalance(userId)
+  const response: any = { items, wallet: { balance: bal, cap: 1_000_000 } }
   
   // Include transaction history if requested
   if (includeTransactions) {
@@ -21,7 +22,11 @@ export async function GET(req: NextRequest) {
     response.transactions = listTransactions(userId)
   }
   
-  if (!enrich || items.length === 0) return NextResponse.json(response)
+  if (!enrich || items.length === 0) {
+    const res = NextResponse.json(response)
+    try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false }) } catch {}
+    return res
+  }
 
   // Enrich with fast concurrent quotes from our own quote endpoint
   const enriched = await Promise.all(items.map(async (p) => {
@@ -73,7 +78,7 @@ export async function GET(req: NextRequest) {
       }
     }
   }))
-  return NextResponse.json({ items: enriched }, {
+  return NextResponse.json({ items: enriched, wallet: { balance: bal, cap: 1_000_000 } }, {
     headers: {
       'Content-Type': 'application/json',
     }
@@ -102,7 +107,10 @@ export async function POST(req: NextRequest) {
       const input = TradeInputSchema.parse(body)
       try {
         const pos = upsertTrade(userId, input)
-        return NextResponse.json({ item: pos })
+        const updatedBal = getWalletBalance(userId)
+        const res = NextResponse.json({ item: pos, wallet: { balance: updatedBal, cap: 1_000_000 } })
+        try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false }) } catch {}
+        return res
       } catch (e: any) {
         return NextResponse.json({ error: e?.message || 'trade_failed' }, { status: 400 })
       }

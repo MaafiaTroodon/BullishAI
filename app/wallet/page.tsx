@@ -12,6 +12,7 @@ export default function WalletPage() {
     const r = await fetch('/api/wallet', { cache: 'no-store' })
     const j = await r.json()
     setBalance(j.balance || 0)
+    try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
   }
 
   useEffect(()=>{ refresh() }, [])
@@ -27,6 +28,7 @@ export default function WalletPage() {
       } else {
         setBalance(j.balance || 0)
         showToast(action==='deposit'?'Funds added':'Withdrawal complete', 'success')
+        try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
       }
     } finally {
       setBusy(false)
