@@ -19,10 +19,12 @@ const DEFAULT_HEADLINES = [
   'Real-Time Edge, On Demand.',
 ]
 
-const DEFAULT_TYPING_MS = 45
-const DEFAULT_DELETING_MS = 30
-const DEFAULT_HOLD_MS = 2000
-const DEFAULT_START_DELAY_MS = 400
+// Timings per spec
+const DEFAULT_TYPING_MS = 58 // 50–60ms/char (a tad slower for readability)
+const DEFAULT_DELETING_MS = 36 // 35–45ms/char (a bit faster for smoothness)
+const DEFAULT_HOLD_MS = 1800 // full-text hold
+const DEFAULT_START_DELAY_MS = 350 // 300–400ms
+const DEFAULT_IDLE_GAP_MS = 0 // idle gap removed per request
 
 export function HeadlineRotator({
   headlines = DEFAULT_HEADLINES,
@@ -43,6 +45,27 @@ export function HeadlineRotator({
   const containerRef = useRef<HTMLDivElement>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const [isVisible, setIsVisible] = useState(true)
+
+  // Easing helpers to make typing/deleting feel smoother and less robotic
+  function easedTypingDelay(len: number, idx: number) {
+    if (len <= 0) return typingMs
+    const t = Math.min(1, Math.max(0, idx / len))
+    // Slow-in, steady, slight slow-out (cosine ease)
+    const ease = 0.5 - 0.5 * Math.cos(Math.PI * t)
+    // Map ease to a ±20% variance around base
+    const scale = 0.8 + ease * 0.4
+    return Math.max(20, Math.round(typingMs * scale))
+  }
+
+  function easedDeletingDelay(len: number, remaining: number) {
+    if (len <= 0) return deletingMs
+    const t = Math.min(1, Math.max(0, 1 - remaining / len))
+    // Slight accelerate at the start, then gentle decel at the end
+    const ease = 0.5 - 0.5 * Math.cos(Math.PI * t)
+    const scale = 0.75 + ease * 0.3 // 75%..105% of base
+    return Math.max(16, Math.round(deletingMs * scale))
+  }
 
   // Detect reduced motion preference
   useEffect(() => {
@@ -74,15 +97,18 @@ export function HeadlineRotator({
     observerRef.current = new IntersectionObserver(
       (entries) => {
         const isVisible = entries[0]?.isIntersecting ?? false
-        if (!isVisible && phase !== 'idle') {
-          // Pause animation
+        setIsVisible(isVisible)
+        if (!isVisible) {
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current)
             timeoutRef.current = null
           }
-        } else if (isVisible && phase === 'idle') {
-          // Resume animation
-          startCycle()
+        } else {
+          // If returning visible and nothing scheduled, re-run current phase tick
+          if (!timeoutRef.current && phase === 'idle') {
+            const cleanup = startCycle()
+            // No-op cleanup in observer context
+          }
         }
       },
       { threshold: 0.25 }
@@ -132,17 +158,18 @@ export function HeadlineRotator({
     }
   }, [])
 
-  // Typing animation
+  // Typing animation (only when visible)
   useEffect(() => {
-    if (phase !== 'typing' || isReduced) return
+    if (phase !== 'typing' || isReduced || !isVisible) return
     const currentHeadline = headlines[currentIndex]
     if (!currentHeadline) return
     
     if (charIndex < currentHeadline.length) {
+      const delay = easedTypingDelay(currentHeadline.length, charIndex)
       timeoutRef.current = setTimeout(() => {
         setDisplayText(currentHeadline.substring(0, charIndex + 1))
         setCharIndex(prev => prev + 1)
-      }, typingMs)
+      }, delay)
     } else {
       setPhase('hold')
       setCharIndex(0)
@@ -153,11 +180,11 @@ export function HeadlineRotator({
         timeoutRef.current = null
       }
     }
-  }, [phase, charIndex, typingMs, headlines, currentIndex, isReduced])
+  }, [phase, charIndex, typingMs, headlines, currentIndex, isReduced, isVisible])
 
   // Hold phase
   useEffect(() => {
-    if (phase !== 'hold' || isReduced) return
+    if (phase !== 'hold' || isReduced || !isVisible) return
     timeoutRef.current = setTimeout(() => {
       setPhase('deleting')
     }, holdMs)
@@ -166,19 +193,21 @@ export function HeadlineRotator({
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [phase, holdMs, isReduced])
+  }, [phase, holdMs, isReduced, isVisible])
 
   // Deleting animation
   useEffect(() => {
-    if (phase !== 'deleting' || isReduced) return
+    if (phase !== 'deleting' || isReduced || !isVisible) return
     if (displayText.length > 0) {
+      const delay = easedDeletingDelay((headlines[currentIndex] || '').length, displayText.length)
       timeoutRef.current = setTimeout(() => {
         setDisplayText(prev => prev.substring(0, prev.length - 1))
-        setCharIndex(prev => prev + 1)
-      }, deletingMs)
+        setCharIndex(prev => Math.max(0, prev + 1))
+      }, delay)
     } else {
-      // Move to next headline
+      // Fully deleted → immediately move to next (idle gap removed)
       const nextIndex = (currentIndex + 1) % headlines.length
+      setPhase('idle')
       setCurrentIndex(nextIndex)
       setPhase('typing')
       setCharIndex(0)
@@ -190,7 +219,7 @@ export function HeadlineRotator({
         timeoutRef.current = null
       }
     }
-  }, [phase, charIndex, displayText, deletingMs, currentIndex, headlines, isReduced])
+  }, [phase, displayText.length, deletingMs, currentIndex, headlines, isReduced, isVisible])
 
   // SSR fallback: show first headline
   const ssrText = headlines[0]
