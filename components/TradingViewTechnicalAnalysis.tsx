@@ -18,34 +18,26 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
     if (!container.current) return
 
     const currentContainer = container.current
+    let isMounted = true
     setError(false)
 
-    // Clean up safely
-    const cleanup = () => {
-      if (currentContainer) {
-        // Remove all child nodes safely
-        while (currentContainer.firstChild) {
-          try {
-            currentContainer.removeChild(currentContainer.firstChild)
-          } catch (e) {
-            // If node was already removed, just clear innerHTML
-            currentContainer.innerHTML = ''
-            break
-          }
-        }
-      }
+    // Clear previous content safely using innerHTML (safer than removeChild)
+    if (currentContainer) {
+      currentContainer.innerHTML = ''
     }
-
-    cleanup()
 
     const n = normalizeTradingViewSymbol(symbol)
 
     // Set timeout to detect loading failure
     const timeout = setTimeout(() => {
-      if (currentContainer && (!currentContainer.querySelector('.tradingview-widget-container__widget iframe'))) {
+      if (isMounted && currentContainer && (!currentContainer.querySelector('.tradingview-widget-container__widget iframe'))) {
         setError(true)
       }
     }, 5000)
+
+    // Create a wrapper div for the widget
+    const widgetDiv = document.createElement('div')
+    widgetDiv.className = 'tradingview-widget-container__widget'
 
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js'
@@ -65,17 +57,28 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
     })
     
     script.onerror = () => {
-      setError(true)
-      clearTimeout(timeout)
+      if (isMounted) {
+        setError(true)
+        clearTimeout(timeout)
+      }
     }
     
-    if (currentContainer) {
-      currentContainer.appendChild(script)
+    if (currentContainer && isMounted) {
+      currentContainer.appendChild(widgetDiv)
+      widgetDiv.appendChild(script)
     }
 
     return () => {
+      isMounted = false
       clearTimeout(timeout)
-      cleanup()
+      // Use innerHTML for safer cleanup - avoids removeChild errors
+      if (currentContainer) {
+        try {
+          currentContainer.innerHTML = ''
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      }
     }
   }, [symbol, exchange, height])
 
@@ -100,8 +103,8 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="tradingview-widget-container flex-1 min-h-0" style={{minHeight: `${height}px`, width: '100%'}} ref={container}>
-        <div className="tradingview-widget-container__widget w-full h-full"></div>
+      <div className="tradingview-widget-container flex-1 min-h-0 overflow-hidden" style={{minHeight: `${height}px`, width: '100%'}} ref={container}>
+        {/* Widget will be inserted here by script */}
       </div>
       <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
         <div className="text-slate-400 mb-1">Symbol: {symbol} ({normalizeTradingViewSymbol(symbol).tvSymbol})</div>
