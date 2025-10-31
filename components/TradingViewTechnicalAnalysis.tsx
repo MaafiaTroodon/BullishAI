@@ -104,15 +104,15 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
         <div className="tradingview-widget-container__widget w-full h-full"></div>
       </div>
       <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
+        <div className="text-slate-400 mb-1">Symbol: {symbol} ({normalizeTradingViewSymbol(symbol).tvSymbol})</div>
         <a 
           href={`https://www.tradingview.com/symbols/${normalizeTradingViewSymbol(symbol).tvSymbol.replace(':','-')}/technicals/`} 
           rel="noopener nofollow" 
           target="_blank"
           className="text-blue-500 hover:text-blue-400"
         >
-          {symbol} technical analysis
-        </a>{' '}
-        <span> by TradingView</span>
+          View {symbol} technical analysis on TradingView →
+        </a>
       </div>
     </div>
   )
