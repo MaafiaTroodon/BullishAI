@@ -8,6 +8,7 @@ import { PopularToday } from '@/components/PopularToday'
 import { TradingViewHeatmap } from '@/components/TradingViewHeatmap'
 import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import TradingViewTopStories from '@/components/TradingViewTopStories'
+import { HeadlineRotator } from '@/components/HeadlineRotator'
 import useSWR from 'swr'
 
 const fetcher = async (url: string) => {
@@ -97,9 +98,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
-          <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 bg-gradient-to-r from-blue-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
-            AI-Powered Stock Insights
-          </h1>
+          <HeadlineRotator className="mb-6" />
           <p className="text-xl md:text-2xl text-slate-300 mb-8 max-w-3xl mx-auto">
             Track your portfolio in real-time with AI-driven analysis, automated alerts, 
             and intelligent market insights powered by Groq's Llama-3.

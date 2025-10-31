@@ -13,6 +13,7 @@ import { PositionSummary } from '@/components/PositionSummary'
 import { StockChart } from '@/components/charts/StockChart'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
+import { showToast } from '@/components/Toast'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -66,10 +67,10 @@ export default function StockPage() {
     let newItems = [...watchlistItems]
     if (isInWatchlist) {
       newItems = newItems.filter(s => s !== symbol)
-      console.log(`${symbol} removed from watchlist`)
+      showToast(`${symbol} removed from watchlist`, 'info')
     } else {
       newItems.push(symbol)
-      console.log(`${symbol} added to watchlist`)
+      showToast(`${symbol} added to watchlist`, 'success')
     }
     setWatchlistItems(newItems)
     setIsInWatchlist(!isInWatchlist)

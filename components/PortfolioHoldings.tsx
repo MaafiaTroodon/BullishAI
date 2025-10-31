@@ -91,7 +91,12 @@ export function PortfolioHoldings() {
               <div key={p.symbol} className="bg-slate-700/30 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6">
-                    <div className="text-white font-bold text-lg">{p.symbol}</div>
+                    <button
+                      onClick={() => router.push(`/stocks/${p.symbol}`)}
+                      className="text-white font-bold text-lg hover:text-blue-400 transition cursor-pointer"
+                    >
+                      {p.symbol}
+                    </button>
                     <div className="text-sm text-slate-300">Shares: <span className="text-white font-semibold">{p.totalShares.toFixed(4)}</span></div>
                     <div className="text-sm text-slate-300">Avg: <span className="text-white font-semibold">${p.avgPrice.toFixed(2)}</span></div>
                     <div className="text-sm text-slate-300">Value: <span className="text-white font-semibold">${totalValue.toFixed(2)}</span></div>

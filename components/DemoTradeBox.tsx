@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { showToast } from '@/components/Toast'
 
 type Props = {
   symbol: string
@@ -84,6 +85,10 @@ export function DemoTradeBox({ symbol, price }: Props) {
           localStorage.setItem(txKey, JSON.stringify(transactions))
           
           window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: j.item.symbol } }))
+          showToast(
+            `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${symbol.toUpperCase()} at $${currentPrice.toFixed(2)}`,
+            'success'
+          )
         } catch {}
         setAmount(0)
       }

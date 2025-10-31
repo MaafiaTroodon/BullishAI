@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 import TradingViewMiniChart from '@/components/TradingViewMiniChart'
+import { showToast } from '@/components/Toast'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -70,6 +71,7 @@ export default function WatchlistPage() {
       
       if (validSymbols.length > 0) {
         setWatchlistItems([...watchlistItems, ...validSymbols])
+        showToast(`${validSymbols.join(', ')} added to watchlist`, 'success')
       }
       setNewSymbol('')
       setShowSuggestions(false)
@@ -82,6 +84,7 @@ export default function WatchlistPage() {
     if (selectedSymbol === symbol && newItems.length > 0) {
       setSelectedSymbol(newItems[0])
     }
+    showToast(`${symbol} removed from watchlist`, 'info')
     // Save to localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('watchlistItems', JSON.stringify(newItems))
@@ -110,6 +113,7 @@ export default function WatchlistPage() {
   const handleSelectSuggestion = (symbol: string) => {
     if (!watchlistItems.includes(symbol)) {
       setWatchlistItems([...watchlistItems, symbol])
+      showToast(`${symbol} added to watchlist`, 'success')
     }
     setNewSymbol('')
     setShowSuggestions(false)
