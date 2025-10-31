@@ -38,12 +38,13 @@ export type Position = z.infer<typeof PositionSchema>
 type Portfolio = {
   positions: Record<string, Position>
   transactions: Transaction[] // Store all buy/sell transactions with timestamps
+  walletBalance: number
 }
 
 const store: Record<string, Portfolio> = {}
 
 function getPf(userId: string): Portfolio {
-  if (!store[userId]) store[userId] = { positions: {}, transactions: [] }
+  if (!store[userId]) store[userId] = { positions: {}, transactions: [], walletBalance: 0 }
   return store[userId]
 }
 
@@ -94,19 +95,51 @@ export function upsertTrade(userId: string, input: TradeInput): Position {
   pf.transactions.push(transaction)
 
   if (input.action === 'buy') {
+    const totalCost = input.price * input.quantity
+    if (pf.walletBalance < totalCost) {
+      throw new Error('insufficient_funds')
+    }
+    pf.walletBalance -= totalCost
     const newTotalCost = existing.totalCost + input.price * input.quantity
     const newTotalShares = existing.totalShares + input.quantity
     const newAvg = newTotalShares > 0 ? newTotalCost / newTotalShares : 0
     pf.positions[s] = { ...existing, totalShares: newTotalShares, avgPrice: newAvg, totalCost: newTotalCost }
   } else {
-    const sellQty = Math.min(existing.totalShares, input.quantity)
+    if (input.quantity > existing.totalShares) {
+      throw new Error('insufficient_shares')
+    }
+    const sellQty = input.quantity
     const newTotalShares = existing.totalShares - sellQty
     const realized = (input.price - existing.avgPrice) * sellQty
     const newTotalCost = existing.avgPrice * newTotalShares
     pf.positions[s] = { ...existing, totalShares: newTotalShares, totalCost: newTotalCost, realizedPnl: existing.realizedPnl + realized }
+    // credit proceeds
+    pf.walletBalance += input.price * sellQty
   }
 
   return pf.positions[s]
+}
+
+// Wallet helpers
+export function getWalletBalance(userId: string): number {
+  return getPf(userId).walletBalance
+}
+
+export function depositToWallet(userId: string, amount: number): number {
+  if (amount <= 0) throw new Error('invalid_amount')
+  const pf = getPf(userId)
+  const cap = 1_000_000
+  const newBalance = Math.min(cap, pf.walletBalance + amount)
+  pf.walletBalance = newBalance
+  return pf.walletBalance
+}
+
+export function withdrawFromWallet(userId: string, amount: number): number {
+  if (amount <= 0) throw new Error('invalid_amount')
+  const pf = getPf(userId)
+  if (pf.walletBalance < amount) throw new Error('insufficient_funds')
+  pf.walletBalance -= amount
+  return pf.walletBalance
 }
 
 

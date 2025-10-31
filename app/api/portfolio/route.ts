@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TradeInputSchema, listPositions, upsertTrade } from '@/lib/portfolio'
+import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const includeTransactions = url.searchParams.get('transactions') === '1'
   const items = listPositions(userId)
   
-  const response: any = { items }
+  const response: any = { items, wallet: { balance: getWalletBalance(userId), cap: 1_000_000 } }
   
   // Include transaction history if requested
   if (includeTransactions) {
@@ -100,8 +100,12 @@ export async function POST(req: NextRequest) {
     // Process single trade
     if (body && body.symbol) {
       const input = TradeInputSchema.parse(body)
-      const pos = upsertTrade(userId, input)
-      return NextResponse.json({ item: pos })
+      try {
+        const pos = upsertTrade(userId, input)
+        return NextResponse.json({ item: pos })
+      } catch (e: any) {
+        return NextResponse.json({ error: e?.message || 'trade_failed' }, { status: 400 })
+      }
     }
 
     return NextResponse.json({ ok: true })

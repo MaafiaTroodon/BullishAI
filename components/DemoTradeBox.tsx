@@ -59,6 +59,10 @@ export function DemoTradeBox({ symbol, price }: Props) {
         body: JSON.stringify({ symbol, action: mode, price: currentPrice, quantity: estShares })
       })
       const j = await res.json()
+      if (!res.ok) {
+        showToast(j?.error === 'insufficient_funds' ? 'Insufficient wallet balance' : j?.error === 'insufficient_shares' ? 'Not enough shares to sell' : 'Trade failed', 'error')
+        return
+      }
       if (res.ok) {
         setPositions((prev:any[])=>{
           const others = (prev||[]).filter(p=>p.symbol!==j.item.symbol)

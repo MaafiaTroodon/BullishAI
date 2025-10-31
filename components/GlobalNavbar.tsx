@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Bell, ChevronDown, Settings, LogOut, TrendingUp } from 'lucide-react'
 import { DevStatus } from './DevStatus'
+import useSWR from 'swr'
 
 export function GlobalNavbar() {
   const router = useRouter()
@@ -13,6 +14,7 @@ export function GlobalNavbar() {
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const { data: wallet } = useSWR('/api/wallet', (url)=>fetch(url).then(r=>r.json()), { refreshInterval: 10000 })
 
   // Handle search
   const handleSearchChange = async (value: string) => {
@@ -137,6 +139,11 @@ export function GlobalNavbar() {
                   </li>
                 </ul>
               </nav>
+              {/* Wallet balance pill */}
+              <div className="hidden lg:flex items-center bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-slate-200 font-semibold">
+                <span className="text-slate-400 mr-2">Wallet</span>
+                <span>${(wallet?.balance ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+              </div>
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
