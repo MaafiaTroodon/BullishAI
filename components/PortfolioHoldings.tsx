@@ -4,7 +4,16 @@ import useSWR from 'swr'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r=>r.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url, { cache: 'no-store' })
+  const ct = res.headers.get('content-type') || ''
+  if (!ct.includes('application/json')) {
+    const text = await res.text()
+    console.error('Non-JSON response:', text.substring(0, 200))
+    throw new Error('Invalid response format')
+  }
+  return res.json()
+}
 
 export function PortfolioHoldings() {
   const router = useRouter()

@@ -6,7 +6,16 @@ import useSWR from 'swr'
 import { GlobalNavbar } from '@/components/GlobalNavbar'
 import TradingViewMiniChart from '@/components/TradingViewMiniChart'
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  const ct = res.headers.get('content-type') || ''
+  if (!ct.includes('application/json')) {
+    const text = await res.text()
+    console.error('Non-JSON response:', text.substring(0, 200))
+    throw new Error('Invalid response format')
+  }
+  return res.json()
+}
 
 const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX']
 

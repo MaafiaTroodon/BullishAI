@@ -10,7 +10,16 @@ import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import TradingViewTopStories from '@/components/TradingViewTopStories'
 import useSWR from 'swr'
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  const ct = res.headers.get('content-type') || ''
+  if (!ct.includes('application/json')) {
+    const text = await res.text()
+    console.error('Non-JSON response:', text.substring(0, 200))
+    throw new Error('Invalid response format')
+  }
+  return res.json()
+}
 
 const TOP_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
 

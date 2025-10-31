@@ -7,7 +7,16 @@ type Props = {
   price?: number | null
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  const ct = res.headers.get('content-type') || ''
+  if (!ct.includes('application/json')) {
+    const text = await res.text()
+    console.error('Non-JSON response:', text.substring(0, 200))
+    throw new Error('Invalid response format')
+  }
+  return res.json()
+}
 
 export function DemoTradeBox({ symbol, price }: Props) {
   const [mode, setMode] = useState<'buy'|'sell'>('buy')
@@ -18,7 +27,11 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [positions, setPositions] = useState<any[]>([])
 
   useEffect(() => {
-    fetch('/api/portfolio').then(r=>r.json()).then(j=>setPositions(j.items||[]))
+    fetch('/api/portfolio').then(async r=>{
+      const ct = r.headers.get('content-type')||''
+      if (!ct.includes('application/json')) { throw new Error('Invalid response format') }
+      return r.json()
+    }).then(j=>setPositions(j.items||[]))
   },[])
 
   const pos = useMemo(()=> (positions||[]).find((p:any)=>p.symbol===symbol.toUpperCase()), [positions, symbol])

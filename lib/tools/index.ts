@@ -177,14 +177,74 @@ export async function getTrending(market = 'US', limit = 20): Promise<ToolResult
 // get_earnings tool (placeholder - implement with earnings data)
 export async function getEarnings(symbol: string, range: 'last' | 'next' | 'calendar' = 'last'): Promise<ToolResult> {
   try {
-    // Placeholder - would integrate with earnings calendar API
+    const s = resolveTicker(symbol)
+    const FINNHUB = process.env.FINNHUB_KEY || process.env.NEXT_PUBLIC_FINNHUB_KEY
+    const FMP = process.env.FMP_KEY || process.env.NEXT_PUBLIC_FMP_KEY
+
+    // Helper to fetch with timeout
+    const withTimeout = (p: Promise<Response>, ms = 6000) => {
+      return Promise.race([
+        p,
+        new Promise<Response>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)) as any,
+      ])
+    }
+
+    let items: any[] = []
+    let source = ''
+
+    // 1) Finnhub earnings calendar
+    if (FINNHUB) {
+      try {
+        const now = new Date()
+        const addDays = (d: number) => { const x = new Date(now); x.setDate(x.getDate()+d); return x.toISOString().slice(0,10) }
+        const from = range === 'last' ? addDays(-120) : addDays(0)
+        const to = range === 'last' ? addDays(0) : addDays(120)
+        const url = `https://finnhub.io/api/v1/calendar/earnings?symbol=${encodeURIComponent(s)}&from=${from}&to=${to}&token=${FINNHUB}`
+        const r = await withTimeout(fetch(url, { next: { revalidate: 60 }}))
+        if (r.ok) {
+          const j = await r.json()
+          const arr = Array.isArray(j.earningsCalendar) ? j.earningsCalendar : []
+          items = arr.map((e:any)=>({
+            date: e.date,
+            symbol: e.symbol || s,
+            epsActual: e.epsActual ?? null,
+            epsEstimate: e.epsEstimate ?? null,
+            revenueActual: e.revenueActual ?? null,
+            revenueEstimate: e.revenueEstimate ?? null,
+            time: e.hour || e.quarter || null,
+            source: 'Finnhub'
+          }))
+          source = 'Finnhub'
+        }
+      } catch {}
+    }
+
+    // 2) FMP fallback
+    if (items.length === 0 && FMP) {
+      try {
+        const endpoint = range === 'last' ? 'historical/earning_calendar' : 'earning_calendar'
+        const url = `https://financialmodelingprep.com/api/v3/${endpoint}/${encodeURIComponent(s)}?apikey=${FMP}`
+        const r = await withTimeout(fetch(url, { next: { revalidate: 60 }}))
+        if (r.ok) {
+          const j = await r.json()
+          const arr = Array.isArray(j) ? j : []
+          items = arr.map((e:any)=>({
+            date: e.date || e.epsActualDate || e.fiscalDateEnding,
+            symbol: e.symbol || s,
+            epsActual: e.epsActual ?? e.eps ?? null,
+            epsEstimate: e.epsEstimated ?? e.epsEstimated ?? null,
+            revenueActual: e.revenue ?? e.revenueActual ?? null,
+            revenueEstimate: e.revenueEstimated ?? null,
+            time: e.time || null,
+            source: 'FMP'
+          }))
+          source = 'FMP'
+        }
+      } catch {}
+    }
+
     return {
-      data: {
-        symbol: symbol.toUpperCase(),
-        range,
-        earnings: [],
-        message: 'Earnings data integration pending',
-      },
+      data: { symbol: s, range, items, source },
       timestamp: formatET(new Date()),
     }
   } catch (error: any) {

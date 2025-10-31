@@ -15,7 +15,16 @@ import { StockChart } from '@/components/charts/StockChart'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  const ct = res.headers.get('content-type') || ''
+  if (!ct.includes('application/json')) {
+    const text = await res.text()
+    console.error('Non-JSON response:', text.substring(0, 200))
+    throw new Error('Invalid response format')
+  }
+  return res.json()
+}
 
 export default function StockPage() {
   const params = useParams()
