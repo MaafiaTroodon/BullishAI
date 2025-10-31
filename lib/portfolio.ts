@@ -55,7 +55,8 @@ export function listTransactions(userId: string): Transaction[] {
 
 export function listPositions(userId: string): Position[] {
   const pf = getPf(userId)
-  return Object.values(pf.positions)
+  // Hide empty positions (0 shares)
+  return Object.values(pf.positions).filter(p => (p.totalShares || 0) > 0)
 }
 
 // Merge a client-provided snapshot of positions into the server portfolio store.
