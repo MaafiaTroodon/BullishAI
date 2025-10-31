@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { NewsFeed } from '@/components/NewsFeed'
-import { GlobalNavbar } from '@/components/GlobalNavbar'
 import { StockAIInsights } from '@/components/StockAIInsights'
 import { TradingViewTechnicalAnalysis } from '@/components/TradingViewTechnicalAnalysis'
 import { TradingViewFinancials } from '@/components/TradingViewFinancials'
@@ -111,8 +110,6 @@ export default function StockPage() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <GlobalNavbar />
-      
       {/* Header Stats */}
       <div className="bg-slate-800 border-b border-slate-700 py-8">
         <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">

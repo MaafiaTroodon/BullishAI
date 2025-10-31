@@ -97,11 +97,17 @@ export function GlobalNavbar() {
             </form>
 
             <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="hidden md:block text-slate-300 hover:text-white px-4 py-2 transition">
+              <Link href="/dashboard" className="hidden md:block mask-btn">
                 Dashboard
               </Link>
-              <Link href="/watchlist" className="hidden md:block text-slate-300 hover:text-white px-4 py-2 transition">
+              <Link href="/watchlist" className="hidden md:block mask-btn">
                 Watchlist
+              </Link>
+              <Link href="/news" className="hidden md:block mask-btn">
+                News
+              </Link>
+              <Link href="/alerts" className="hidden md:block mask-btn">
+                Alerts
               </Link>
               <div className="relative">
                 <button

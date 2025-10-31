@@ -8,9 +8,12 @@ const fetcher = async (url: string) => {
   const res = await fetch(url, { cache: 'no-store' })
   const ct = res.headers.get('content-type') || ''
   if (!ct.includes('application/json')) {
-    const text = await res.text()
-    console.error('Non-JSON response:', text.substring(0, 200))
-    throw new Error('Invalid response format')
+    try {
+      const text = await res.text()
+      console.error('Non-JSON response from', url, ':', text.substring(0, 200))
+    } catch {}
+    // Return null so the UI can fallback to flat-line from current value
+    return null as any
   }
   return res.json()
 }
@@ -51,6 +54,36 @@ export function PortfolioChart() {
     }
   )
 
+      // Client-side fallback: if proxy returns null/HTML, fetch per-symbol directly
+      const [chartsOverride, setChartsOverride] = useState<any | null>(null)
+      useEffect(() => {
+        let cancelled = false
+        async function fetchDirect() {
+          if (!items || items.length === 0) { setChartsOverride(null); return }
+          if (isLoadingCharts) return
+          if (charts && typeof charts === 'object') { setChartsOverride(null); return }
+          try {
+            const entries = await Promise.all(items.map(async (p:any) => {
+              try {
+                const r = await fetch(`/api/chart?symbol=${encodeURIComponent(p.symbol)}&range=${encodeURIComponent(chartRange)}`, { cache: 'no-store' })
+                const ct = r.headers.get('content-type')||''
+                if (!ct.includes('application/json')) return [p.symbol, []]
+                const j = await r.json()
+                const arr = Array.isArray(j?.data) ? j.data : []
+                return [p.symbol, arr]
+              } catch {
+                return [p.symbol, []]
+              }
+            }))
+            if (!cancelled) setChartsOverride(Object.fromEntries(entries))
+          } catch {
+            if (!cancelled) setChartsOverride(null)
+          }
+        }
+        fetchDirect()
+        return () => { cancelled = true }
+      }, [items.map(p=>p.symbol).join(','), chartRange, isLoadingCharts, typeof charts])
+
   // Invalidate chart cache when portfolio updates
   useEffect(() => {
     function onPortfolioUpdate() {
@@ -60,8 +93,10 @@ export function PortfolioChart() {
     return () => window.removeEventListener('portfolioUpdated', onPortfolioUpdate as any)
   }, [mutateCharts])
 
-  // Expect charts: { [symbol]: [{t,c}] }
-  const points = useMemo(() => {
+      const chartsEffective = chartsOverride || charts
+
+      // Expect charts: { [symbol]: [{t,c}] }
+      const points = useMemo(() => {
     if (!items || items.length === 0) return []
     
     // Calculate current portfolio value for fallback
@@ -77,7 +112,7 @@ export function PortfolioChart() {
     }
     
     // If we don't have charts data, create a flat line chart with current value
-    if (!charts || typeof charts !== 'object' || Object.keys(charts).length === 0) {
+        if (!chartsEffective || typeof chartsEffective !== 'object' || Object.keys(chartsEffective).length === 0) {
       if (currentPortfolioValue > 0) {
         const now = Date.now()
         const rangeMs: Record<string, number> = {
@@ -108,8 +143,8 @@ export function PortfolioChart() {
     }
     
     // Get all symbols that have chart data
-    const syms = items.map(p => p.symbol).filter((s:string) => {
-      const chartData = charts[s]
+        const syms = items.map(p => p.symbol).filter((s:string) => {
+          const chartData = chartsEffective[s]
       return Array.isArray(chartData) && chartData.length > 0
     })
     
@@ -118,7 +153,7 @@ export function PortfolioChart() {
     // Collect all unique timestamps from all stocks
     const allTimestamps = new Set<number>()
     syms.forEach(sym => {
-      const data = charts[sym] || []
+          const data = chartsEffective[sym] || []
       data.forEach((p:any) => {
         if (p && typeof p.t === 'number') {
           allTimestamps.add(p.t)
@@ -133,7 +168,7 @@ export function PortfolioChart() {
     
     // Helper function to find price at a specific timestamp (with interpolation)
     const getPriceAtTime = (symbol: string, timestamp: number): number | null => {
-      const arr = charts[symbol] || []
+          const arr = chartsEffective[symbol] || []
       if (!Array.isArray(arr) || arr.length === 0) return null
       
       // Find exact match first
@@ -195,7 +230,7 @@ export function PortfolioChart() {
       
       // Try to get current prices from charts or calculate from avgPrice
       for (const pos of items) {
-        const arr = charts[pos.symbol] || []
+            const arr = chartsEffective[pos.symbol] || []
         let price: number | null = null
         
         if (Array.isArray(arr) && arr.length > 0) {

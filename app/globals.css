@@ -2,6 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mask Button (Urban sprite) for navbar links)
+   Implemented on ::before overlay so the label never disappears */
+.mask-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  border: 1px solid #334155; /* slate-700 */
+  color: #cbd5e1; /* slate-300 */
+  background: transparent;
+  overflow: hidden;
+  transition: color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.mask-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #0f172a; /* slate-900 */
+  border-radius: 8px;
+  -webkit-mask-image: url('https://raw.githubusercontent.com/robin-dela/css-mask-animation/master/img/urban-sprite.png');
+  mask-image: url('https://raw.githubusercontent.com/robin-dela/css-mask-animation/master/img/urban-sprite.png');
+  -webkit-mask-size: 3000% 100%;
+  mask-size: 3000% 100%;
+  -webkit-animation: mask-ani-rev 0.7s steps(29) forwards;
+  animation: mask-ani-rev 0.7s steps(29) forwards;
+  z-index: 0; /* keep overlay behind text */
+}
+
+.mask-btn:hover::before { 
+  -webkit-animation: mask-ani 0.7s steps(29) forwards; 
+  animation: mask-ani 0.7s steps(29) forwards; 
+}
+
+.mask-btn:hover {
+  color: #ffffff;
+  border-color: #475569; /* slate-600 */
+  box-shadow: 0 0 0 1px rgba(148,163,184,.15), inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+@-webkit-keyframes mask-ani {
+  from { -webkit-mask-position: 0 0; mask-position: 0 0; }
+  to   { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+}
+@keyframes mask-ani {
+  from { -webkit-mask-position: 0 0; mask-position: 0 0; }
+  to   { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+}
+
+@-webkit-keyframes mask-ani-rev {
+  from { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+  to   { -webkit-mask-position: 0 0; mask-position: 0 0; }
+}
+@keyframes mask-ani-rev {
+  from { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+  to   { -webkit-mask-position: 0 0; mask-position: 0 0; }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

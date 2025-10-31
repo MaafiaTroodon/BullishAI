@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { GlobalNavbar } from '@/components/GlobalNavbar'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -87,7 +86,6 @@ export default function AlertsPage() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <GlobalNavbar />
       <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>

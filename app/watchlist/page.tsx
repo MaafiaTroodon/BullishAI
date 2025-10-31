@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
-import { GlobalNavbar } from '@/components/GlobalNavbar'
 import TradingViewMiniChart from '@/components/TradingViewMiniChart'
 
 const fetcher = async (url: string) => {
@@ -140,7 +139,6 @@ export default function WatchlistPage() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <GlobalNavbar />
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

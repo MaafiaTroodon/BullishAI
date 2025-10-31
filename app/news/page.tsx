@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Clock, ExternalLink, Newspaper, Search, TrendingUp, Zap } from 'lucide-react'
 import useSWR from 'swr'
-import { GlobalNavbar } from '@/components/GlobalNavbar'
 import Link from 'next/link'
 
 const fetcher = async (url: string) => {
@@ -71,7 +70,6 @@ export default function NewsPage() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <GlobalNavbar />
       
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
