@@ -9,22 +9,33 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 14px;
   font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: .2px;
   border-radius: 8px;
   border: 1px solid #334155; /* slate-700 */
-  color: #cbd5e1; /* slate-300 */
+  color: #e2e8f0; /* slate-200 for better contrast */
   background: transparent;
   overflow: hidden;
   transition: color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.mask-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: rgba(51, 65, 85, 0.55); /* slate-700 with alpha to keep visible when idle */
+  z-index: 0;
 }
 
 .mask-btn::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: #0f172a; /* slate-900 */
+  background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%); /* blue→violet sheen */
   border-radius: 8px;
   -webkit-mask-image: url('https://raw.githubusercontent.com/robin-dela/css-mask-animation/master/img/urban-sprite.png');
   mask-image: url('https://raw.githubusercontent.com/robin-dela/css-mask-animation/master/img/urban-sprite.png');
@@ -32,7 +43,8 @@
   mask-size: 3000% 100%;
   -webkit-animation: mask-ani-rev 0.7s steps(29) forwards;
   animation: mask-ani-rev 0.7s steps(29) forwards;
-  z-index: 0; /* keep overlay behind text */
+  z-index: 1; /* above base fill but behind text */
+  pointer-events: none;
 }
 
 .mask-btn:hover::before { 
@@ -41,7 +53,7 @@
 }
 
 .mask-btn:hover {
-  color: #ffffff;
+  color: #ffffff; /* brighter on hover */
   border-color: #475569; /* slate-600 */
   box-shadow: 0 0 0 1px rgba(148,163,184,.15), inset 0 1px 0 rgba(255,255,255,.03);
 }
