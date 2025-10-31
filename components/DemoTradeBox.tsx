@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { showToast } from '@/components/Toast'
+import { useRouter } from 'next/navigation'
 
 type Props = {
   symbol: string
@@ -20,6 +21,7 @@ const fetcher = async (url: string) => {
 }
 
 export function DemoTradeBox({ symbol, price }: Props) {
+  const router = useRouter()
   const [mode, setMode] = useState<'buy'|'sell'>('buy')
   const [subType, setSubType] = useState<'market'|'fraction'>('fraction')
   const [orderType, setOrderType] = useState<'dollars'|'shares'>('dollars')
@@ -69,6 +71,11 @@ export function DemoTradeBox({ symbol, price }: Props) {
           const map = raw ? JSON.parse(raw) : {}
           map[j.item.symbol] = j.item
           localStorage.setItem(key, JSON.stringify(map))
+          // After local write, sync full snapshot to server so dashboard always shows all positions
+          try {
+            const snapshot = Object.values(map)
+            await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: snapshot }) })
+          } catch {}
           
           // Also persist transaction history
           const txKey = 'bullish_demo_transactions'
@@ -91,6 +98,8 @@ export function DemoTradeBox({ symbol, price }: Props) {
           )
         } catch {}
         setAmount(0)
+        // Navigate back to dashboard after successful trade
+        try { router.push('/dashboard') } catch {}
       }
     } finally {
       setSubmitting(false)

@@ -19,17 +19,17 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     let isMounted = true
     setError(false)
 
-    // Suppress TradingView iframe console errors (they're harmless CORS warnings)
+    // Suppress TradingView iframe console errors (dev overlay noise)
     const originalConsoleError = console.error
-    const suppressTradingViewErrors = (...args: any[]) => {
-      const msg = args.join(' ')
-      if (msg.includes('contentWindow') || msg.includes('iframe') || msg.includes('TradingView')) {
-        // Suppress these harmless warnings
-        return
-      }
-      originalConsoleError.apply(console, args)
+    console.error = (...args: any[]) => {
+      try {
+        const msg = args.map(String).join(' ')
+        if (msg.includes('contentWindow') || msg.includes('iframe') || msg.includes('TradingView')) {
+          return
+        }
+      } catch {}
+      originalConsoleError.apply(console, args as any)
     }
-    console.error = suppressTradingViewErrors
 
     // Clear previous content safely using innerHTML (safer than removeChild)
     if (currentContainer) {
@@ -78,7 +78,7 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     return () => {
       isMounted = false
       clearTimeout(timeout)
-      // Restore original console.error
+      // Restore console.error
       console.error = originalConsoleError
       // Use innerHTML for safer cleanup - avoids removeChild errors
       if (currentContainer) {

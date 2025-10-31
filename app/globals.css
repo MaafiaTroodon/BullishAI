@@ -82,6 +82,9 @@
   51%, 100% { opacity: 0; }
 }
 
+/* Liquid Ether container */
+.liquid-ether-container{position:relative;overflow:hidden;width:100%;height:100%;touch-action:none}
+
 /* Hover polish */
 .hover-card {
   transition: transform 180ms ease-out, box-shadow 180ms ease-out, border-color 180ms ease-out, background-color 180ms ease-out;

@@ -10,6 +10,7 @@ import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import TradingViewTopStories from '@/components/TradingViewTopStories'
 import { HeadlineRotator } from '@/components/HeadlineRotator'
 import { TiltCard } from '@/components/TiltCard'
+import LiquidEther from '@/components/LiquidEther'
 import useSWR from 'swr'
 
 const fetcher = async (url: string) => {
@@ -97,7 +98,11 @@ export default function Home() {
       {/* Navbar removed here; GlobalNavbar renders via app/layout.tsx */}
 
       {/* Hero Section */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-once="true" data-anim-stagger="60">
+      <section className="relative max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-once="true" data-anim-stagger="60">
+        {/* Background liquid ether */}
+        <div className="absolute inset-0 -z-10 pointer-events-none opacity-70">
+          <LiquidEther colors={[ '#1e293b', '#334155', '#0ea5e9' ]} resolution={0.6} />
+        </div>
         <div className="text-center" data-anim="fade-up" data-anim-delay="50">
           <HeadlineRotator className="mb-6" />
           <p className="text-xl md:text-2xl text-slate-300 mb-8 max-w-3xl mx-auto">

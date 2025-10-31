@@ -57,6 +57,23 @@ export function listPositions(userId: string): Position[] {
   return Object.values(pf.positions)
 }
 
+// Merge a client-provided snapshot of positions into the server portfolio store.
+// Existing positions are overwritten by the snapshot for the same symbol.
+export function mergePositions(userId: string, positions: Position[]): void {
+  const pf = getPf(userId)
+  for (const p of positions) {
+    const s = p.symbol.toUpperCase()
+    pf.positions[s] = {
+      symbol: s,
+      totalShares: p.totalShares,
+      avgPrice: p.avgPrice,
+      marketValue: p.marketValue ?? 0,
+      totalCost: p.totalCost ?? p.avgPrice * p.totalShares,
+      realizedPnl: p.realizedPnl ?? 0,
+    }
+  }
+}
+
 export function upsertTrade(userId: string, input: TradeInput): Position {
   const pf = getPf(userId)
   const s = input.symbol.toUpperCase()

@@ -8,10 +8,7 @@ const fetcher = async (url: string) => {
   const res = await fetch(url, { cache: 'no-store' })
   const ct = res.headers.get('content-type') || ''
   if (!ct.includes('application/json')) {
-    try {
-      const text = await res.text()
-      console.error('Non-JSON response from', url, ':', text.substring(0, 200))
-    } catch {}
+    // Avoid noisy dev overlay; fallback handled below
     // Return null so the UI can fallback to flat-line from current value
     return null as any
   }

@@ -83,10 +83,28 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const input = TradeInputSchema.parse(body)
     const userId = getUserId()
-    const pos = upsertTrade(userId, input)
-    return NextResponse.json({ item: pos })
+
+    // Optional: bulk sync positions snapshot from client localStorage
+    if (Array.isArray(body?.syncPositions)) {
+      const { PositionSchema, mergePositions } = await import('@/lib/portfolio')
+      const validated: any[] = []
+      for (const p of body.syncPositions) {
+        try { validated.push(PositionSchema.parse(p)) } catch {}
+      }
+      if (validated.length > 0) {
+        mergePositions(userId, validated)
+      }
+    }
+
+    // Process single trade
+    if (body && body.symbol) {
+      const input = TradeInputSchema.parse(body)
+      const pos = upsertTrade(userId, input)
+      return NextResponse.json({ item: pos })
+    }
+
+    return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'invalid_trade' }, { status: 400 })
   }
