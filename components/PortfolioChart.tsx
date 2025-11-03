@@ -18,6 +18,7 @@ const fetcher = async (url: string) => {
 export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1m')
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 15000 })
+  const { data: wallet } = useSWR('/api/wallet', fetcher, { refreshInterval: 30000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   useEffect(() => {
     try {
@@ -34,6 +35,7 @@ export function PortfolioChart() {
   }, [mutatePf])
   const items: any[] = (pf?.items && pf.items.length>0) ? pf.items : localItems
   const transactions: any[] = pf?.transactions || []
+  const walletTx: any[] = wallet?.transactions || []
 
   const { data: charts, isLoading: isLoadingCharts, mutate: mutateCharts, error: chartsError } = useSWR(
     () => items.length>0 ? `/api/_portfolio_chart_proxy?symbols=${items.map(p=>p.symbol).join(',')}&range=${chartRange}` : null,
@@ -162,7 +164,24 @@ export function PortfolioChart() {
     if (allTimestamps.size === 0) return []
     
     // Sort timestamps
-    const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b)
+    let sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b)
+
+    // Determine portfolio start: first wallet deposit or first trade
+    let firstEvent = Number.POSITIVE_INFINITY
+    if (walletTx && walletTx.length > 0) {
+      const firstDep = walletTx.find((t:any)=>t.action==='deposit')
+      if (firstDep) firstEvent = Math.min(firstEvent, firstDep.timestamp)
+    }
+    if (transactions && transactions.length > 0) {
+      firstEvent = Math.min(firstEvent, ...transactions.map((t:any)=>t.timestamp||Infinity))
+    }
+    if (isFinite(firstEvent)) {
+      sortedTimestamps = sortedTimestamps.filter(t => t >= firstEvent)
+      // Ensure we always include a starting point at firstEvent
+      if (sortedTimestamps.length === 0 || sortedTimestamps[0] > firstEvent) {
+        sortedTimestamps.unshift(firstEvent)
+      }
+    }
     
     // Helper function to find price at a specific timestamp (with interpolation)
     const getPriceAtTime = (symbol: string, timestamp: number): number | null => {

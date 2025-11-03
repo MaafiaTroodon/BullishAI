@@ -39,12 +39,13 @@ type Portfolio = {
   positions: Record<string, Position>
   transactions: Transaction[] // Store all buy/sell transactions with timestamps
   walletBalance: number
+  walletTransactions?: Array<{ action: 'deposit'|'withdraw'; amount: number; timestamp: number }>
 }
 
 const store: Record<string, Portfolio> = {}
 
 function getPf(userId: string): Portfolio {
-  if (!store[userId]) store[userId] = { positions: {}, transactions: [], walletBalance: 0 }
+  if (!store[userId]) store[userId] = { positions: {}, transactions: [], walletBalance: 0, walletTransactions: [] }
   return store[userId]
 }
 
@@ -132,6 +133,7 @@ export function depositToWallet(userId: string, amount: number): number {
   const cap = 1_000_000
   const newBalance = Math.min(cap, pf.walletBalance + amount)
   pf.walletBalance = newBalance
+  try { pf.walletTransactions!.push({ action: 'deposit', amount, timestamp: Date.now() }) } catch {}
   return pf.walletBalance
 }
 
@@ -140,7 +142,12 @@ export function withdrawFromWallet(userId: string, amount: number): number {
   const pf = getPf(userId)
   if (pf.walletBalance < amount) throw new Error('insufficient_funds')
   pf.walletBalance -= amount
+  try { pf.walletTransactions!.push({ action: 'withdraw', amount, timestamp: Date.now() }) } catch {}
   return pf.walletBalance
+}
+
+export function listWalletTransactions(userId: string) {
+  return (getPf(userId).walletTransactions || []).slice().sort((a,b)=>a.timestamp-b.timestamp)
 }
 
 

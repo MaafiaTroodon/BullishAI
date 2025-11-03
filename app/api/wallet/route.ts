@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWalletBalance, depositToWallet, withdrawFromWallet } from '@/lib/portfolio'
+import { getWalletBalance, depositToWallet, withdrawFromWallet, listWalletTransactions } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       if (!Number.isNaN(parsed)) balance = Math.max(balance, parsed)
     }
   } catch {}
-  const res = NextResponse.json({ balance, cap: 1_000_000 })
+  const res = NextResponse.json({ balance, cap: 1_000_000, transactions: listWalletTransactions(userId) })
   // Reflect current balance in cookie
   try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false }) } catch {}
   return res

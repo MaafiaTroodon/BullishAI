@@ -50,6 +50,14 @@ export default function StockPage() {
     }
   )
 
+  // Persist last non-empty chart so switching range never shows a blank
+  const [stableChart, setStableChart] = useState<any | null>(null)
+  useEffect(() => {
+    if (chartData && Array.isArray(chartData.data) && chartData.data.length > 0) {
+      setStableChart(chartData)
+    }
+  }, [chartData])
+
   // Load watchlist on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
