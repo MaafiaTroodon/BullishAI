@@ -2,7 +2,7 @@
 
 import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url, { cache: 'no-store' })
@@ -335,7 +335,7 @@ export function PortfolioChart() {
           ))}
         </div>
       </div>
-      <div className="h-[500px]">
+      <div className="h-[360px]">
         {items.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
         ) : isLoadingCharts && !charts && points.length === 0 ? (
@@ -358,10 +358,16 @@ export function PortfolioChart() {
           <div className="h-full flex items-center justify-center text-slate-400">Loading chart data...</div>
         ) : points.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart 
+            <AreaChart 
               data={points}
-              margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+              margin={{ top: 10, right: 8, left: 0, bottom: 0 }}
             >
+              <defs>
+                <linearGradient id="pfColor" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <XAxis 
                 dataKey="t" 
                 type="number"
@@ -377,7 +383,7 @@ export function PortfolioChart() {
                 style={{ fontSize: '12px' }}
               />
               <Tooltip 
-                formatter={(v: any) => [`$$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
+                formatter={(v: any) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
                 labelFormatter={(l: any) => {
                   const date = new Date(l)
                   return date.toLocaleString('en-US', { 
@@ -390,16 +396,18 @@ export function PortfolioChart() {
                 }}
                 contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0', borderRadius: '8px' }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#10b981" 
-                strokeWidth={2} 
+              <Area 
+                type="monotoneX" 
+                dataKey="value"
+                stroke="#10b981"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#pfColor)"
                 dot={false}
-                animationDuration={300}
-                isAnimationActive={true}
+                isAnimationActive
+                animationDuration={350}
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         ) : (
           <div className="h-full flex items-center justify-center text-slate-400">Preparing chart...</div>

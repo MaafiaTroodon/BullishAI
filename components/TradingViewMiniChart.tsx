@@ -28,6 +28,18 @@ function TradingViewMiniChart({
   useEffect(() => {
     if (!container.current) return
 
+    // Suppress harmless TradingView iframe console errors in dev overlay
+    const originalConsoleError = console.error
+    console.error = (...args: any[]) => {
+      try {
+        const msg = args.map(String).join(' ')
+        if (msg.includes('contentWindow') || msg.includes('iframe') || msg.includes('TradingView')) {
+          return
+        }
+      } catch {}
+      originalConsoleError.apply(console, args as any)
+    }
+
     // Clear previous content
     container.current.innerHTML = ''
 
@@ -49,6 +61,12 @@ function TradingViewMiniChart({
     })
 
     container.current.appendChild(script)
+
+    return () => {
+      // Restore console after unmount
+      console.error = originalConsoleError
+      try { if (container.current) container.current.innerHTML = '' } catch {}
+    }
   }, [symbol, chartOnly, dateRange, noTimeScale, colorTheme, isTransparent, width, height])
 
   return (
