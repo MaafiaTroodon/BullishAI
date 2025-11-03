@@ -16,8 +16,11 @@ const fetcher = async (url: string) => {
 }
 
 export function PortfolioSummary() {
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 15000 })
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 1000 })
   const [localItems, setLocalItems] = useState<any[]>([])
+  // Flash animation on value change
+  const [flash, setFlash] = useState<'up'|'down'|null>(null)
+  const [prevVal, setPrevVal] = useState<number | null>(null)
   
   useEffect(() => {
     try {
@@ -127,6 +130,17 @@ export function PortfolioSummary() {
     }
   }, [JSON.stringify(enrichedItems)])
 
+  // Flash animation effect
+  useEffect(() => {
+    if (prevVal === null) { setPrevVal(metrics.totalValue); return }
+    if (metrics.totalValue !== prevVal) {
+      setFlash(metrics.totalValue > prevVal ? 'up' : 'down')
+      setPrevVal(metrics.totalValue)
+      const t = setTimeout(()=> setFlash(null), 450)
+      return () => clearTimeout(t)
+    }
+  }, [metrics.totalValue, prevVal])
+
   if (isLoading && enrichedItems.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -152,7 +166,7 @@ export function PortfolioSummary() {
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="text-slate-400 text-sm mb-1">Total Portfolio Value</div>
-          <div className="text-white text-4xl font-bold">${metrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className={`text-white text-4xl font-bold transition-all duration-300 ${flash==='up'?'text-emerald-400':''}${flash==='down'?' text-red-400':''}`}>${metrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         {metrics.totalReturn !== 0 && (
           <div className={`flex items-center gap-1 ${metrics.isPositive ? 'text-emerald-400' : 'text-red-400'}`}>

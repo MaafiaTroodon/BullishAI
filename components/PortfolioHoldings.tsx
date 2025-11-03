@@ -17,7 +17,7 @@ const fetcher = async (url: string) => {
 
 export function PortfolioHoldings() {
   const router = useRouter()
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 15000 })
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 2000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   useEffect(() => {
     try {

@@ -2,7 +2,7 @@
 
 import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, Scatter, ScatterChart } from 'recharts'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url, { cache: 'no-store' })
@@ -44,7 +44,7 @@ export function PortfolioChart() {
       keepPreviousData: true,
       revalidateOnFocus: false,
       dedupingInterval: 5000,
-      refreshInterval: 30000,
+      refreshInterval: 10000,
       onError: (err) => {
         console.error('Chart fetch error:', err)
       },
@@ -230,6 +230,17 @@ export function PortfolioChart() {
       return Math.max(0, shares)
     }
 
+    // Wallet cash at time from walletTx
+    const cashAt = (timestamp: number): number => {
+      let bal = 0
+      for (const wt of (walletTx||[])) {
+        if ((wt.timestamp||0) <= timestamp) {
+          bal += wt.action==='deposit'? wt.amount : -wt.amount
+        }
+      }
+      return Math.max(0, bal)
+    }
+
     // Calculate portfolio value for each timestamp
     const portfolioPoints = sortedTimestamps.map(timestamp => {
       let totalValue = 0
@@ -243,6 +254,8 @@ export function PortfolioChart() {
           hasData = true
         }
       }
+      // include cash balance to reflect deposits/withdrawals as jumps
+      totalValue += cashAt(timestamp)
       
       return hasData ? { t: timestamp, value: Number(totalValue.toFixed(2)) } : null
     }).filter((p): p is { t: number; value: number } => p !== null && p.value > 0)
@@ -441,6 +454,14 @@ export function PortfolioChart() {
                 isAnimationActive
                 animationDuration={350}
               />
+              {/* Trade markers */}
+              {transactions && transactions.length>0 && (
+                <Scatter data={transactions.map((tx:any)=>{
+                  // find portfolio value at tx timestamp
+                  const nearest = points.find(p=>p.t>=tx.timestamp) || points[points.length-1]
+                  return { x: tx.timestamp, y: nearest? nearest.value : 0, action: tx.action, symbol: tx.symbol }
+                })} shape="circle" fill="#38bdf8" />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         ) : (
