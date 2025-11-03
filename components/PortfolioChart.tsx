@@ -17,7 +17,7 @@ const fetcher = async (url: string) => {
 
 export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1m')
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio', fetcher, { refreshInterval: 15000 })
+  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 15000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   useEffect(() => {
     try {
@@ -33,6 +33,7 @@ export function PortfolioChart() {
     } catch {}
   }, [mutatePf])
   const items: any[] = (pf?.items && pf.items.length>0) ? pf.items : localItems
+  const transactions: any[] = pf?.transactions || []
 
   const { data: charts, isLoading: isLoadingCharts, mutate: mutateCharts, error: chartsError } = useSWR(
     () => items.length>0 ? `/api/_portfolio_chart_proxy?symbols=${items.map(p=>p.symbol).join(',')}&range=${chartRange}` : null,
@@ -197,6 +198,19 @@ export function PortfolioChart() {
       return null
     }
     
+    // Helper: shares held at time using transaction history (if available)
+    const sharesAt = (sym: string, timestamp: number, fallbackShares: number): number => {
+      const tx = transactions.filter(t => t.symbol === sym)
+      if (tx.length === 0) return fallbackShares
+      let shares = 0
+      for (const t of tx) {
+        if (typeof t.timestamp !== 'number' || t.timestamp > timestamp) continue
+        if (t.action === 'buy') shares += t.quantity
+        else if (t.action === 'sell') shares -= Math.min(shares, t.quantity)
+      }
+      return Math.max(0, shares)
+    }
+
     // Calculate portfolio value for each timestamp
     const portfolioPoints = sortedTimestamps.map(timestamp => {
       let totalValue = 0
@@ -204,8 +218,9 @@ export function PortfolioChart() {
       
       for (const pos of items) {
         const price = getPriceAtTime(pos.symbol, timestamp)
-        if (price !== null && typeof pos.totalShares === 'number' && pos.totalShares > 0) {
-          totalValue += pos.totalShares * price
+        const held = sharesAt(pos.symbol, timestamp, pos.totalShares)
+        if (price !== null && typeof held === 'number' && held > 0) {
+          totalValue += held * price
           hasData = true
         }
       }
