@@ -90,14 +90,13 @@ export async function GET(req: NextRequest) {
       }
     }
   }))
-  return NextResponse.json({ items: enriched, wallet: { balance: bal, cap: 1_000_000 } }, {
+  const res = NextResponse.json({ items: enriched, wallet: { balance: bal, cap: 1_000_000 } }, {
     headers: {
       'Content-Type': 'application/json',
     }
-  }).then(res => {
-    try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
-    return res
   })
+  try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+  return res
 }
 
 export async function POST(req: NextRequest) {
