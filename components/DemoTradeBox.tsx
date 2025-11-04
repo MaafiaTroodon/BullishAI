@@ -34,24 +34,42 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [localItems, setLocalItems] = useState<any[]>([])
   
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('bullish_demo_pf_positions')
-      if (raw) {
-        const map = JSON.parse(raw)
-        setLocalItems(Object.values(map))
+    function loadPositions() {
+      try {
+        const raw = localStorage.getItem('bullish_demo_pf_positions')
+        if (raw) {
+          const map = JSON.parse(raw)
+          const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+          setLocalItems(items)
+          console.log('[DemoTradeBox] Loaded positions from localStorage:', items.map((p: any) => `${p.symbol}: ${p.totalShares} shares`))
+        } else {
+          setLocalItems([])
+        }
+      } catch (err) {
+        console.error('[DemoTradeBox] Error loading positions:', err)
+        setLocalItems([])
       }
-      function onUpd() {
-        const r = localStorage.getItem('bullish_demo_pf_positions')
-        if (r) setLocalItems(Object.values(JSON.parse(r)))
-        mutate()
-      }
-      window.addEventListener('portfolioUpdated', onUpd as any)
-      return () => window.removeEventListener('portfolioUpdated', onUpd as any)
-    } catch {}
+    }
+    
+    loadPositions()
+    
+    function onUpd() {
+      loadPositions()
+      mutate()
+    }
+    
+    window.addEventListener('portfolioUpdated', onUpd as any)
+    return () => window.removeEventListener('portfolioUpdated', onUpd as any)
   }, [mutate])
   
   const positions = portfolioData?.items || localItems
-  const pos = useMemo(()=> positions.find((p:any)=>p.symbol===symbol.toUpperCase()), [positions, symbol])
+  // Filter out zero-share positions and find the matching symbol (case-insensitive)
+  const pos = useMemo(()=> {
+    const filtered = positions.filter((p:any) => (p.totalShares || 0) > 0)
+    const found = filtered.find((p:any)=>p.symbol?.toUpperCase()===symbol.toUpperCase())
+    console.log('[DemoTradeBox] Looking for position:', symbol.toUpperCase(), 'Found:', found ? `${found.symbol}: ${found.totalShares} shares` : 'none', 'Available positions:', filtered.map((p:any)=>`${p.symbol}: ${p.totalShares}`))
+    return found || null
+  }, [positions, symbol])
   const currentPrice = price ?? null
   const estShares = useMemo(() => {
     if (!currentPrice) return 0
@@ -108,13 +126,21 @@ export function DemoTradeBox({ symbol, price }: Props) {
           const key = 'bullish_demo_pf_positions'
           const raw = localStorage.getItem(key)
           const map = raw ? JSON.parse(raw) : {}
+          // Always use uppercase symbol as key
+          const symbolKey = (j.item.symbol || symbol).toUpperCase()
           // If position has 0 shares, remove it
           if (j.item.totalShares <= 0) {
-            delete map[j.item.symbol]
+            delete map[symbolKey]
           } else {
-            map[j.item.symbol] = j.item
+            // Ensure symbol is uppercase in the item
+            map[symbolKey] = { ...j.item, symbol: symbolKey }
           }
           localStorage.setItem(key, JSON.stringify(map))
+          // Immediately reload positions
+          const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+          setLocalItems(items)
+          console.log('[DemoTradeBox] Position updated after trade:', items)
+          
           // Sync full snapshot to server
           try {
             const snapshot = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
@@ -135,15 +161,15 @@ export function DemoTradeBox({ symbol, price }: Props) {
           })
           localStorage.setItem(txKey, JSON.stringify(transactions))
           
-          window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: j.item.symbol } }))
+          window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
           showToast(
-            `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${symbol.toUpperCase()} at $${currentPrice.toFixed(2)}`,
+            `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`,
             'success'
           )
         } catch {}
         setAmount(0)
-        // Navigate back to dashboard after successful trade
-        try { router.push('/dashboard') } catch {}
+        // Don't navigate away - let user stay on page to see updated position
+        // try { router.push('/dashboard') } catch {}
       }
     } finally {
       setSubmitting(false)
@@ -155,8 +181,29 @@ export function DemoTradeBox({ symbol, price }: Props) {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xl font-bold text-white">Demo Trade</h3>
         <div className="bg-slate-900 rounded-md p-1">
-          <button onClick={()=>{ setMode('buy'); mutate() }} className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}>Buy</button>
-          <button onClick={()=>{ setMode('sell'); mutate() }} className={`px-3 py-1 rounded ${mode==='sell'?'bg-red-600 text-white':'text-slate-300'}`}>Sell</button>
+          <button onClick={()=>{ 
+            setMode('buy')
+            mutate()
+            // Reload positions
+            const raw = localStorage.getItem('bullish_demo_pf_positions')
+            if (raw) {
+              const map = JSON.parse(raw)
+              const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+              setLocalItems(items)
+            }
+          }} className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}>Buy</button>
+          <button onClick={()=>{ 
+            setMode('sell')
+            mutate()
+            // Reload positions when switching to sell
+            const raw = localStorage.getItem('bullish_demo_pf_positions')
+            if (raw) {
+              const map = JSON.parse(raw)
+              const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+              setLocalItems(items)
+              console.log('[DemoTradeBox] Switched to sell mode, reloaded positions:', items)
+            }
+          }} className={`px-3 py-1 rounded ${mode==='sell'?'bg-red-600 text-white':'text-slate-300'}`}>Sell</button>
         </div>
       </div>
       <div className="text-slate-300 text-sm mb-4">{subType==='market'?'Market': 'Fraction'} {mode}. Stored locally on the server (demo portfolio).</div>
@@ -165,8 +212,24 @@ export function DemoTradeBox({ symbol, price }: Props) {
       {mode === 'sell' && (
         <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
           {pos && pos.totalShares > 0 ? (
-            <div className="flex items-center justify-between">
-              <span className="text-slate-300 text-sm">You own: <span className="text-white font-semibold">{pos.totalShares.toFixed(4)} shares</span></span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300 text-sm">You own: <span className="text-white font-semibold">{pos.totalShares.toFixed(4)} shares</span></span>
+                <button
+                  onClick={() => {
+                    mutate()
+                    const raw = localStorage.getItem('bullish_demo_pf_positions')
+                    if (raw) {
+                      const map = JSON.parse(raw)
+                      const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                      setLocalItems(items)
+                    }
+                  }}
+                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"
+                >
+                  Refresh
+                </button>
+              </div>
               <button 
                 onClick={async () => {
                   if (!currentPrice || !pos || pos.totalShares <= 0) {
@@ -195,16 +258,22 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         const key = 'bullish_demo_pf_positions'
                         const raw = localStorage.getItem(key)
                         const map = raw ? JSON.parse(raw) : {}
-                        delete map[symbol.toUpperCase()]
+                        const symbolKey = symbol.toUpperCase()
+                        delete map[symbolKey]
                         localStorage.setItem(key, JSON.stringify(map))
-                        await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: Object.values(map).filter((p: any) => (p.totalShares || 0) > 0) }) })
+                        // Immediately reload positions
+                        const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                        setLocalItems(items)
+                        console.log('[DemoTradeBox] Positions after sell all:', items)
+                        
+                        await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: items }) })
                         
                         const txKey = 'bullish_demo_transactions'
                         const txRaw = localStorage.getItem(txKey)
                         const transactions = txRaw ? JSON.parse(txRaw) : []
                         transactions.push({
                           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                          symbol: symbol.toUpperCase(),
+                          symbol: symbolKey,
                           action: 'sell',
                           price: currentPrice,
                           quantity: pos.totalShares,
@@ -212,10 +281,11 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         })
                         localStorage.setItem(txKey, JSON.stringify(transactions))
                         
-                        window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbol.toUpperCase() } }))
-                        showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbol.toUpperCase()} at $${currentPrice.toFixed(2)}`, 'success')
+                        window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
+                        showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`, 'success')
                       } catch {}
-                      try { router.push('/dashboard') } catch {}
+                      // Don't navigate away - let user see updated state
+                      // try { router.push('/dashboard') } catch {}
                     }
                   } catch (err: any) {
                     showToast(`Error: ${err.message || 'Failed to sell'}`, 'error')
@@ -229,7 +299,31 @@ export function DemoTradeBox({ symbol, price }: Props) {
               </button>
             </div>
           ) : (
-            <div className="text-slate-400 text-sm">No position in {symbol} to sell</div>
+            <div className="space-y-2">
+              <div className="text-slate-400 text-sm">No position in {symbol.toUpperCase()} to sell</div>
+              <div className="text-xs text-slate-500">
+                {positions.length > 0 ? (
+                  <>Found {positions.length} position(s): {positions.map((p: any) => `${p.symbol} (${p.totalShares} shares)`).join(', ')}</>
+                ) : (
+                  <>No positions found. Check localStorage or try refreshing.</>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  mutate()
+                  const raw = localStorage.getItem('bullish_demo_pf_positions')
+                  if (raw) {
+                    const map = JSON.parse(raw)
+                    const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                    setLocalItems(items)
+                    console.log('[DemoTradeBox] Manual refresh - positions:', items)
+                  }
+                }}
+                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"
+              >
+                Refresh Positions
+              </button>
+            </div>
           )}
         </div>
       )}
