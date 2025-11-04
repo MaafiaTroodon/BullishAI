@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { showToast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 
 type Props = {
   symbol: string
@@ -27,31 +28,60 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [orderType, setOrderType] = useState<'dollars'|'shares'>('dollars')
   const [amount, setAmount] = useState<number>(0)
   const [isSubmitting, setSubmitting] = useState(false)
-  const [positions, setPositions] = useState<any[]>([])
-
+  
+  // Fetch portfolio data with SWR for real-time updates
+  const { data: portfolioData, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 2000 })
+  const [localItems, setLocalItems] = useState<any[]>([])
+  
   useEffect(() => {
-    fetch('/api/portfolio').then(async r=>{
-      const ct = r.headers.get('content-type')||''
-      if (!ct.includes('application/json')) { throw new Error('Invalid response format') }
-      return r.json()
-    }).then(j=>setPositions(j.items||[]))
-  },[])
-
-  const pos = useMemo(()=> (positions||[]).find((p:any)=>p.symbol===symbol.toUpperCase()), [positions, symbol])
+    try {
+      const raw = localStorage.getItem('bullish_demo_pf_positions')
+      if (raw) {
+        const map = JSON.parse(raw)
+        setLocalItems(Object.values(map))
+      }
+      function onUpd() {
+        const r = localStorage.getItem('bullish_demo_pf_positions')
+        if (r) setLocalItems(Object.values(JSON.parse(r)))
+        mutate()
+      }
+      window.addEventListener('portfolioUpdated', onUpd as any)
+      return () => window.removeEventListener('portfolioUpdated', onUpd as any)
+    } catch {}
+  }, [mutate])
+  
+  const positions = portfolioData?.items || localItems
+  const pos = useMemo(()=> positions.find((p:any)=>p.symbol===symbol.toUpperCase()), [positions, symbol])
   const currentPrice = price ?? null
   const estShares = useMemo(() => {
     if (!currentPrice) return 0
-    if (subType==='market') return 1
+    if (subType==='market') return mode === 'sell' && pos ? pos.totalShares : 1
     if (amount<=0) return 0
-    return orderType==='dollars' ? amount / currentPrice : amount
-  }, [amount, orderType, currentPrice, subType])
+    const calculated = orderType==='dollars' ? amount / currentPrice : amount
+    // For sell mode, cap at available shares
+    if (mode === 'sell' && pos && calculated > pos.totalShares) {
+      return pos.totalShares
+    }
+    return calculated
+  }, [amount, orderType, currentPrice, subType, mode, pos])
   const estCost = useMemo(() => {
-    if (!currentPrice || amount<=0) return 0
-    return orderType==='dollars' ? amount : amount * currentPrice
-  }, [amount, orderType, currentPrice])
+    if (!currentPrice || estShares<=0) return 0
+    return orderType==='dollars' ? amount : estShares * currentPrice
+  }, [amount, orderType, currentPrice, estShares])
 
   async function submit() {
     if (!currentPrice || estShares<=0) return
+    // For sell mode, validate we have enough shares
+    if (mode === 'sell') {
+      if (!pos || pos.totalShares <= 0) {
+        showToast('No shares to sell', 'error')
+        return
+      }
+      if (estShares > pos.totalShares) {
+        showToast(`You only have ${pos.totalShares.toFixed(4)} shares`, 'error')
+        return
+      }
+    }
     setSubmitting(true)
     try {
       const res = await fetch('/api/portfolio', {
@@ -71,24 +101,26 @@ export function DemoTradeBox({ symbol, price }: Props) {
         return
       }
       if (res.ok) {
-        setPositions((prev:any[])=>{
-          const others = (prev||[]).filter(p=>p.symbol!==j.item.symbol)
-          return [j.item, ...others]
-        })
-        // Persist to localStorage for cross-widget visibility
+        // Update local positions
+        mutate() // Refresh SWR cache
         try {
           const key = 'bullish_demo_pf_positions'
           const raw = localStorage.getItem(key)
           const map = raw ? JSON.parse(raw) : {}
-          map[j.item.symbol] = j.item
+          // If position has 0 shares, remove it
+          if (j.item.totalShares <= 0) {
+            delete map[j.item.symbol]
+          } else {
+            map[j.item.symbol] = j.item
+          }
           localStorage.setItem(key, JSON.stringify(map))
-          // After local write, sync full snapshot to server so dashboard always shows all positions
+          // Sync full snapshot to server
           try {
             const snapshot = Object.values(map)
             await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: snapshot }) })
           } catch {}
           
-          // Also persist transaction history
+          // Persist transaction history
           const txKey = 'bullish_demo_transactions'
           const txRaw = localStorage.getItem(txKey)
           const transactions = txRaw ? JSON.parse(txRaw) : []
@@ -149,7 +181,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
         </div>
       )}
 
-      <div className="text-slate-400 text-sm mb-4 flex items-center gap-3">
+      <div className="text-slate-400 text-sm mb-4 flex items-center gap-3 flex-wrap">
         <span>
           Current price: <span className="text-white font-semibold">{currentPrice ? `$${currentPrice.toFixed(2)}` : 'N/A'}</span>
         </span>
@@ -159,12 +191,83 @@ export function DemoTradeBox({ symbol, price }: Props) {
             <button onClick={()=>{ setMode('sell'); setOrderType('dollars'); setAmount(Number(currentPrice.toFixed(2))) }} className="px-2 py-1 bg-slate-700 text-slate-100 rounded text-xs">Sell @ price</button>
           </div>
         )}
+        {mode === 'sell' && pos && pos.totalShares > 0 && currentPrice && (
+          <button 
+            onClick={async () => {
+              if (!currentPrice || !pos || pos.totalShares <= 0) return
+              setMode('sell')
+              setSubType('fraction')
+              setOrderType('shares')
+              setAmount(pos.totalShares)
+              // Auto-submit sell all
+              setSubmitting(true)
+              try {
+                const res = await fetch('/api/portfolio', {
+                  method: 'POST', headers: { 'Content-Type':'application/json' },
+                  body: JSON.stringify({ symbol, action: 'sell', price: currentPrice, quantity: pos.totalShares })
+                })
+                const j = await res.json()
+                if (!res.ok) {
+                  if (j?.error === 'insufficient_shares') {
+                    showToast('Not enough shares to sell.', 'error')
+                  } else {
+                    showToast('Trade failed', 'error')
+                  }
+                  return
+                }
+                if (res.ok) {
+                  mutate()
+                  try {
+                    const key = 'bullish_demo_pf_positions'
+                    const raw = localStorage.getItem(key)
+                    const map = raw ? JSON.parse(raw) : {}
+                    delete map[symbol.toUpperCase()]
+                    localStorage.setItem(key, JSON.stringify(map))
+                    await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: Object.values(map) }) })
+                    
+                    const txKey = 'bullish_demo_transactions'
+                    const txRaw = localStorage.getItem(txKey)
+                    const transactions = txRaw ? JSON.parse(txRaw) : []
+                    transactions.push({
+                      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      symbol: symbol.toUpperCase(),
+                      action: 'sell',
+                      price: currentPrice,
+                      quantity: pos.totalShares,
+                      timestamp: Date.now(),
+                    })
+                    localStorage.setItem(txKey, JSON.stringify(transactions))
+                    
+                    window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbol.toUpperCase() } }))
+                    showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbol.toUpperCase()} at $${currentPrice.toFixed(2)}`, 'success')
+                  } catch {}
+                  try { router.push('/dashboard') } catch {}
+                }
+              } finally {
+                setSubmitting(false)
+              }
+            }}
+            disabled={isSubmitting || !currentPrice || !pos || pos.totalShares <= 0}
+            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+          >
+            Sell All ({pos.totalShares.toFixed(4)} shares)
+          </button>
+        )}
         {currentPrice && estShares>0 && (
           <span className="ml-2">Est. Shares: <span className="text-white font-semibold">{estShares.toFixed(4)}</span> • Est. Cost: <span className="text-white font-semibold">${estCost.toFixed(2)}</span></span>
         )}
       </div>
 
-      <button onClick={submit} disabled={isSubmitting || !currentPrice || estShares<=0} className={`w-full py-2 rounded-lg font-semibold ${mode==='buy' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white disabled:opacity-50`}>
+      <button 
+        onClick={submit} 
+        disabled={
+          isSubmitting || 
+          !currentPrice || 
+          estShares<=0 || 
+          (mode === 'sell' && (!pos || pos.totalShares <= 0 || estShares > pos.totalShares))
+        } 
+        className={`w-full py-2 rounded-lg font-semibold ${mode==='buy' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white disabled:opacity-50`}
+      >
         {isSubmitting ? 'Submitting...' : mode==='buy' ? 'Buy' : 'Sell'} {symbol}
       </button>
 
