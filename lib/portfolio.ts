@@ -58,6 +58,11 @@ export function initializeWalletFromBalance(userId: string, balance: number): vo
   }
 }
 
+// Sync wallet balance (update in-memory store)
+export function setWalletBalance(userId: string, balance: number): void {
+  getPf(userId).walletBalance = balance
+}
+
 export function listTransactions(userId: string): Transaction[] {
   const pf = getPf(userId)
   return pf.transactions.sort((a, b) => b.timestamp - a.timestamp) // Most recent first
