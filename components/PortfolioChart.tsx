@@ -337,8 +337,6 @@ export function PortfolioChart() {
               />
             </AreaChart>
           </ResponsiveContainer>
-        ) : (
-          <div className="h-full flex items-center justify-center text-slate-400">Preparing chart...</div>
         )}
       </div>
     </div>
