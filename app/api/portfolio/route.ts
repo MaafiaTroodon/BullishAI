@@ -13,24 +13,25 @@ export async function GET(req: NextRequest) {
   const includeTransactions = url.searchParams.get('transactions') === '1'
   
   // Restore wallet from cookie if in-memory is empty
-  let bal = await getWalletBalance(userId)
+  let bal = getWalletBalance(userId)
   try {
     const cookieBal = req.cookies.get('bullish_wallet')?.value
     if (cookieBal) {
       const parsed = Number(cookieBal)
       if (!Number.isNaN(parsed) && parsed > 0) {
-        await initializeWalletFromBalance(userId, parsed)
+        initializeWalletFromBalance(userId, parsed)
         bal = parsed
       }
     }
   } catch {}
   
-  const items = await listPositions(userId)
+  const items = listPositions(userId)
   const response: any = { items, wallet: { balance: bal, cap: 1_000_000 } }
   
   // Include transaction history if requested
   if (includeTransactions) {
-    response.transactions = await listTransactions(userId)
+    const { listTransactions } = await import('@/lib/portfolio')
+    response.transactions = listTransactions(userId)
   }
   
   if (!enrich || items.length === 0) {
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         try { validated.push(PositionSchema.parse(p)) } catch {}
       }
       if (validated.length > 0) {
-        await mergePositions(userId, validated)
+        mergePositions(userId, validated)
       }
     }
 
@@ -123,15 +124,15 @@ export async function POST(req: NextRequest) {
         if (cookieBal) {
           const parsed = Number(cookieBal)
           if (!Number.isNaN(parsed) && parsed > 0) {
-            await initializeWalletFromBalance(userId, parsed)
+            initializeWalletFromBalance(userId, parsed)
           }
         }
       } catch {}
       
       const input = TradeInputSchema.parse(body)
       try {
-        const pos = await upsertTrade(userId, input)
-        const updatedBal = await getWalletBalance(userId)
+        const pos = upsertTrade(userId, input)
+        const updatedBal = getWalletBalance(userId)
         const res = NextResponse.json({ item: pos, wallet: { balance: updatedBal, cap: 1_000_000 } })
         try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
         return res

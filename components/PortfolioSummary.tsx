@@ -90,6 +90,9 @@ export function PortfolioSummary() {
 
   const enrichedItems = enriched.length > 0 ? enriched : items
 
+  // Filter out zero-share positions
+  const activePositions = enrichedItems.filter((p: any) => (p.totalShares || 0) > 0)
+
   // Calculate portfolio metrics
   const metrics = useMemo(() => {
     let totalValue = 0
@@ -97,21 +100,19 @@ export function PortfolioSummary() {
     let realizedPnl = 0
     let holdingCount = 0
 
-    enrichedItems.forEach((p: any) => {
-      if (p.totalShares > 0) {
-        holdingCount++
-        // Current value
-        const value = p.totalValue || (p.currentPrice ? p.currentPrice * p.totalShares : 0)
-        totalValue += value
-        
-        // Cost basis (money put in)
-        const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
-        totalCost += cost
-        
-        // Realized P/L
-        if (p.realizedPnl) {
-          realizedPnl += p.realizedPnl
-        }
+    activePositions.forEach((p: any) => {
+      holdingCount++
+      // Current value
+      const value = p.totalValue || (p.currentPrice ? p.currentPrice * p.totalShares : 0)
+      totalValue += value
+      
+      // Cost basis (money put in)
+      const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
+      totalCost += cost
+      
+      // Realized P/L
+      if (p.realizedPnl) {
+        realizedPnl += p.realizedPnl
       }
     })
 
@@ -128,7 +129,7 @@ export function PortfolioSummary() {
       holdingCount,
       isPositive: totalReturn >= 0
     }
-  }, [JSON.stringify(enrichedItems)])
+  }, [JSON.stringify(activePositions)])
 
   // Flash animation effect
   useEffect(() => {
@@ -141,7 +142,7 @@ export function PortfolioSummary() {
     }
   }, [metrics.totalValue, prevVal])
 
-  if (isLoading && enrichedItems.length === 0) {
+  if (isLoading && activePositions.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="animate-pulse">

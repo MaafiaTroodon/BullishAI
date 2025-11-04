@@ -97,11 +97,13 @@ export function PortfolioChart() {
 
       // Expect charts: { [symbol]: [{t,c}] }
       const points = useMemo(() => {
-    if (!items || items.length === 0) return []
+    // Filter out zero-share positions immediately
+    const activeItems = items.filter((p: any) => (p.totalShares || 0) > 0)
+    if (!activeItems || activeItems.length === 0) return []
     
     // Calculate current portfolio value for fallback
     let currentPortfolioValue = 0
-    for (const pos of items) {
+    for (const pos of activeItems) {
       if (typeof pos.totalShares === 'number' && pos.totalShares > 0) {
         // Try to get current price from enriched data, or use avgPrice
         const price = pos.currentPrice || pos.avgPrice || 0
@@ -143,7 +145,7 @@ export function PortfolioChart() {
     }
     
     // Get all symbols that have chart data
-        const syms = items.map(p => p.symbol).filter((s:string) => {
+        const syms = activeItems.map(p => p.symbol).filter((s:string) => {
           const chartData = chartsEffective[s]
       return Array.isArray(chartData) && chartData.length > 0
     })
@@ -246,7 +248,7 @@ export function PortfolioChart() {
       let totalValue = 0
       let hasData = false
       
-      for (const pos of items) {
+      for (const pos of activeItems) {
         const price = getPriceAtTime(pos.symbol, timestamp)
         const held = sharesAt(pos.symbol, timestamp, pos.totalShares)
         if (price !== null && typeof held === 'number' && held > 0) {
@@ -262,7 +264,7 @@ export function PortfolioChart() {
     
     // Ensure we have at least some data points
     if (portfolioPoints.length === 0) {
-      console.warn('No portfolio points calculated', { items, charts, syms })
+      console.warn('No portfolio points calculated', { activeItems, charts, syms })
       return []
     }
     
@@ -273,7 +275,7 @@ export function PortfolioChart() {
       const now = Date.now()
       
       // Try to get current prices from charts or calculate from avgPrice
-      for (const pos of items) {
+      for (const pos of activeItems) {
             const arr = chartsEffective[pos.symbol] || []
         let price: number | null = null
         
@@ -339,7 +341,7 @@ export function PortfolioChart() {
     }
     
     return []
-  }, [JSON.stringify(items), JSON.stringify(charts), chartRange])
+  }, [JSON.stringify(items), JSON.stringify(charts), chartRange, JSON.stringify(transactions), JSON.stringify(walletTx)])
 
   const ranges = [
     { label: '1H', value: '1h' },
@@ -383,7 +385,7 @@ export function PortfolioChart() {
         </div>
       </div>
       <div className="h-[360px]">
-        {items.length === 0 ? (
+        {items.filter((p: any) => (p.totalShares || 0) > 0).length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
         ) : isLoadingCharts && !charts && points.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400">Loading chart…</div>
@@ -392,7 +394,7 @@ export function PortfolioChart() {
             <div className="text-center">
               <p className="mb-2">No chart data available</p>
               <p className="text-sm text-slate-500">Chart data is loading or unavailable for your holdings.</p>
-              <p className="text-xs text-slate-600 mt-2">Holdings: {items.map(p => p.symbol).join(', ')}</p>
+              <p className="text-xs text-slate-600 mt-2">Holdings: {items.filter((p: any) => (p.totalShares || 0) > 0).map(p => p.symbol).join(', ')}</p>
               <p className="text-xs text-slate-600 mt-1">
                 Charts data: {charts ? Object.keys(charts).map(s => `${s}: ${Array.isArray(charts[s]) ? charts[s].length : 0}`).join(', ') : 'none'}
               </p>

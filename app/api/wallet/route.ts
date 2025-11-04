@@ -10,8 +10,8 @@ export async function GET(req: NextRequest) {
   const userId = getUserId()
   
   // Restore from cookie if in-memory is empty
-  let balance = await getWalletBalance(userId)
-  const walletTx = await listWalletTransactions(userId)
+  let balance = getWalletBalance(userId)
+  const walletTx = listWalletTransactions(userId)
   
   // If we have wallet transactions, recalculate balance from them (more accurate)
   if (walletTx && walletTx.length > 0) {
@@ -21,8 +21,8 @@ export async function GET(req: NextRequest) {
       else if (tx.action === 'withdraw') calculatedBalance -= tx.amount
     }
     balance = Math.max(0, calculatedBalance)
-    // Sync calculated balance back to database
-    await setWalletBalance(userId, balance)
+    // Sync calculated balance back to in-memory store
+    setWalletBalance(userId, balance)
   } else {
     // No transactions, try to restore from cookie
     try {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         const parsed = Number(cookieBal)
         if (!Number.isNaN(parsed) && parsed > 0) {
           balance = parsed
-          await initializeWalletFromBalance(userId, parsed)
+          initializeWalletFromBalance(userId, parsed)
         }
       }
     } catch {}
@@ -55,20 +55,20 @@ export async function POST(req: NextRequest) {
       if (cookieBal) {
         const parsed = Number(cookieBal)
         if (!Number.isNaN(parsed) && parsed > 0) {
-          await initializeWalletFromBalance(userId, parsed)
+          initializeWalletFromBalance(userId, parsed)
         }
       }
     } catch {}
     
     if (typeof amount !== 'number' || amount <= 0) return NextResponse.json({ error: 'invalid_amount' }, { status: 400 })
     if (action === 'deposit') {
-      const balance = await depositToWallet(userId, amount)
+      const balance = depositToWallet(userId, amount)
       const res = NextResponse.json({ balance })
       try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
       return res
     }
     if (action === 'withdraw') {
-      const balance = await withdrawFromWallet(userId, amount)
+      const balance = withdrawFromWallet(userId, amount)
       const res = NextResponse.json({ balance })
       try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
       return res
