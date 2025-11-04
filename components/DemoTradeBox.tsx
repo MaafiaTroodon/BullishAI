@@ -94,10 +94,11 @@ export function DemoTradeBox({ symbol, price }: Props) {
           showToast('Insufficient wallet balance. Top up your wallet and try again.', 'error')
           try { window.location.href = '/wallet' } catch {}
         } else if (j?.error === 'insufficient_shares') {
-          showToast('Not enough shares to sell.', 'error')
+          showToast(`Not enough shares to sell. You have ${pos?.totalShares?.toFixed(4) || 0} shares.`, 'error')
         } else {
-          showToast('Trade failed', 'error')
+          showToast(`Trade failed: ${j?.error || 'Unknown error'}`, 'error')
         }
+        setSubmitting(false)
         return
       }
       if (res.ok) {
