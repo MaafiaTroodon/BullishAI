@@ -234,21 +234,26 @@ export function PortfolioChart() {
       }
       
       // Calculate portfolio value at this event time
-      // For historical points, use transaction price
+      // Use transaction price for the stock being traded, current/avg price for others
       let portfolioValue = cashBalance
       
-      // Add value of holdings at transaction price (for historical events)
+      // Add value of holdings
       Object.keys(holdings).forEach(sym => {
         const holding = holdings[sym]
-        // Find the price for this symbol at this timestamp
-        // For buys/sells, use the transaction price
-        let price = event.price || 0
+        // If this event is for this symbol, use transaction price
+        // Otherwise, use avgPrice from current position (or transaction price if available)
+        let price = 0
         if (event.symbol && event.symbol.toUpperCase() === sym && event.price) {
           price = event.price
         } else {
-          // For other symbols, try to find current price from activeItems
+          // Find current position or use avgPrice
           const pos = activeItems.find((p: any) => p.symbol === sym)
-          price = pos?.avgPrice || 0
+          if (pos) {
+            price = pos.currentPrice || pos.avgPrice || 0
+          } else {
+            // No current position, but we have holding - use cost basis / shares
+            price = holding.costBasis / (holding.shares || 1)
+          }
         }
         portfolioValue += holding.shares * price
       })
