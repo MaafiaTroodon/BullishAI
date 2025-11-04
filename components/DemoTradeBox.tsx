@@ -116,7 +116,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
           localStorage.setItem(key, JSON.stringify(map))
           // Sync full snapshot to server
           try {
-            const snapshot = Object.values(map)
+            const snapshot = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
             await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: snapshot }) })
           } catch {}
           
@@ -154,8 +154,8 @@ export function DemoTradeBox({ symbol, price }: Props) {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xl font-bold text-white">Demo Trade</h3>
         <div className="bg-slate-900 rounded-md p-1">
-          <button onClick={()=>setMode('buy')} className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}>Buy</button>
-          <button onClick={()=>setMode('sell')} className={`px-3 py-1 rounded ${mode==='sell'?'bg-red-600 text-white':'text-slate-300'}`}>Sell</button>
+          <button onClick={()=>{ setMode('buy'); mutate() }} className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}>Buy</button>
+          <button onClick={()=>{ setMode('sell'); mutate() }} className={`px-3 py-1 rounded ${mode==='sell'?'bg-red-600 text-white':'text-slate-300'}`}>Sell</button>
         </div>
       </div>
       <div className="text-slate-300 text-sm mb-4">{subType==='market'?'Market': 'Fraction'} {mode}. Stored locally on the server (demo portfolio).</div>
@@ -194,12 +194,10 @@ export function DemoTradeBox({ symbol, price }: Props) {
         {mode === 'sell' && pos && pos.totalShares > 0 && currentPrice && (
           <button 
             onClick={async () => {
-              if (!currentPrice || !pos || pos.totalShares <= 0) return
-              setMode('sell')
-              setSubType('fraction')
-              setOrderType('shares')
-              setAmount(pos.totalShares)
-              // Auto-submit sell all
+              if (!currentPrice || !pos || pos.totalShares <= 0) {
+                showToast('No shares available to sell', 'error')
+                return
+              }
               setSubmitting(true)
               try {
                 const res = await fetch('/api/portfolio', {
@@ -211,8 +209,9 @@ export function DemoTradeBox({ symbol, price }: Props) {
                   if (j?.error === 'insufficient_shares') {
                     showToast('Not enough shares to sell.', 'error')
                   } else {
-                    showToast('Trade failed', 'error')
+                    showToast(`Trade failed: ${j?.error || 'Unknown error'}`, 'error')
                   }
+                  setSubmitting(false)
                   return
                 }
                 if (res.ok) {
@@ -223,7 +222,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
                     const map = raw ? JSON.parse(raw) : {}
                     delete map[symbol.toUpperCase()]
                     localStorage.setItem(key, JSON.stringify(map))
-                    await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: Object.values(map) }) })
+                    await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: Object.values(map).filter((p: any) => (p.totalShares || 0) > 0) }) })
                     
                     const txKey = 'bullish_demo_transactions'
                     const txRaw = localStorage.getItem(txKey)
@@ -243,15 +242,19 @@ export function DemoTradeBox({ symbol, price }: Props) {
                   } catch {}
                   try { router.push('/dashboard') } catch {}
                 }
-              } finally {
+              } catch (err: any) {
+                showToast(`Error: ${err.message || 'Failed to sell'}`, 'error')
                 setSubmitting(false)
               }
             }}
             disabled={isSubmitting || !currentPrice || !pos || pos.totalShares <= 0}
-            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Sell All ({pos.totalShares.toFixed(4)} shares)
           </button>
+        )}
+        {mode === 'sell' && (!pos || pos.totalShares <= 0) && (
+          <span className="text-xs text-slate-500 italic">No position to sell</span>
         )}
         {currentPrice && estShares>0 && (
           <span className="ml-2">Est. Shares: <span className="text-white font-semibold">{estShares.toFixed(4)}</span> • Est. Cost: <span className="text-white font-semibold">${estCost.toFixed(2)}</span></span>
@@ -264,9 +267,9 @@ export function DemoTradeBox({ symbol, price }: Props) {
           isSubmitting || 
           !currentPrice || 
           estShares<=0 || 
-          (mode === 'sell' && (!pos || pos.totalShares <= 0 || estShares > pos.totalShares))
+          (mode === 'sell' && (!pos || pos.totalShares <= 0))
         } 
-        className={`w-full py-2 rounded-lg font-semibold ${mode==='buy' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white disabled:opacity-50`}
+        className={`w-full py-2 rounded-lg font-semibold transition ${mode==='buy' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {isSubmitting ? 'Submitting...' : mode==='buy' ? 'Buy' : 'Sell'} {symbol}
       </button>
