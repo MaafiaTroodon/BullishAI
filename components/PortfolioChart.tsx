@@ -17,8 +17,8 @@ const fetcher = async (url: string) => {
 
 export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1m')
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 15000 })
-  const { data: wallet } = useSWR('/api/wallet', fetcher, { refreshInterval: 30000 })
+  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 1000 })
+  const { data: wallet } = useSWR('/api/wallet', fetcher, { refreshInterval: 1000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   useEffect(() => {
     try {
@@ -95,253 +95,198 @@ export function PortfolioChart() {
 
       const chartsEffective = chartsOverride || charts
 
-      // Expect charts: { [symbol]: [{t,c}] }
+      // Build graph based on transaction history (buy/sell/deposits)
       const points = useMemo(() => {
-    // Filter out zero-share positions immediately
     const activeItems = items.filter((p: any) => (p.totalShares || 0) > 0)
-    if (!activeItems || activeItems.length === 0) return []
     
-    // Calculate current portfolio value for fallback
-    let currentPortfolioValue = 0
-    for (const pos of activeItems) {
-      if (typeof pos.totalShares === 'number' && pos.totalShares > 0) {
-        // Try to get current price from enriched data, or use avgPrice
-        const price = pos.currentPrice || pos.avgPrice || 0
-        if (price > 0) {
-          currentPortfolioValue += pos.totalShares * price
-        }
-      }
-    }
+    // Get all events (deposits, withdrawals, buys, sells) sorted by timestamp
+    const allEvents: Array<{ timestamp: number; type: 'deposit' | 'withdraw' | 'buy' | 'sell'; amount?: number; symbol?: string; shares?: number; price?: number }> = []
     
-    // If we don't have charts data, create a flat line chart with current value
-        if (!chartsEffective || typeof chartsEffective !== 'object' || Object.keys(chartsEffective).length === 0) {
-      if (currentPortfolioValue > 0) {
-        const now = Date.now()
-        const rangeMs: Record<string, number> = {
-          '1h': 60 * 60 * 1000,
-          '1d': 24 * 60 * 60 * 1000,
-          '3d': 3 * 24 * 60 * 60 * 1000,
-          '1week': 7 * 24 * 60 * 60 * 1000,
-          '3m': 90 * 24 * 60 * 60 * 1000,
-          '6m': 180 * 24 * 60 * 60 * 1000,
-          '1y': 365 * 24 * 60 * 60 * 1000,
-        }
-        const rangeBack = rangeMs[chartRange] || 30 * 24 * 60 * 60 * 1000
-        const startTime = now - rangeBack
-        
-        // Create multiple points for a smoother line (even if flat)
-        const pointCount = 50
-        const timeStep = rangeBack / pointCount
-        const fallbackPoints = []
-        for (let i = 0; i <= pointCount; i++) {
-          fallbackPoints.push({
-            t: startTime + (i * timeStep),
-            value: Number(currentPortfolioValue.toFixed(2))
+    // Add wallet transactions
+    if (walletTx && walletTx.length > 0) {
+      walletTx.forEach((wt: any) => {
+        if (wt.timestamp && wt.action) {
+          allEvents.push({
+            timestamp: wt.timestamp,
+            type: wt.action === 'deposit' ? 'deposit' : 'withdraw',
+            amount: wt.amount || 0
           })
-        }
-        return fallbackPoints
-      }
-      return []
-    }
-    
-    // Get all symbols that have chart data
-        const syms = activeItems.map(p => p.symbol).filter((s:string) => {
-          const chartData = chartsEffective[s]
-      return Array.isArray(chartData) && chartData.length > 0
-    })
-    
-    if (syms.length === 0) return []
-    
-    // Collect all unique timestamps from all stocks
-    const allTimestamps = new Set<number>()
-    syms.forEach(sym => {
-          const data = chartsEffective[sym] || []
-      data.forEach((p:any) => {
-        if (p && typeof p.t === 'number') {
-          allTimestamps.add(p.t)
         }
       })
-    })
-    
-    if (allTimestamps.size === 0) return []
-    
-    // Sort timestamps
-    let sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b)
-
-    // Determine portfolio start: first wallet deposit or first trade
-    let firstEvent = Number.POSITIVE_INFINITY
-    if (walletTx && walletTx.length > 0) {
-      const firstDep = walletTx.find((t:any)=>t.action==='deposit')
-      if (firstDep) firstEvent = Math.min(firstEvent, firstDep.timestamp)
     }
+    
+    // Add trade transactions
     if (transactions && transactions.length > 0) {
-      firstEvent = Math.min(firstEvent, ...transactions.map((t:any)=>t.timestamp||Infinity))
-    }
-    if (isFinite(firstEvent)) {
-      sortedTimestamps = sortedTimestamps.filter(t => t >= firstEvent)
-      // Ensure we always include a starting point at firstEvent
-      if (sortedTimestamps.length === 0 || sortedTimestamps[0] > firstEvent) {
-        sortedTimestamps.unshift(firstEvent)
-      }
-    }
-    
-    // Helper function to find price at a specific timestamp (with interpolation)
-    const getPriceAtTime = (symbol: string, timestamp: number): number | null => {
-          const arr = chartsEffective[symbol] || []
-      if (!Array.isArray(arr) || arr.length === 0) return null
-      
-      // Find exact match first
-      const exact = arr.find((p:any) => p && typeof p.t === 'number' && p.t === timestamp)
-      if (exact) {
-        const price = exact.c ?? exact.close
-        return typeof price === 'number' && price > 0 ? price : null
-      }
-      
-      // Find closest data points for interpolation
-      let before: any = null
-      let after: any = null
-      
-      for (const p of arr) {
-        if (!p || typeof p.t !== 'number') continue
-        const price = p.c ?? p.close
-        if (typeof price !== 'number' || price <= 0) continue
-        
-        if (p.t < timestamp && (!before || p.t > before.t)) {
-          before = { t: p.t, price }
-        } else if (p.t > timestamp && (!after || p.t < after.t)) {
-          after = { t: p.t, price }
-        }
-      }
-      
-      // Use before if available, else after, else null
-      if (before) return before.price
-      if (after) return after.price
-      return null
-    }
-    
-    // Helper: shares held at time using transaction history (if available)
-    const sharesAt = (sym: string, timestamp: number, fallbackShares: number): number => {
-      const tx = transactions.filter(t => t.symbol === sym)
-      if (tx.length === 0) return fallbackShares
-      let shares = 0
-      for (const t of tx) {
-        if (typeof t.timestamp !== 'number' || t.timestamp > timestamp) continue
-        if (t.action === 'buy') shares += t.quantity
-        else if (t.action === 'sell') shares -= Math.min(shares, t.quantity)
-      }
-      return Math.max(0, shares)
-    }
-
-    // Wallet cash at time from walletTx
-    const cashAt = (timestamp: number): number => {
-      let bal = 0
-      for (const wt of (walletTx||[])) {
-        if ((wt.timestamp||0) <= timestamp) {
-          bal += wt.action==='deposit'? wt.amount : -wt.amount
-        }
-      }
-      return Math.max(0, bal)
-    }
-
-    // Calculate portfolio value for each timestamp
-    const portfolioPoints = sortedTimestamps.map(timestamp => {
-      let totalValue = 0
-      let hasData = false
-      
-      for (const pos of activeItems) {
-        const price = getPriceAtTime(pos.symbol, timestamp)
-        const held = sharesAt(pos.symbol, timestamp, pos.totalShares)
-        if (price !== null && typeof held === 'number' && held > 0) {
-          totalValue += held * price
-          hasData = true
-        }
-      }
-      // include cash balance to reflect deposits/withdrawals as jumps
-      totalValue += cashAt(timestamp)
-      
-      return hasData ? { t: timestamp, value: Number(totalValue.toFixed(2)) } : null
-    }).filter((p): p is { t: number; value: number } => p !== null && p.value > 0)
-    
-    // Ensure we have at least some data points
-    if (portfolioPoints.length === 0) {
-      console.warn('No portfolio points calculated', { activeItems, charts, syms })
-      return []
-    }
-    
-    // If we have very few points, create a chart from current portfolio value
-    if (portfolioPoints.length < 2) {
-      // Calculate current portfolio value
-      let currentTotal = 0
-      const now = Date.now()
-      
-      // Try to get current prices from charts or calculate from avgPrice
-      for (const pos of activeItems) {
-            const arr = chartsEffective[pos.symbol] || []
-        let price: number | null = null
-        
-        if (Array.isArray(arr) && arr.length > 0) {
-          // Get the latest price from chart data
-          const latest = arr[arr.length - 1]
-          price = latest?.c ?? latest?.close ?? null
-        }
-        
-        // If no chart price, use avgPrice as fallback (will show flat line)
-        if (price === null || price <= 0) {
-          price = pos.avgPrice || 0
-        }
-        
-        if (typeof pos.totalShares === 'number' && pos.totalShares > 0 && price > 0) {
-          currentTotal += pos.totalShares * price
-        }
-      }
-      
-      if (currentTotal > 0) {
-        // Create a simple line chart showing current portfolio value
-        // Use the selected range to determine how far back to go
-        const rangeMs: Record<string, number> = {
-          '1h': 60 * 60 * 1000,
-          '1d': 24 * 60 * 60 * 1000,
-          '3d': 3 * 24 * 60 * 60 * 1000,
-          '1week': 7 * 24 * 60 * 60 * 1000,
-          '3m': 90 * 24 * 60 * 60 * 1000,
-          '6m': 180 * 24 * 60 * 60 * 1000,
-          '1y': 365 * 24 * 60 * 60 * 1000,
-        }
-        
-        const rangeBack = rangeMs[chartRange] || 30 * 24 * 60 * 60 * 1000 // Default 30 days
-        const startTime = now - rangeBack
-        
-        // Create multiple points for a smoother line (even if flat)
-        const pointCount = 50
-        const timeStep = rangeBack / pointCount
-        const fallbackPoints = []
-        for (let i = 0; i <= pointCount; i++) {
-          fallbackPoints.push({
-            t: startTime + (i * timeStep),
-            value: Number(currentTotal.toFixed(2))
+      transactions.forEach((tx: any) => {
+        if (tx.timestamp && tx.action && tx.symbol) {
+          allEvents.push({
+            timestamp: tx.timestamp,
+            type: tx.action,
+            symbol: tx.symbol,
+            shares: tx.quantity || 0,
+            price: tx.price || 0
           })
         }
-        return fallbackPoints
-      }
+      })
     }
     
-    // If we still have points, ensure they're sorted and have at least 2 points
-    if (portfolioPoints.length > 0) {
-      // Ensure chronological order
-      portfolioPoints.sort((a, b) => a.t - b.t)
+    // Sort by timestamp
+    allEvents.sort((a, b) => a.timestamp - b.timestamp)
+    
+    if (allEvents.length === 0) {
+      // No events yet - show flat line at $0 or current portfolio value
+      const now = Date.now()
+      const rangeMs: Record<string, number> = {
+        '1h': 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000,
+        '3d': 3 * 24 * 60 * 60 * 1000,
+        '1week': 7 * 24 * 60 * 60 * 1000,
+        '3m': 90 * 24 * 60 * 60 * 1000,
+        '6m': 180 * 24 * 60 * 60 * 1000,
+        '1y': 365 * 24 * 60 * 60 * 1000,
+      }
+      const rangeBack = rangeMs[chartRange] || 30 * 24 * 60 * 60 * 1000
+      const startTime = now - rangeBack
       
-      // If we only have 1 point, duplicate it to show a line
-      if (portfolioPoints.length === 1) {
-        const point = portfolioPoints[0]
-        const earlierPoint = { t: point.t - (24 * 60 * 60 * 1000), value: point.value }
-        return [earlierPoint, point]
+      // Calculate current portfolio value
+      let currentValue = 0
+      activeItems.forEach((pos: any) => {
+        const price = pos.currentPrice || pos.avgPrice || 0
+        if (price > 0 && pos.totalShares > 0) {
+          currentValue += pos.totalShares * price
+        }
+      })
+      
+      // Add wallet balance
+      if (wallet?.balance) {
+        currentValue += wallet.balance
       }
       
-      return portfolioPoints
+      // Return flat line at current value (or $0 if no positions)
+      const pointCount = 50
+      const timeStep = rangeBack / pointCount
+      const fallbackPoints = []
+      for (let i = 0; i <= pointCount; i++) {
+        fallbackPoints.push({
+          t: startTime + (i * timeStep),
+          value: Number(currentValue.toFixed(2))
+        })
+      }
+      return fallbackPoints
     }
     
-    return []
-  }, [JSON.stringify(items), JSON.stringify(charts), chartRange, JSON.stringify(transactions), JSON.stringify(walletTx)])
+    // Get first event timestamp - start graph from there
+    const firstEventTime = allEvents[0].timestamp
+    const now = Date.now()
+    
+    // Build portfolio value over time based on transactions
+    // Track holdings per symbol: { symbol: { shares, costBasis } }
+    const holdings: Record<string, { shares: number; costBasis: number }> = {}
+    let cashBalance = 0
+    const graphPoints: Array<{ t: number; value: number }> = []
+    
+    // Add starting point at $0 before first event
+    const rangeMs: Record<string, number> = {
+      '1h': 60 * 60 * 1000,
+      '1d': 24 * 60 * 60 * 1000,
+      '3d': 3 * 24 * 60 * 60 * 1000,
+      '1week': 7 * 24 * 60 * 60 * 1000,
+      '3m': 90 * 24 * 60 * 60 * 1000,
+      '6m': 180 * 24 * 60 * 60 * 1000,
+      '1y': 365 * 24 * 60 * 60 * 1000,
+    }
+    const rangeBack = rangeMs[chartRange] || 30 * 24 * 60 * 60 * 1000
+    const graphStartTime = Math.max(firstEventTime - rangeBack, firstEventTime - (24 * 60 * 60 * 1000)) // At least 1 day before first event
+    
+    // Add point at graph start ($0)
+    graphPoints.push({ t: graphStartTime, value: 0 })
+    
+    // Process each event chronologically
+    for (const event of allEvents) {
+      if (event.type === 'deposit') {
+        cashBalance += event.amount || 0
+      } else if (event.type === 'withdraw') {
+        cashBalance -= event.amount || 0
+        cashBalance = Math.max(0, cashBalance)
+      } else if (event.type === 'buy' && event.symbol && event.shares && event.price) {
+        const sym = event.symbol.toUpperCase()
+        if (!holdings[sym]) {
+          holdings[sym] = { shares: 0, costBasis: 0 }
+        }
+        holdings[sym].shares += event.shares
+        holdings[sym].costBasis += event.shares * event.price
+        cashBalance -= event.shares * event.price // Deduct from cash
+      } else if (event.type === 'sell' && event.symbol && event.shares && event.price) {
+        const sym = event.symbol.toUpperCase()
+        if (holdings[sym]) {
+          const sellShares = Math.min(event.shares, holdings[sym].shares)
+          holdings[sym].shares -= sellShares
+          // Update cost basis proportionally
+          const sellRatio = sellShares / (holdings[sym].shares + sellShares)
+          holdings[sym].costBasis -= holdings[sym].costBasis * sellRatio
+          cashBalance += sellShares * event.price // Add proceeds to cash
+          
+          // Remove symbol if no shares left
+          if (holdings[sym].shares <= 0) {
+            delete holdings[sym]
+          }
+        }
+      }
+      
+      // Calculate portfolio value at this event time
+      // For historical points, use transaction price
+      let portfolioValue = cashBalance
+      
+      // Add value of holdings at transaction price (for historical events)
+      Object.keys(holdings).forEach(sym => {
+        const holding = holdings[sym]
+        // Find the price for this symbol at this timestamp
+        // For buys/sells, use the transaction price
+        let price = event.price || 0
+        if (event.symbol && event.symbol.toUpperCase() === sym && event.price) {
+          price = event.price
+        } else {
+          // For other symbols, try to find current price from activeItems
+          const pos = activeItems.find((p: any) => p.symbol === sym)
+          price = pos?.avgPrice || 0
+        }
+        portfolioValue += holding.shares * price
+      })
+      
+      graphPoints.push({ t: event.timestamp, value: Number(portfolioValue.toFixed(2)) })
+    }
+    
+    // Add current point using current prices
+    let currentValue = cashBalance
+    activeItems.forEach((pos: any) => {
+      const price = pos.currentPrice || pos.avgPrice || 0
+      if (price > 0 && pos.totalShares > 0) {
+        currentValue += pos.totalShares * price
+      }
+    })
+    
+    // Add wallet balance (in case it's not reflected in cashBalance)
+    if (wallet?.balance && wallet.balance > cashBalance) {
+      currentValue = currentValue - cashBalance + wallet.balance
+    }
+    
+    graphPoints.push({ t: now, value: Number(currentValue.toFixed(2)) })
+    
+    // Ensure points are sorted by timestamp
+    graphPoints.sort((a, b) => a.t - b.t)
+    
+    // Remove duplicates (same timestamp)
+    const uniquePoints: Array<{ t: number; value: number }> = []
+    let lastPoint: { t: number; value: number } | null = null
+    graphPoints.forEach(point => {
+      if (!lastPoint || point.t !== lastPoint.t) {
+        uniquePoints.push(point)
+        lastPoint = point
+      }
+    })
+    
+    return uniquePoints.length > 0 ? uniquePoints : [{ t: now, value: 0 }]
+  }, [items, transactions, walletTx, wallet, chartRange])
 
   const ranges = [
     { label: '1H', value: '1h' },
@@ -385,27 +330,14 @@ export function PortfolioChart() {
         </div>
       </div>
       <div className="h-[360px]">
-        {items.filter((p: any) => (p.totalShares || 0) > 0).length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
-        ) : isLoadingCharts && !charts && points.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">Loading chart…</div>
-        ) : points.length === 0 && !isLoadingCharts ? (
+        {points.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
-              <p className="mb-2">No chart data available</p>
-              <p className="text-sm text-slate-500">Chart data is loading or unavailable for your holdings.</p>
-              <p className="text-xs text-slate-600 mt-2">Holdings: {items.filter((p: any) => (p.totalShares || 0) > 0).map(p => p.symbol).join(', ')}</p>
-              <p className="text-xs text-slate-600 mt-1">
-                Charts data: {charts ? Object.keys(charts).map(s => `${s}: ${Array.isArray(charts[s]) ? charts[s].length : 0}`).join(', ') : 'none'}
-              </p>
-              {chartsError && (
-                <p className="text-xs text-red-400 mt-1">Error: {chartsError.message}</p>
-              )}
+              <p className="mb-2">No portfolio activity yet</p>
+              <p className="text-sm text-slate-500">Make a deposit or buy stocks to see your portfolio value chart.</p>
             </div>
           </div>
-        ) : points.length === 0 && isLoadingCharts ? (
-          <div className="h-full flex items-center justify-center text-slate-400">Loading chart data...</div>
-        ) : points.length > 0 ? (
+        ) : (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart 
               data={points}
