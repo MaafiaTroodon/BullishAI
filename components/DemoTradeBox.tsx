@@ -160,6 +160,79 @@ export function DemoTradeBox({ symbol, price }: Props) {
       </div>
       <div className="text-slate-300 text-sm mb-4">{subType==='market'?'Market': 'Fraction'} {mode}. Stored locally on the server (demo portfolio).</div>
 
+      {/* Position Info - Always visible when in sell mode */}
+      {mode === 'sell' && (
+        <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+          {pos && pos.totalShares > 0 ? (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-300 text-sm">You own: <span className="text-white font-semibold">{pos.totalShares.toFixed(4)} shares</span></span>
+              <button 
+                onClick={async () => {
+                  if (!currentPrice || !pos || pos.totalShares <= 0) {
+                    showToast('No shares available to sell', 'error')
+                    return
+                  }
+                  setSubmitting(true)
+                  try {
+                    const res = await fetch('/api/portfolio', {
+                      method: 'POST', headers: { 'Content-Type':'application/json' },
+                      body: JSON.stringify({ symbol, action: 'sell', price: currentPrice, quantity: pos.totalShares })
+                    })
+                    const j = await res.json()
+                    if (!res.ok) {
+                      if (j?.error === 'insufficient_shares') {
+                        showToast('Not enough shares to sell.', 'error')
+                      } else {
+                        showToast(`Trade failed: ${j?.error || 'Unknown error'}`, 'error')
+                      }
+                      setSubmitting(false)
+                      return
+                    }
+                    if (res.ok) {
+                      mutate()
+                      try {
+                        const key = 'bullish_demo_pf_positions'
+                        const raw = localStorage.getItem(key)
+                        const map = raw ? JSON.parse(raw) : {}
+                        delete map[symbol.toUpperCase()]
+                        localStorage.setItem(key, JSON.stringify(map))
+                        await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: Object.values(map).filter((p: any) => (p.totalShares || 0) > 0) }) })
+                        
+                        const txKey = 'bullish_demo_transactions'
+                        const txRaw = localStorage.getItem(txKey)
+                        const transactions = txRaw ? JSON.parse(txRaw) : []
+                        transactions.push({
+                          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                          symbol: symbol.toUpperCase(),
+                          action: 'sell',
+                          price: currentPrice,
+                          quantity: pos.totalShares,
+                          timestamp: Date.now(),
+                        })
+                        localStorage.setItem(txKey, JSON.stringify(transactions))
+                        
+                        window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbol.toUpperCase() } }))
+                        showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbol.toUpperCase()} at $${currentPrice.toFixed(2)}`, 'success')
+                      } catch {}
+                      try { router.push('/dashboard') } catch {}
+                    }
+                  } catch (err: any) {
+                    showToast(`Error: ${err.message || 'Failed to sell'}`, 'error')
+                    setSubmitting(false)
+                  }
+                }}
+                disabled={isSubmitting || !currentPrice || !pos || pos.totalShares <= 0}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Selling...' : `Sell All (${pos.totalShares.toFixed(4)} shares)`}
+              </button>
+            </div>
+          ) : (
+            <div className="text-slate-400 text-sm">No position in {symbol} to sell</div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 mb-4 bg-slate-900 rounded-md p-1 w-fit">
         <button onClick={()=>setSubType('market')} className={`px-3 py-1 rounded ${subType==='market'?'bg-slate-700 text-white':'text-slate-300'}`}>Market (1 share)</button>
         <button onClick={()=>setSubType('fraction')} className={`px-3 py-1 rounded ${subType==='fraction'?'bg-slate-700 text-white':'text-slate-300'}`}>Fraction</button>
@@ -190,71 +263,6 @@ export function DemoTradeBox({ symbol, price }: Props) {
             <button onClick={()=>{ setMode('buy'); setOrderType('dollars'); setAmount(Number(currentPrice.toFixed(2))) }} className="px-2 py-1 bg-slate-700 text-slate-100 rounded text-xs">Buy @ price</button>
             <button onClick={()=>{ setMode('sell'); setOrderType('dollars'); setAmount(Number(currentPrice.toFixed(2))) }} className="px-2 py-1 bg-slate-700 text-slate-100 rounded text-xs">Sell @ price</button>
           </div>
-        )}
-        {mode === 'sell' && pos && pos.totalShares > 0 && currentPrice && (
-          <button 
-            onClick={async () => {
-              if (!currentPrice || !pos || pos.totalShares <= 0) {
-                showToast('No shares available to sell', 'error')
-                return
-              }
-              setSubmitting(true)
-              try {
-                const res = await fetch('/api/portfolio', {
-                  method: 'POST', headers: { 'Content-Type':'application/json' },
-                  body: JSON.stringify({ symbol, action: 'sell', price: currentPrice, quantity: pos.totalShares })
-                })
-                const j = await res.json()
-                if (!res.ok) {
-                  if (j?.error === 'insufficient_shares') {
-                    showToast('Not enough shares to sell.', 'error')
-                  } else {
-                    showToast(`Trade failed: ${j?.error || 'Unknown error'}`, 'error')
-                  }
-                  setSubmitting(false)
-                  return
-                }
-                if (res.ok) {
-                  mutate()
-                  try {
-                    const key = 'bullish_demo_pf_positions'
-                    const raw = localStorage.getItem(key)
-                    const map = raw ? JSON.parse(raw) : {}
-                    delete map[symbol.toUpperCase()]
-                    localStorage.setItem(key, JSON.stringify(map))
-                    await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: Object.values(map).filter((p: any) => (p.totalShares || 0) > 0) }) })
-                    
-                    const txKey = 'bullish_demo_transactions'
-                    const txRaw = localStorage.getItem(txKey)
-                    const transactions = txRaw ? JSON.parse(txRaw) : []
-                    transactions.push({
-                      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                      symbol: symbol.toUpperCase(),
-                      action: 'sell',
-                      price: currentPrice,
-                      quantity: pos.totalShares,
-                      timestamp: Date.now(),
-                    })
-                    localStorage.setItem(txKey, JSON.stringify(transactions))
-                    
-                    window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbol.toUpperCase() } }))
-                    showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbol.toUpperCase()} at $${currentPrice.toFixed(2)}`, 'success')
-                  } catch {}
-                  try { router.push('/dashboard') } catch {}
-                }
-              } catch (err: any) {
-                showToast(`Error: ${err.message || 'Failed to sell'}`, 'error')
-                setSubmitting(false)
-              }
-            }}
-            disabled={isSubmitting || !currentPrice || !pos || pos.totalShares <= 0}
-            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Sell All ({pos.totalShares.toFixed(4)} shares)
-          </button>
-        )}
-        {mode === 'sell' && (!pos || pos.totalShares <= 0) && (
-          <span className="text-xs text-slate-500 italic">No position to sell</span>
         )}
         {currentPrice && estShares>0 && (
           <span className="ml-2">Est. Shares: <span className="text-white font-semibold">{estShares.toFixed(4)}</span> • Est. Cost: <span className="text-white font-semibold">${estCost.toFixed(2)}</span></span>
