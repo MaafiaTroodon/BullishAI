@@ -120,6 +120,9 @@ export function DemoTradeBox({ symbol, price }: Props) {
         return
       }
       if (res.ok) {
+        // Immediately reset submitting state - don't wait for async operations
+        setSubmitting(false)
+        
         // Update local positions
         mutate() // Refresh SWR cache
         try {
@@ -141,12 +144,6 @@ export function DemoTradeBox({ symbol, price }: Props) {
           setLocalItems(items)
           console.log('[DemoTradeBox] Position updated after trade:', items)
           
-          // Sync full snapshot to server
-          try {
-            const snapshot = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-            await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: snapshot }) })
-          } catch {}
-          
           // Persist transaction history
           const txKey = 'bullish_demo_transactions'
           const txRaw = localStorage.getItem(txKey)
@@ -166,10 +163,12 @@ export function DemoTradeBox({ symbol, price }: Props) {
             `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`,
             'success'
           )
+          
+          // Sync to server in background (non-blocking)
+          const snapshot = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+          fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: snapshot }) }).catch(() => {})
         } catch {}
         setAmount(0)
-        // Don't navigate away - let user stay on page to see updated position
-        // try { router.push('/dashboard') } catch {}
       }
     } finally {
       setSubmitting(false)
@@ -253,6 +252,9 @@ export function DemoTradeBox({ symbol, price }: Props) {
                       return
                     }
                     if (res.ok) {
+                      // Immediately reset submitting state
+                      setSubmitting(false)
+                      
                       mutate()
                       try {
                         const key = 'bullish_demo_pf_positions'
@@ -265,8 +267,6 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
                         setLocalItems(items)
                         console.log('[DemoTradeBox] Positions after sell all:', items)
-                        
-                        await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: items }) })
                         
                         const txKey = 'bullish_demo_transactions'
                         const txRaw = localStorage.getItem(txKey)
@@ -283,9 +283,10 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         
                         window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
                         showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`, 'success')
+                        
+                        // Sync to server in background (non-blocking)
+                        fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: items }) }).catch(() => {})
                       } catch {}
-                      // Don't navigate away - let user see updated state
-                      // try { router.push('/dashboard') } catch {}
                     }
                   } catch (err: any) {
                     showToast(`Error: ${err.message || 'Failed to sell'}`, 'error')
