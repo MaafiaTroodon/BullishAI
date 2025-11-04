@@ -2,7 +2,7 @@
 
 import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, Scatter, ScatterChart } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url, { cache: 'no-store' })
