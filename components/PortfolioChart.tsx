@@ -37,66 +37,8 @@ export function PortfolioChart() {
   const transactions: any[] = pf?.transactions || []
   const walletTx: any[] = wallet?.transactions || []
 
-  const { data: charts, isLoading: isLoadingCharts, mutate: mutateCharts, error: chartsError } = useSWR(
-    () => items.length>0 ? `/api/_portfolio_chart_proxy?symbols=${items.map(p=>p.symbol).join(',')}&range=${chartRange}` : null,
-    fetcher,
-    { 
-      keepPreviousData: true,
-      revalidateOnFocus: false,
-      dedupingInterval: 5000,
-      refreshInterval: 10000,
-      onError: (err) => {
-        console.error('Chart fetch error:', err)
-      },
-      onSuccess: (data) => {
-        console.log('Chart data received:', Object.keys(data || {}), items.map(p => p.symbol))
-      }
-    }
-  )
-
-      // Client-side fallback: if proxy returns null/HTML, fetch per-symbol directly
-      const [chartsOverride, setChartsOverride] = useState<any | null>(null)
-      useEffect(() => {
-        let cancelled = false
-        async function fetchDirect() {
-          if (!items || items.length === 0) { setChartsOverride(null); return }
-          if (isLoadingCharts) return
-          if (charts && typeof charts === 'object') { setChartsOverride(null); return }
-          try {
-            const entries = await Promise.all(items.map(async (p:any) => {
-              try {
-                const r = await fetch(`/api/chart?symbol=${encodeURIComponent(p.symbol)}&range=${encodeURIComponent(chartRange)}`, { cache: 'no-store' })
-                const ct = r.headers.get('content-type')||''
-                if (!ct.includes('application/json')) return [p.symbol, []]
-                const j = await r.json()
-                const arr = Array.isArray(j?.data) ? j.data : []
-                return [p.symbol, arr]
-              } catch {
-                return [p.symbol, []]
-              }
-            }))
-            if (!cancelled) setChartsOverride(Object.fromEntries(entries))
-          } catch {
-            if (!cancelled) setChartsOverride(null)
-          }
-        }
-        fetchDirect()
-        return () => { cancelled = true }
-      }, [items.map(p=>p.symbol).join(','), chartRange, isLoadingCharts, typeof charts])
-
-  // Invalidate chart cache when portfolio updates
-  useEffect(() => {
-    function onPortfolioUpdate() {
-      mutateCharts()
-    }
-    window.addEventListener('portfolioUpdated', onPortfolioUpdate as any)
-    return () => window.removeEventListener('portfolioUpdated', onPortfolioUpdate as any)
-  }, [mutateCharts])
-
-      const chartsEffective = chartsOverride || charts
-
-      // Build graph based on transaction history (buy/sell/deposits)
-      const points = useMemo(() => {
+  // Build graph based on transaction history (buy/sell/deposits)
+  const points = useMemo(() => {
     const activeItems = items.filter((p: any) => (p.totalShares || 0) > 0)
     
     // Get all events (deposits, withdrawals, buys, sells) sorted by timestamp
