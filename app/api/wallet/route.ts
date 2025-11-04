@@ -21,6 +21,11 @@ export async function GET(req: NextRequest) {
       else if (tx.action === 'withdraw') calculatedBalance -= tx.amount
     }
     balance = Math.max(0, calculatedBalance)
+    // Sync calculated balance back to in-memory store
+    const pf = getPf(userId)
+    if (pf.walletBalance !== balance) {
+      pf.walletBalance = balance
+    }
   } else {
     // No transactions, try to restore from cookie
     try {
