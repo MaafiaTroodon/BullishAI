@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWalletBalance, depositToWallet, withdrawFromWallet, listWalletTransactions, initializeWalletFromBalance } from '@/lib/portfolio'
+import { getWalletBalance, depositToWallet, withdrawFromWallet, listWalletTransactions, initializeWalletFromBalance, setWalletBalance } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,10 +22,7 @@ export async function GET(req: NextRequest) {
     }
     balance = Math.max(0, calculatedBalance)
     // Sync calculated balance back to in-memory store
-    const pf = getPf(userId)
-    if (pf.walletBalance !== balance) {
-      pf.walletBalance = balance
-    }
+    setWalletBalance(userId, balance)
   } else {
     // No transactions, try to restore from cookie
     try {
