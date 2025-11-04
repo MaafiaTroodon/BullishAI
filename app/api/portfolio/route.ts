@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance } from '@/lib/portfolio'
+import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,9 +11,21 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const enrich = url.searchParams.get('enrich') === '1'
   const includeTransactions = url.searchParams.get('transactions') === '1'
-  const items = listPositions(userId)
   
-  const bal = getWalletBalance(userId)
+  // Restore wallet from cookie if in-memory is empty
+  let bal = getWalletBalance(userId)
+  try {
+    const cookieBal = req.cookies.get('bullish_wallet')?.value
+    if (cookieBal) {
+      const parsed = Number(cookieBal)
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        initializeWalletFromBalance(userId, parsed)
+        bal = parsed
+      }
+    }
+  } catch {}
+  
+  const items = listPositions(userId)
   const response: any = { items, wallet: { balance: bal, cap: 1_000_000 } }
   
   // Include transaction history if requested
@@ -24,7 +36,7 @@ export async function GET(req: NextRequest) {
   
   if (!enrich || items.length === 0) {
     const res = NextResponse.json(response)
-    try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false }) } catch {}
+    try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
     return res
   }
 
@@ -104,12 +116,23 @@ export async function POST(req: NextRequest) {
 
     // Process single trade
     if (body && body.symbol) {
+      // Restore wallet from cookie before processing trade
+      try {
+        const cookieBal = req.cookies.get('bullish_wallet')?.value
+        if (cookieBal) {
+          const parsed = Number(cookieBal)
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            initializeWalletFromBalance(userId, parsed)
+          }
+        }
+      } catch {}
+      
       const input = TradeInputSchema.parse(body)
       try {
         const pos = upsertTrade(userId, input)
         const updatedBal = getWalletBalance(userId)
         const res = NextResponse.json({ item: pos, wallet: { balance: updatedBal, cap: 1_000_000 } })
-        try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false }) } catch {}
+        try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
         return res
       } catch (e: any) {
         return NextResponse.json({ error: e?.message || 'trade_failed' }, { status: 400 })
