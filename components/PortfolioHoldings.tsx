@@ -24,11 +24,32 @@ export function PortfolioHoldings() {
       const raw = localStorage.getItem('bullish_demo_pf_positions')
       if (raw) {
         const map = JSON.parse(raw)
-        setLocalItems(Object.values(map))
+        // Clean up zero-share positions immediately
+        const cleaned: Record<string, any> = {}
+        for (const [sym, pos] of Object.entries(map)) {
+          if ((pos as any).totalShares > 0) {
+            cleaned[sym] = pos
+          }
+        }
+        localStorage.setItem('bullish_demo_pf_positions', JSON.stringify(cleaned))
+        setLocalItems(Object.values(cleaned))
       }
       function onUpd() {
         const r = localStorage.getItem('bullish_demo_pf_positions')
-        if (r) setLocalItems(Object.values(JSON.parse(r)))
+        if (r) {
+          const map = JSON.parse(r)
+          // Clean up zero-share positions from localStorage
+          const cleaned: Record<string, any> = {}
+          for (const [sym, pos] of Object.entries(map)) {
+            if ((pos as any).totalShares > 0) {
+              cleaned[sym] = pos
+            }
+          }
+          localStorage.setItem('bullish_demo_pf_positions', JSON.stringify(cleaned))
+          setLocalItems(Object.values(cleaned))
+        } else {
+          setLocalItems([])
+        }
         mutate() // Invalidate SWR cache
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
@@ -37,17 +58,23 @@ export function PortfolioHoldings() {
   }, [mutate])
   const [enriched, setEnriched] = useState<any[]>([])
   const items = (data?.items && data.items.length>0) ? data.items : localItems
+  
+  // Filter out zero-share positions immediately
+  const filteredItems = items.filter((p:any) => (p.totalShares || 0) > 0)
 
   // Enrich local-only items with live quotes so value/PNL render correctly
   useEffect(() => {
     let cancelled = false
     async function enrich() {
-      if (!items || items.length === 0) { setEnriched([]); return }
-      // If items already have currentPrice from API, use them
-      if (items[0]?.currentPrice != null) { setEnriched(items); return }
+      if (!filteredItems || filteredItems.length === 0) { setEnriched([]); return }
+      // If items already have currentPrice from API, use them (but still filter)
+      if (filteredItems[0]?.currentPrice != null) { 
+        setEnriched(filteredItems.filter((p:any)=> (p.totalShares||0) > 0))
+        return 
+      }
       try {
         const out: any[] = []
-        await Promise.all(items.filter((p:any)=> (p.totalShares||0) > 0).map(async (p:any) => {
+        await Promise.all(filteredItems.map(async (p:any) => {
           try {
             const r = await fetch(`/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { cache: 'no-store' })
             const j = await r.json()
@@ -63,12 +90,12 @@ export function PortfolioHoldings() {
         }))
         if (!cancelled) setEnriched(out)
       } catch {
-        if (!cancelled) setEnriched(items)
+        if (!cancelled) setEnriched(filteredItems)
       }
     }
     enrich()
     return () => { cancelled = true }
-  }, [JSON.stringify(items)])
+  }, [JSON.stringify(filteredItems)])
 
   return (
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -81,7 +108,7 @@ export function PortfolioHoldings() {
         <div className="text-slate-400">No positions yet. <button onClick={() => router.push('/stocks/AAPL')} className="text-blue-400 hover:text-blue-300 underline">Buy stocks</button> to get started.</div>
       ) : (
         <div className="space-y-3">
-          {enriched.filter((p:any)=> (p.totalShares||0) > 0).map((p:any)=>{
+          {enriched.map((p:any)=>{
             const price = p.currentPrice || 0
             const totalValue = price * p.totalShares
             const base = p.avgPrice * p.totalShares
