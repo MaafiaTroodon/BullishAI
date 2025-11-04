@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWalletBalance, depositToWallet, withdrawFromWallet, listWalletTransactions } from '@/lib/portfolio'
+import { getWalletBalance, depositToWallet, withdrawFromWallet, listWalletTransactions, initializeWalletFromBalance } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,18 +8,36 @@ function getUserId() { return 'demo-user' }
 
 export async function GET(req: NextRequest) {
   const userId = getUserId()
+  
+  // Restore from cookie if in-memory is empty
   let balance = getWalletBalance(userId)
-  // Also hydrate from cookie if present (persists across deployments)
-  try {
-    const cookieBal = req.cookies.get('bullish_wallet')?.value
-    if (cookieBal) {
-      const parsed = Number(cookieBal)
-      if (!Number.isNaN(parsed)) balance = Math.max(balance, parsed)
+  const walletTx = listWalletTransactions(userId)
+  
+  // If we have wallet transactions, recalculate balance from them (more accurate)
+  if (walletTx && walletTx.length > 0) {
+    let calculatedBalance = 0
+    for (const tx of walletTx) {
+      if (tx.action === 'deposit') calculatedBalance += tx.amount
+      else if (tx.action === 'withdraw') calculatedBalance -= tx.amount
     }
-  } catch {}
-  const res = NextResponse.json({ balance, cap: 1_000_000, transactions: listWalletTransactions(userId) })
-  // Reflect current balance in cookie
-  try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false }) } catch {}
+    balance = Math.max(0, calculatedBalance)
+  } else {
+    // No transactions, try to restore from cookie
+    try {
+      const cookieBal = req.cookies.get('bullish_wallet')?.value
+      if (cookieBal) {
+        const parsed = Number(cookieBal)
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          balance = parsed
+          initializeWalletFromBalance(userId, parsed)
+        }
+      }
+    } catch {}
+  }
+  
+  const res = NextResponse.json({ balance, cap: 1_000_000, transactions: walletTx })
+  // Always persist current balance to cookie
+  try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
   return res
 }
 

@@ -49,6 +49,15 @@ function getPf(userId: string): Portfolio {
   return store[userId]
 }
 
+// Initialize wallet from persisted balance (called from API routes)
+export function initializeWalletFromBalance(userId: string, balance: number): void {
+  const pf = getPf(userId)
+  if (balance > 0 && (pf.walletBalance === 0 || !pf.walletTransactions || pf.walletTransactions.length === 0)) {
+    // Only initialize if we don't have transactions (fresh start)
+    pf.walletBalance = balance
+  }
+}
+
 export function listTransactions(userId: string): Transaction[] {
   const pf = getPf(userId)
   return pf.transactions.sort((a, b) => b.timestamp - a.timestamp) // Most recent first
