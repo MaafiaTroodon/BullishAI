@@ -335,14 +335,6 @@ export function PortfolioChart() {
                 isAnimationActive
                 animationDuration={350}
               />
-              {/* Trade markers */}
-              {transactions && transactions.length>0 && (
-                <Scatter data={transactions.map((tx:any)=>{
-                  // find portfolio value at tx timestamp
-                  const nearest = points.find(p=>p.t>=tx.timestamp) || points[points.length-1]
-                  return { x: tx.timestamp, y: nearest? nearest.value : 0, action: tx.action, symbol: tx.symbol }
-                })} shape="circle" fill="#38bdf8" />
-              )}
             </AreaChart>
           </ResponsiveContainer>
         ) : (
