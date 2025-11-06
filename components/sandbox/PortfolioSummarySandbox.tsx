@@ -6,9 +6,9 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 
 export function PortfolioSummarySandbox() {
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 1000 })
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { refreshInterval: 1000 })
   // Get latest snapshot from timeseries API for header cards
-  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=1d&gran=1d', fetcher, { refreshInterval: 1000 })
+  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=1d&gran=1d', safeJsonFetcher, { refreshInterval: 1000 })
   
   const [localItems, setLocalItems] = useState<any[]>([])
   const [flash, setFlash] = useState<'up'|'down'|null>(null)

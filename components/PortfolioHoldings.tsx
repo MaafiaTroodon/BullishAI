@@ -4,21 +4,11 @@ import useSWR from 'swr'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { HoldingSparkline } from './HoldingSparkline'
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: 'no-store' })
-  const ct = res.headers.get('content-type') || ''
-  if (!ct.includes('application/json')) {
-    const text = await res.text()
-    console.error('Non-JSON response:', text.substring(0, 200))
-    throw new Error('Invalid response format')
-  }
-  return res.json()
-}
+import { safeJsonFetcher } from '@/lib/safeFetch'
 
 export function PortfolioHoldings() {
   const router = useRouter()
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 2000 })
+  const { data, isLoading, error, mutate } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { refreshInterval: 2000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   useEffect(() => {
     try {
@@ -103,8 +93,19 @@ export function PortfolioHoldings() {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-white">Holdings</h3>
       </div>
-      {isLoading && enriched.length===0 ? (
+      {isLoading && enriched.length === 0 ? (
         <div className="text-slate-400">Loading positions…</div>
+      ) : error ? (
+        <div className="text-center py-8">
+          <p className="text-red-400 mb-2">Couldn't load holdings</p>
+          <p className="text-slate-500 text-sm mb-4">{error.message || 'API request failed'}</p>
+          <button
+            onClick={() => mutate()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Retry
+          </button>
+        </div>
       ) : enriched.length === 0 ? (
         <div className="text-slate-400">No positions yet. <button onClick={() => router.push('/stocks/AAPL')} className="text-blue-400 hover:text-blue-300 underline">Buy stocks</button> to get started.</div>
       ) : (

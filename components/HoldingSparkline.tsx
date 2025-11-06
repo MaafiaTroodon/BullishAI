@@ -3,15 +3,7 @@
 import { useMemo } from 'react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import useSWR from 'swr'
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: 'no-store' })
-  const ct = res.headers.get('content-type') || ''
-  if (!ct.includes('application/json')) {
-    return null as any
-  }
-  return res.json()
-}
+import { safeJsonFetcher } from '@/lib/safeFetch'
 
 type SparklineProps = {
   symbol: string
@@ -22,7 +14,7 @@ type SparklineProps = {
 export function HoldingSparkline({ symbol, width = 120, height = 40 }: SparklineProps) {
   const { data } = useSWR(
     `/api/holdings/${symbol}/timeseries?range=1d&gran=5m`,
-    fetcher,
+    safeJsonFetcher,
     { refreshInterval: 15000 } // Update every 15 seconds for real-time during market hours
   )
 
