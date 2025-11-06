@@ -102,8 +102,8 @@ export function PortfolioChart() {
     
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
-      value: p.portfolio || 0,
-      costBasis: p.costBasis || 0
+      value: Math.max(0, p.portfolio || 0), // Ensure no negative values
+      costBasis: Math.max(0, p.costBasis || 0) // Ensure no negative cost basis
     }))
   }, [timeseriesData])
 
@@ -114,6 +114,17 @@ export function PortfolioChart() {
   const gradientId = `pfColor-${colorMode}`
   const gradientStartColor = colorMode === 'up' ? '#10b981' : '#ef4444'
   const gradientEndColor = colorMode === 'up' ? '#10b981' : '#ef4444'
+  
+  // Calculate Y-axis domain to prevent negative values
+  const yDomain = useMemo(() => {
+    if (points.length === 0) return [0, 100]
+    const values = points.map(p => p.value)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const range = max - min || max || 1
+    const padding = range * 0.1
+    return [Math.max(0, min - padding), max + padding]
+  }, [points])
 
   const ranges = [
     { label: '1H', value: '1h' },
