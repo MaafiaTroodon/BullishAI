@@ -4,28 +4,9 @@ import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Line } from 'recharts'
 import dynamic from 'next/dynamic'
+import { safeJsonFetcher } from '@/lib/safeFetch'
 const PortfolioSummarySandbox = dynamic(() => import('@/components/sandbox/PortfolioSummarySandbox').then(m => m.PortfolioSummarySandbox), { ssr: false })
 const PortfolioHoldingsComp = dynamic(() => import('@/components/PortfolioHoldings').then(m => m.PortfolioHoldings), { ssr: false })
-
-const fetcher = async (url: string) => {
-  try {
-    const res = await fetch(url, { cache: 'no-store' })
-    if (!res.ok) {
-      console.error(`API error: ${res.status} ${res.statusText}`)
-      return null as any
-    }
-    const ct = res.headers.get('content-type') || ''
-    if (!ct.includes('application/json')) {
-      const text = await res.text()
-      console.error('Non-JSON response:', text.substring(0, 200))
-      return null as any
-    }
-    return res.json()
-  } catch (error) {
-    console.error('Fetcher error:', error)
-    return null as any
-  }
-}
 
 export function PortfolioChartSandbox() {
   const [chartRange, setChartRange] = useState('1M')
@@ -46,14 +27,14 @@ export function PortfolioChartSandbox() {
   const apiRange = apiRangeMap[chartRange] || '1M'
   const gran = chartRange === '1h' || chartRange === '1d' || chartRange === '3d' ? '5m' : '1d'
   
-  const { data: timeseriesData, mutate: mutateTimeseries } = useSWR(
+  const { data: timeseriesData, error: timeseriesError, mutate: mutateTimeseries } = useSWR(
     `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
-    fetcher,
+    safeJsonFetcher,
     { refreshInterval: 1000 }
   )
   
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 1000 })
-  const { data: wallet } = useSWR('/api/wallet', fetcher, { refreshInterval: 1000 })
+  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', safeJsonFetcher, { refreshInterval: 1000 })
+  const { data: wallet } = useSWR('/api/wallet', safeJsonFetcher, { refreshInterval: 1000 })
   
   useEffect(() => {
     function onUpd() {
@@ -86,7 +67,8 @@ export function PortfolioChartSandbox() {
         }
         
         if (Object.keys(syncData).length > 0) {
-          await fetch('/api/portfolio', {
+          const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || window.location.origin
+          await fetch(new URL('/api/portfolio', baseUrl).toString(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(syncData)
@@ -205,11 +187,30 @@ export function PortfolioChartSandbox() {
         </div>
       </div>
       <div className="h-[360px]">
-        {points.length === 0 ? (
+        {timeseriesError ? (
+          <div className="h-full flex items-center justify-center text-slate-400">
+            <div className="text-center">
+              <p className="mb-2 text-red-400">Couldn't load chart data</p>
+              <p className="text-sm text-slate-500 mb-4">{timeseriesError.message || 'API request failed'}</p>
+              <button
+                onClick={() => mutateTimeseries()}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
               <p className="mb-2">No portfolio activity yet</p>
               <p className="text-sm text-slate-500">Make a deposit or buy stocks to see your portfolio value chart.</p>
+            </div>
+          </div>
+        ) : points.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-slate-400">
+            <div className="text-center">
+              <p className="mb-2">Processing chart data...</p>
             </div>
           </div>
         ) : (
