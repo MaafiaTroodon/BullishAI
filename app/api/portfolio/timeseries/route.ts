@@ -174,13 +174,6 @@ export async function GET(req: NextRequest) {
         if (event.type === 'wallet') {
           if (event.action === 'deposit') {
             cashBalance += event.amount || 0
-            totalDeposits += event.amount || 0
-          } else if (event.action === 'withdraw') {
-            cashBalance -= event.amount || 0
-          }
-        if (event.type === 'wallet') {
-          if (event.action === 'deposit') {
-            cashBalance += event.amount || 0
             moneyInvested += event.amount || 0 // Track net deposits
           } else if (event.action === 'withdraw') {
             cashBalance -= event.amount || 0
