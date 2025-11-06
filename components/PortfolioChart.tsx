@@ -102,10 +102,10 @@ export function PortfolioChart() {
     
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
-      value: p.portfolioAbs || 0, // Use absolute portfolio value for chart
+      value: p.portfolioAbs || 0, // Absolute portfolio value for chart
+      netDeposits: p.netDepositsAbs || 0, // Lifetime net deposits
       deltaFromStart$: p.deltaFromStart$ || 0,
-      deltaFromStartPct: p.deltaFromStartPct || 0,
-      moneyInvestedToDate: p.moneyInvestedToDate || 0 // Lifetime net deposits
+      deltaFromStartPct: p.deltaFromStartPct || 0
     }))
   }, [timeseriesData])
 
