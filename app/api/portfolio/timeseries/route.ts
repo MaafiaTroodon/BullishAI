@@ -153,7 +153,11 @@ export async function GET(req: NextRequest) {
     // Build portfolio value over time
     const holdings: Record<string, { shares: number; avgCost: number; costBasis: number }> = {}
     let cashBalance = 0
-    let moneyInvested = 0 // Net deposits (DEPOSIT - WITHDRAW), not cost basis
+    let moneyInvested = 0 // Net deposits (DEPOSIT - WITHDRAW), lifetime cumulative
+    
+    // Track last known values for forward-fill
+    let lastCashBalance = 0
+    let lastMoneyInvested = 0
     
     const series: Array<{
       t: number
@@ -174,11 +178,13 @@ export async function GET(req: NextRequest) {
         if (event.type === 'wallet') {
           if (event.action === 'deposit') {
             cashBalance += event.amount || 0
-            moneyInvested += event.amount || 0 // Track net deposits
+            moneyInvested += event.amount || 0 // Track net deposits (lifetime)
           } else if (event.action === 'withdraw') {
             cashBalance -= event.amount || 0
-            moneyInvested -= event.amount || 0 // Subtract withdrawals from net deposits
+            moneyInvested -= event.amount || 0 // Subtract withdrawals from net deposits (lifetime)
           }
+          lastCashBalance = cashBalance
+          lastMoneyInvested = moneyInvested
         } else if (event.type === 'trade') {
           const sym = event.symbol.toUpperCase()
           if (!holdings[sym]) {
@@ -198,11 +204,13 @@ export async function GET(req: NextRequest) {
               costBasis: newShares * newAvg
             }
             cashBalance -= qty * price
+            lastCashBalance = cashBalance
           } else if (event.action === 'sell') {
             const qty = Math.min(event.quantity || 0, holdings[sym].shares)
             holdings[sym].shares -= qty
             holdings[sym].costBasis = holdings[sym].shares * holdings[sym].avgCost
             cashBalance += qty * (event.price || 0)
+            lastCashBalance = cashBalance
             if (holdings[sym].shares <= 0) {
               delete holdings[sym]
             }
@@ -211,6 +219,11 @@ export async function GET(req: NextRequest) {
         
         eventIndex++
       }
+      
+      // Forward-fill cash and moneyInvested if no events in this bucket
+      // (This ensures continuity even if no transactions occurred)
+      const currentCash = cashBalance || lastCashBalance
+      const currentMoneyInvested = moneyInvested !== 0 ? moneyInvested : lastMoneyInvested
       
       // Calculate portfolio value at this bucket
       let holdingsValue = 0
@@ -223,15 +236,15 @@ export async function GET(req: NextRequest) {
         costBasis += holding.costBasis
       }
       
-      const portfolioValue = holdingsValue + cashBalance
+      const portfolioValue = holdingsValue + currentCash
       
       series.push({
         t: bucket,
         portfolio: Number(portfolioValue.toFixed(2)),
         holdings: Number(holdingsValue.toFixed(2)),
-        cash: Number(cashBalance.toFixed(2)),
+        cash: Number(currentCash.toFixed(2)),
         costBasis: Number(costBasis.toFixed(2)),
-        moneyInvested: Number(moneyInvested.toFixed(2))
+        moneyInvested: Number(currentMoneyInvested.toFixed(2)) // Lifetime net deposits
       })
     }
     
