@@ -5,14 +5,23 @@ import { useEffect, useState, useMemo } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: 'no-store' })
-  const ct = res.headers.get('content-type') || ''
-  if (!ct.includes('application/json')) {
-    const text = await res.text()
-    console.error('Non-JSON response:', text.substring(0, 200))
-    throw new Error('Invalid response format')
+  try {
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) {
+      console.error(`API error: ${res.status} ${res.statusText}`)
+      return null as any
+    }
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      const text = await res.text()
+      console.error('Non-JSON response:', text.substring(0, 200))
+      return null as any
+    }
+    return res.json()
+  } catch (error) {
+    console.error('Fetcher error:', error)
+    return null as any
   }
-  return res.json()
 }
 
 export function PortfolioSummarySandbox() {
