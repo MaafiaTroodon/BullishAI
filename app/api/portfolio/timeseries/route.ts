@@ -59,8 +59,14 @@ export async function GET(req: NextRequest) {
     const gran = url.searchParams.get('gran') || '1d'
     
     // Get all transactions
-    const transactions = listTransactions(userId)
-    const walletTx = listWalletTransactions(userId)
+    let transactions = listTransactions(userId)
+    let walletTx = listWalletTransactions(userId)
+    
+    // If no transactions in memory, try to load from localStorage (for client-side persistence)
+    if (transactions.length === 0 && typeof window === 'undefined') {
+      // Server-side: transactions should be in memory store
+      // But we can't access localStorage here, so rely on sync from client
+    }
     
     // Determine time range
     const now = Date.now()
@@ -77,7 +83,16 @@ export async function GET(req: NextRequest) {
     }
     
     const rangeBack = rangeMs[range] || 30 * 24 * 60 * 60 * 1000
-    const startTime = range === 'ALL' ? (transactions.length > 0 ? Math.min(...transactions.map(t => t.timestamp), ...walletTx.map(w => w.timestamp)) : now - rangeBack) : now - rangeBack
+    let startTime = now - rangeBack
+    if (range === 'ALL') {
+      const allTimestamps = [
+        ...transactions.map(t => t.timestamp),
+        ...walletTx.map(w => w.timestamp || 0)
+      ].filter(t => t > 0)
+      if (allTimestamps.length > 0) {
+        startTime = Math.min(...allTimestamps)
+      }
+    }
     
     // Determine granularity
     const granMs: Record<string, number> = {
