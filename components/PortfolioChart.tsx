@@ -112,8 +112,15 @@ export function PortfolioChart() {
     if (points.length < 2) return 0
     const first = points[0]?.value || 0
     const last = points[points.length - 1]?.value || 0
-    if (first === 0) return 0
-    return (last - first) / first
+    
+    // Simple comparison: if last > first, it's positive (green)
+    // If last < first, it's negative (red)
+    if (Math.abs(first) < 0.01) {
+      // Starting from near zero - check if we're above or below zero
+      return last >= 0 ? 0.01 : -0.01
+    }
+    
+    return (last - first) / Math.abs(first)
   }, [points])
 
   const isPositive = portfolioReturn >= 0
