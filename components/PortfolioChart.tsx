@@ -243,8 +243,9 @@ export function PortfolioChart() {
                   const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                   const portfolioValue = data?.value || 0
                   const netDepositsInStocks = data?.netDepositsInStocks || 0
-                  const dailyChange = getDailyChange(timestamp)
-                  const dailyChangePct = portfolioValue > 0 ? (dailyChange / portfolioValue) * 100 : 0
+                  const dailyChangeData = getDailyChange(timestamp)
+                  const dailyChange = dailyChangeData.change
+                  const dailyChangePct = dailyChangeData.startValue > 0 ? (dailyChange / dailyChangeData.startValue) * 100 : 0
                   
                   return (
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
