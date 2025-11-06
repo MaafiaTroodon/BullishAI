@@ -16,7 +16,29 @@ const fetcher = async (url: string) => {
 }
 
 export function PortfolioChart() {
-  const [chartRange, setChartRange] = useState('1m')
+  const [chartRange, setChartRange] = useState('1M')
+  
+  // Map internal ranges to API ranges
+  const apiRangeMap: Record<string, string> = {
+    '1h': '1d',
+    '1d': '1d',
+    '3d': '3d',
+    '1week': '1week',
+    '3m': '3M',
+    '6m': '6M',
+    '1y': '1Y',
+    '1m': '1M'
+  }
+  
+  const apiRange = apiRangeMap[chartRange] || '1M'
+  const gran = chartRange === '1h' || chartRange === '1d' || chartRange === '3d' ? '5m' : '1d'
+  
+  const { data: timeseriesData, mutate: mutateTimeseries } = useSWR(
+    `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
+    fetcher,
+    { refreshInterval: 1000 }
+  )
+  
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 1000 })
   const { data: wallet } = useSWR('/api/wallet', fetcher, { refreshInterval: 1000 })
   const [localItems, setLocalItems] = useState<any[]>([])

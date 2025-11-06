@@ -50,8 +50,10 @@ export async function GET(req: NextRequest) {
   try {
     const userId = getUserId()
     const url = new URL(req.url)
-    const symbol = (url.pathname.split('/').pop() || '').toUpperCase()
-    const url = new URL(req.url)
+    // Extract symbol from pathname: /api/holdings/MSFT/timeseries -> MSFT
+    const pathParts = url.pathname.split('/')
+    const symbolIndex = pathParts.indexOf('holdings')
+    const symbol = symbolIndex >= 0 && pathParts[symbolIndex + 1] ? pathParts[symbolIndex + 1].toUpperCase() : ''
     const range = url.searchParams.get('range') || '1M'
     const gran = url.searchParams.get('gran') || '1d'
     
