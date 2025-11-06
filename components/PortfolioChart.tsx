@@ -204,6 +204,7 @@ export function PortfolioChart() {
                 stroke="#94a3b8"
                 tickFormatter={(v) => `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 style={{ fontSize: '12px' }}
+                domain={yDomain}
               />
               <Tooltip 
                 formatter={(v: any, name: string) => {
