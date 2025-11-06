@@ -104,25 +104,28 @@ export function PortfolioChart() {
       t: p.t,
       value: p.portfolio || 0,
       costBasis: p.costBasis || 0,
-      holdings: p.holdings || 0 // Current market value of stock holdings
+      holdings: p.holdings || 0,
+      cash: p.cash || 0,
+      moneyInvested: p.moneyInvested || 0 // Net deposits to date
     }))
   }, [timeseriesData])
 
-  // Calculate change for selected time range
+  // Calculate change for selected time range using API meta
   const getRangeChange = useMemo(() => {
-    if (points.length < 2) return { change: 0, changePct: 0, startValue: 0 }
+    const startPortfolio = timeseriesData?.meta?.startPortfolio || 0
+    const startIndex = timeseriesData?.meta?.startIndex || 0
     
-    // Get the first and last points in the current range
-    const first = points[0]
-    const last = points[points.length - 1]
+    if (points.length === 0 || startPortfolio === 0) {
+      return { change: 0, changePct: 0, startValue: 0 }
+    }
     
-    const startValue = first?.value || 0
-    const endValue = last?.value || 0
-    const change = endValue - startValue
-    const changePct = startValue > 0 ? (change / startValue) * 100 : 0
-    
-    return { change, changePct, startValue }
-  }, [points, chartRange])
+    // Use the start portfolio value from API meta
+    return { 
+      change: 0, // Will be calculated per hover point
+      changePct: 0,
+      startValue: startPortfolio
+    }
+  }, [points, timeseriesData, chartRange])
 
   // Calculate daily changes for tooltip (for reference, but we'll use range change)
   const getDailyChange = useMemo(() => {
@@ -265,12 +268,12 @@ export function PortfolioChart() {
                     hour12: true
                   })
                   const portfolioValue = data?.value || 0
-                  const costBasis = data?.costBasis || 0 // Money invested
+                  const moneyInvested = data?.moneyInvested || 0 // Net deposits to date
                   
                   // Calculate change from start of selected range to this point
-                  const rangeStart = points[0]?.value || 0
-                  const rangeChange = portfolioValue - rangeStart
-                  const rangeChangePct = rangeStart > 0 ? (rangeChange / rangeStart) * 100 : 0
+                  const startPortfolio = timeseriesData?.meta?.startPortfolio || 0
+                  const rangeChange = portfolioValue - startPortfolio
+                  const rangeChangePct = startPortfolio > 0 ? (rangeChange / startPortfolio) * 100 : 0
                   
                   // Get range label
                   const rangeLabels: Record<string, string> = {

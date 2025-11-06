@@ -153,8 +153,7 @@ export async function GET(req: NextRequest) {
     // Build portfolio value over time
     const holdings: Record<string, { shares: number; avgCost: number; costBasis: number }> = {}
     let cashBalance = 0
-    let totalDeposits = 0
-    let netDepositsInStocks = 0 // Track total money invested in stocks (buy transactions only)
+    let moneyInvested = 0 // Net deposits (DEPOSIT - WITHDRAW), not cost basis
     
     const series: Array<{
       t: number
@@ -162,8 +161,7 @@ export async function GET(req: NextRequest) {
       holdings: number
       cash: number
       costBasis: number
-      unrealized: number
-      netDepositsInStocks: number
+      moneyInvested: number
     }> = []
     
     let eventIndex = 0
@@ -186,6 +184,20 @@ export async function GET(req: NextRequest) {
             holdings[sym] = { shares: 0, avgCost: 0, costBasis: 0 }
           }
           
+        if (event.type === 'wallet') {
+          if (event.action === 'deposit') {
+            cashBalance += event.amount || 0
+            moneyInvested += event.amount || 0 // Track net deposits
+          } else if (event.action === 'withdraw') {
+            cashBalance -= event.amount || 0
+            moneyInvested -= event.amount || 0 // Subtract withdrawals from net deposits
+          }
+        } else if (event.type === 'trade') {
+          const sym = event.symbol.toUpperCase()
+          if (!holdings[sym]) {
+            holdings[sym] = { shares: 0, avgCost: 0, costBasis: 0 }
+          }
+          
           if (event.action === 'buy') {
             const qty = event.quantity || 0
             const price = event.price || 0
@@ -199,7 +211,6 @@ export async function GET(req: NextRequest) {
               costBasis: newShares * newAvg
             }
             cashBalance -= qty * price
-            netDepositsInStocks += qty * price // Track money invested in stocks
           } else if (event.action === 'sell') {
             const qty = Math.min(event.quantity || 0, holdings[sym].shares)
             holdings[sym].shares -= qty
@@ -226,7 +237,6 @@ export async function GET(req: NextRequest) {
       }
       
       const portfolioValue = holdingsValue + cashBalance
-      const unrealized = portfolioValue - totalDeposits
       
       series.push({
         t: bucket,
@@ -234,10 +244,13 @@ export async function GET(req: NextRequest) {
         holdings: Number(holdingsValue.toFixed(2)),
         cash: Number(cashBalance.toFixed(2)),
         costBasis: Number(costBasis.toFixed(2)),
-        unrealized: Number(unrealized.toFixed(2)),
-        netDepositsInStocks: Number(netDepositsInStocks.toFixed(2))
+        moneyInvested: Number(moneyInvested.toFixed(2))
       })
     }
+    
+    // Find first non-null portfolio value for range start
+    const startIndex = series.findIndex(s => s.portfolio > 0)
+    const startPortfolio = startIndex >= 0 ? series[startIndex].portfolio : 0
     
     return NextResponse.json({
       range,
@@ -247,7 +260,9 @@ export async function GET(req: NextRequest) {
       meta: {
         symbols,
         hasFx: false,
-        lastQuoteTs: new Date().toISOString()
+        lastQuoteTs: new Date().toISOString(),
+        startIndex: startIndex >= 0 ? startIndex : 0,
+        startPortfolio
       }
     })
   } catch (error: any) {
