@@ -4,26 +4,11 @@ import useSWR from 'swr'
 import { useEffect, useState, useMemo } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: 'no-store' })
-  const ct = res.headers.get('content-type') || ''
-  if (!ct.includes('application/json')) {
-    const text = await res.text()
-    console.error('Non-JSON response:', text.substring(0, 200))
-    throw new Error('Invalid response format')
-  }
-  return res.json()
-}
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export function PortfolioSummary() {
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 1000 })
-  // Get latest snapshot from timeseries API for header cards
-  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=1d&gran=1d', fetcher, { refreshInterval: 1000 })
-  
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 15000 })
   const [localItems, setLocalItems] = useState<any[]>([])
-  // Flash animation on value change
-  const [flash, setFlash] = useState<'up'|'down'|null>(null)
-  const [prevVal, setPrevVal] = useState<number | null>(null)
   
   useEffect(() => {
     try {
@@ -93,48 +78,28 @@ export function PortfolioSummary() {
 
   const enrichedItems = enriched.length > 0 ? enriched : items
 
-  // Filter out zero-share positions
-  const activePositions = enrichedItems.filter((p: any) => (p.totalShares || 0) > 0)
-
-  // Calculate portfolio metrics from latest snapshot (prefer timeseries, fallback to positions)
+  // Calculate portfolio metrics
   const metrics = useMemo(() => {
-    // Use latest snapshot from timeseries API if available
-    if (timeseriesData?.series && timeseriesData.series.length > 0) {
-      const latest = timeseriesData.series[timeseriesData.series.length - 1]
-      const portfolioAbs = latest.portfolioAbs || 0
-      const netDepositsAbs = latest.netDepositsAbs || 0
-      const totalReturn$ = portfolioAbs - netDepositsAbs
-      const totalReturnPercent = netDepositsAbs > 0 ? (totalReturn$ / netDepositsAbs) * 100 : 0
-      
-      return {
-        totalValue: Number(portfolioAbs.toFixed(2)),
-        totalCost: Number(netDepositsAbs.toFixed(2)),
-        totalReturn: Number(totalReturn$.toFixed(2)),
-        totalReturnPercent: Number(totalReturnPercent.toFixed(2)),
-        holdingCount: activePositions.length,
-        isPositive: totalReturn$ >= 0
-      }
-    }
-    
-    // Fallback to position-based calculation
     let totalValue = 0
     let totalCost = 0
     let realizedPnl = 0
     let holdingCount = 0
 
-    activePositions.forEach((p: any) => {
-      holdingCount++
-      // Current value
-      const value = p.totalValue || (p.currentPrice ? p.currentPrice * p.totalShares : 0)
-      totalValue += value
-      
-      // Cost basis (money put in)
-      const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
-      totalCost += cost
-      
-      // Realized P/L
-      if (p.realizedPnl) {
-        realizedPnl += p.realizedPnl
+    enrichedItems.forEach((p: any) => {
+      if (p.totalShares > 0) {
+        holdingCount++
+        // Current value
+        const value = p.totalValue || (p.currentPrice ? p.currentPrice * p.totalShares : 0)
+        totalValue += value
+        
+        // Cost basis (money put in)
+        const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
+        totalCost += cost
+        
+        // Realized P/L
+        if (p.realizedPnl) {
+          realizedPnl += p.realizedPnl
+        }
       }
     })
 
@@ -151,20 +116,9 @@ export function PortfolioSummary() {
       holdingCount,
       isPositive: totalReturn >= 0
     }
-  }, [timeseriesData, JSON.stringify(activePositions)])
+  }, [JSON.stringify(enrichedItems)])
 
-  // Flash animation effect
-  useEffect(() => {
-    if (prevVal === null) { setPrevVal(metrics.totalValue); return }
-    if (metrics.totalValue !== prevVal) {
-      setFlash(metrics.totalValue > prevVal ? 'up' : 'down')
-      setPrevVal(metrics.totalValue)
-      const t = setTimeout(()=> setFlash(null), 450)
-      return () => clearTimeout(t)
-    }
-  }, [metrics.totalValue, prevVal])
-
-  if (isLoading && activePositions.length === 0) {
+  if (isLoading && enrichedItems.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="animate-pulse">
@@ -189,7 +143,7 @@ export function PortfolioSummary() {
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="text-slate-400 text-sm mb-1">Total Portfolio Value</div>
-          <div className={`text-white text-4xl font-bold transition-all duration-300 ${flash==='up'?'text-emerald-400':''}${flash==='down'?' text-red-400':''}`}>${metrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className="text-white text-4xl font-bold">${metrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         {metrics.totalReturn !== 0 && (
           <div className={`flex items-center gap-1 ${metrics.isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
