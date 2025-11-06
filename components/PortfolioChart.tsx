@@ -102,29 +102,10 @@ export function PortfolioChart() {
     
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
-      value: Math.max(0, p.portfolio || 0), // Ensure no negative values
-      costBasis: Math.max(0, p.costBasis || 0) // Ensure no negative cost basis
+      value: p.portfolio || 0,
+      costBasis: p.costBasis || 0
     }))
   }, [timeseriesData])
-
-  // Determine color mode based on range delta
-  const rangeDeltaPct = timeseriesData?.meta?.rangeDeltaPct ?? 0
-  const colorMode: 'up' | 'down' = rangeDeltaPct >= 0 ? 'up' : 'down'
-  const strokeColor = colorMode === 'up' ? '#10b981' : '#ef4444'
-  const gradientId = `pfColor-${colorMode}`
-  const gradientStartColor = colorMode === 'up' ? '#10b981' : '#ef4444'
-  const gradientEndColor = colorMode === 'up' ? '#10b981' : '#ef4444'
-  
-  // Calculate Y-axis domain to prevent negative values
-  const yDomain = useMemo(() => {
-    if (points.length === 0) return [0, 100]
-    const values = points.map(p => p.value)
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-    const range = max - min || max || 1
-    const padding = range * 0.1
-    return [Math.max(0, min - padding), max + padding]
-  }, [points])
 
   const ranges = [
     { label: '1H', value: '1h' },
@@ -186,9 +167,9 @@ export function PortfolioChart() {
               margin={{ top: 10, right: 8, left: 0, bottom: 0 }}
             >
               <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={gradientStartColor} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={gradientEndColor} stopOpacity={0} />
+                <linearGradient id="pfColor" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis 
@@ -204,42 +185,36 @@ export function PortfolioChart() {
                 stroke="#94a3b8"
                 tickFormatter={(v) => `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 style={{ fontSize: '12px' }}
-                domain={yDomain}
               />
               <Tooltip 
                 formatter={(v: any, name: string) => {
                   if (name === 'Portfolio Value') {
-                    const returnPct = rangeDeltaPct * 100
-                    const returnText = `${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%`
-                    return [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${returnText})`, 'Portfolio Value']
+                    return [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']
                   }
                   return [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Cost Basis']
                 }}
                 labelFormatter={(l: any) => {
                   const date = new Date(l)
-                  const returnPct = rangeDeltaPct * 100
-                  const returnText = `${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%`
-                  return `${date.toLocaleString('en-US', { 
+                  return date.toLocaleString('en-US', { 
                     month: 'short', 
                     day: 'numeric', 
                     hour: 'numeric', 
                     minute: '2-digit',
                     hour12: true 
-                  })} • Return: ${returnText}`
+                  })
                 }}
                 contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0', borderRadius: '8px' }}
               />
               <Area 
                 type="monotoneX" 
                 dataKey="value"
-                stroke={strokeColor}
+                stroke="#10b981"
                 strokeWidth={2}
                 fillOpacity={1}
-                fill={`url(#${gradientId})`}
+                fill="url(#pfColor)"
                 dot={false}
                 isAnimationActive
-                animationDuration={300}
-                style={{ transition: 'stroke 300ms ease-in-out' }}
+                animationDuration={350}
               />
               <Line
                 type="monotoneX"

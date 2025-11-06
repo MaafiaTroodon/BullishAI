@@ -235,34 +235,15 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Calculate range delta percentage
-    const validSeries = series.filter(s => s.portfolio != null && s.portfolio >= 0)
-    let rangeDeltaPct = 0
-    if (validSeries.length >= 2) {
-      const start = validSeries[0].portfolio
-      const end = validSeries[validSeries.length - 1].portfolio
-      if (start > 0) {
-        rangeDeltaPct = (end - start) / start
-      }
-    }
-    
-    // Ensure cost basis is never negative
-    const sanitizedSeries = series.map(s => ({
-      ...s,
-      costBasis: Math.max(0, s.costBasis),
-      portfolio: Math.max(0, s.portfolio)
-    }))
-    
     return NextResponse.json({
       range,
       granularity: gran,
       currency: 'USD',
-      series: sanitizedSeries,
+      series,
       meta: {
         symbols,
         hasFx: false,
-        lastQuoteTs: new Date().toISOString(),
-        rangeDeltaPct: Number(rangeDeltaPct.toFixed(4))
+        lastQuoteTs: new Date().toISOString()
       }
     })
   } catch (error: any) {

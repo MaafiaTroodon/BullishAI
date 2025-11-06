@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts'
+import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import useSWR from 'swr'
 
 const fetcher = async (url: string) => {
@@ -26,40 +26,15 @@ export function HoldingSparkline({ symbol, width = 120, height = 40 }: Sparkline
     { refreshInterval: 30000 }
   )
 
-  const { points, trend, deltaPct, yDomain } = useMemo(() => {
+  const points = useMemo(() => {
     if (!data?.series || !Array.isArray(data.series)) {
-      return { points: [], trend: 'up' as const, deltaPct: 0, yDomain: [0, 100] }
+      return []
     }
-    
     // Take last 30 days for sparkline
-    const series = data.series.slice(-30).map((p: any) => ({
+    return data.series.slice(-30).map((p: any) => ({
       t: p.t,
       value: p.value || 0
-    })).filter((p: any) => p.value > 0)
-    
-    if (series.length === 0) {
-      return { points: [], trend: 'up' as const, deltaPct: 0, yDomain: [0, 100] }
-    }
-    
-    // Calculate delta percentage from API meta
-    const deltaPctSymbol = data?.meta?.deltaPctSymbol ?? 0
-    const trend: 'up' | 'down' = deltaPctSymbol >= 0 ? 'up' : 'down'
-    
-    // Calculate y-domain from min/max with 8% padding (no zero-anchoring)
-    const values = series.map(p => p.value)
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-    const range = max - min || max || 1
-    const padding = range * 0.08
-    const domainMin = Math.max(0, min - padding)
-    const domainMax = max + padding
-    
-    return {
-      points: series,
-      trend,
-      deltaPct: deltaPctSymbol * 100,
-      yDomain: [domainMin, domainMax]
-    }
+    }))
   }, [data])
 
   if (points.length === 0) {
@@ -70,36 +45,26 @@ export function HoldingSparkline({ symbol, width = 120, height = 40 }: Sparkline
     )
   }
 
-  const strokeColor = trend === 'up' ? '#10b981' : '#ef4444'
-  const arrow = trend === 'up' ? '▲' : '▼'
+  const min = Math.min(...points.map(p => p.value))
+  const max = Math.max(...points.map(p => p.value))
+  const range = max - min || 1
+  const isPositive = points[points.length - 1]?.value >= points[0]?.value
 
   return (
-    <div className="relative" style={{ width, height }}>
+    <div style={{ width, height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 2, right: 16, left: 2, bottom: 2 }}>
-          <YAxis hide domain={yDomain} />
+        <LineChart data={points} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
           <Line
             type="monotone"
             dataKey="value"
-            stroke={strokeColor}
+            stroke={isPositive ? '#10b981' : '#ef4444'}
             strokeWidth={1.5}
             dot={false}
             isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
-      {/* Arrow indicator at last point */}
-      <div 
-        className="absolute text-xs font-bold pointer-events-none"
-        style={{
-          right: 4,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          color: strokeColor
-        }}
-      >
-        {arrow}
-      </div>
     </div>
   )
 }
+

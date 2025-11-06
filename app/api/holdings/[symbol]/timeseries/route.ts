@@ -166,31 +166,10 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Calculate range delta percentage for this holding
-    const validSeries = series.filter(s => s.value != null && s.value >= 0)
-    let deltaPctSymbol = 0
-    if (validSeries.length >= 2) {
-      const start = validSeries[0].value
-      const end = validSeries[validSeries.length - 1].value
-      if (start > 0) {
-        deltaPctSymbol = (end - start) / start
-      }
-    }
-    
-    // Ensure cost basis is never negative
-    const sanitizedSeries = series.map(s => ({
-      ...s,
-      costBasis: Math.max(0, s.costBasis),
-      value: Math.max(0, s.value)
-    }))
-    
     return NextResponse.json({
       symbol,
       currency: 'USD',
-      series: sanitizedSeries,
-      meta: {
-        deltaPctSymbol: Number(deltaPctSymbol.toFixed(4))
-      }
+      series
     })
   } catch (error: any) {
     console.error('Holding timeseries error:', error)
