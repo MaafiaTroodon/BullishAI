@@ -41,26 +41,31 @@ export function PortfolioChart() {
   
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1&transactions=1', fetcher, { refreshInterval: 1000 })
   const { data: wallet } = useSWR('/api/wallet', fetcher, { refreshInterval: 1000 })
-  const [localItems, setLocalItems] = useState<any[]>([])
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('bullish_demo_pf_positions')
-      if (raw) setLocalItems(Object.values(JSON.parse(raw)))
-      function onUpd(){
-        const r = localStorage.getItem('bullish_demo_pf_positions')
-        if (r) setLocalItems(Object.values(JSON.parse(r)))
-        mutatePf() // Invalidate portfolio cache
-      }
-      window.addEventListener('portfolioUpdated', onUpd as any)
-      return () => window.removeEventListener('portfolioUpdated', onUpd as any)
-    } catch {}
-  }, [mutatePf])
-  const items: any[] = (pf?.items && pf.items.length>0) ? pf.items : localItems
-  const transactions: any[] = pf?.transactions || []
-  const walletTx: any[] = wallet?.transactions || []
+    function onUpd() {
+      mutatePf()
+      mutateTimeseries()
+    }
+    window.addEventListener('portfolioUpdated', onUpd as any)
+    window.addEventListener('walletUpdated', onUpd as any)
+    return () => {
+      window.removeEventListener('portfolioUpdated', onUpd as any)
+      window.removeEventListener('walletUpdated', onUpd as any)
+    }
+  }, [mutatePf, mutateTimeseries])
 
-  // Build graph based on transaction history (buy/sell/deposits)
+  // Use timeseries data from API
   const points = useMemo(() => {
+    if (!timeseriesData?.series || !Array.isArray(timeseriesData.series)) {
+      return []
+    }
+    
+    return timeseriesData.series.map((p: any) => ({
+      t: p.t,
+      value: p.portfolio || 0,
+      costBasis: p.costBasis || 0
+    }))
+  }, [timeseriesData])
     const activeItems = items.filter((p: any) => (p.totalShares || 0) > 0)
     
     // Get all events (deposits, withdrawals, buys, sells) sorted by timestamp
