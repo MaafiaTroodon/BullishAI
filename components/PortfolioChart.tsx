@@ -163,20 +163,33 @@ export function PortfolioChart() {
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-white">Portfolio Value</h3>
-        <div className="flex gap-2">
-          {ranges.map((r) => (
-            <button
-              key={r.value}
-              onClick={() => setChartRange(r.value)}
-              className={`px-3 py-1 text-sm rounded transition ${
-                chartRange === r.value
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4">
+          {/* Legend */}
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded ${isPositive ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
+              <span className="text-slate-300">Portfolio</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-0.5 border-t-2 border-dashed border-slate-400"></div>
+              <span className="text-slate-300">Net Deposits</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {ranges.map((r) => (
+              <button
+                key={r.value}
+                onClick={() => setChartRange(r.value)}
+                className={`px-3 py-1 text-sm rounded transition ${
+                  chartRange === r.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="h-[360px]">
