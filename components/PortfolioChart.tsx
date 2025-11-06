@@ -256,12 +256,35 @@ export function PortfolioChart() {
                   const timestamp = label || data?.t
                   const date = new Date(timestamp)
                   const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
-                  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  const dateStr = date.toLocaleString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  })
                   const portfolioValue = data?.value || 0
-                  const holdingsValue = data?.holdings || 0 // Current market value of stock holdings
-                  const dailyChangeData = getDailyChange(timestamp)
-                  const dailyChange = dailyChangeData.change
-                  const dailyChangePct = dailyChangeData.startValue > 0 ? (dailyChange / dailyChangeData.startValue) * 100 : 0
+                  const costBasis = data?.costBasis || 0 // Money invested
+                  
+                  // Calculate change from start of selected range to this point
+                  const rangeStart = points[0]?.value || 0
+                  const rangeChange = portfolioValue - rangeStart
+                  const rangeChangePct = rangeStart > 0 ? (rangeChange / rangeStart) * 100 : 0
+                  
+                  // Get range label
+                  const rangeLabels: Record<string, string> = {
+                    '1h': '1 hour',
+                    '1d': '1 day',
+                    '3d': '3 days',
+                    '1week': '1 week',
+                    '1m': '1 month',
+                    '3m': '3 months',
+                    '6m': '6 months',
+                    '1y': '1 year',
+                    'ALL': 'all time'
+                  }
+                  const rangeLabel = rangeLabels[chartRange] || 'selected period'
                   
                   return (
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
@@ -272,17 +295,14 @@ export function PortfolioChart() {
                           <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm">
-                          <span className="text-slate-400">Change today: </span>
-                          <span className={`font-semibold ${dailyChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {dailyChange >= 0 ? '+' : ''}${dailyChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({dailyChangePct >= 0 ? '+' : ''}{dailyChangePct.toFixed(2)}%)
+                          <span className="text-slate-400">Change ({rangeLabel}): </span>
+                          <span className={`font-semibold ${rangeChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {rangeChange >= 0 ? '+' : ''}${rangeChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({rangeChangePct >= 0 ? '+' : ''}{rangeChangePct.toFixed(2)}%)
                           </span>
                         </div>
                         <div className="text-sm text-white">
-                          <span className="text-slate-400">Holdings value: </span>
-                          <span className="font-semibold">${holdingsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-700">
-                          Cost basis: ${(data?.costBasis || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <span className="text-slate-400">Money invested: </span>
+                          <span className="font-semibold">${costBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
