@@ -299,9 +299,15 @@ export function PortfolioChart() {
                         </div>
                         <div className="text-sm">
                           <span className="text-slate-400">Change ({rangeLabel}): </span>
-                          <span className={`font-semibold ${rangeChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {rangeChange >= 0 ? '+' : ''}${rangeChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({rangeChangePct >= 0 ? '+' : ''}{rangeChangePct.toFixed(2)}%)
-                          </span>
+                          {startPortfolio > 0 ? (
+                            <span className={`font-semibold ${rangeChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {rangeChange >= 0 ? '+' : ''}${rangeChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({rangeChangePct >= 0 ? '+' : ''}{rangeChangePct.toFixed(2)}%)
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-slate-400">
+                              ${rangeChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-white">
                           <span className="text-slate-400">Money invested to date: </span>
