@@ -107,6 +107,19 @@ export function PortfolioChart() {
     }))
   }, [timeseriesData])
 
+  // Calculate portfolio return to determine color
+  const portfolioReturn = useMemo(() => {
+    if (points.length < 2) return 0
+    const first = points[0]?.value || 0
+    const last = points[points.length - 1]?.value || 0
+    if (first === 0) return 0
+    return (last - first) / first
+  }, [points])
+
+  const isPositive = portfolioReturn >= 0
+  const strokeColor = isPositive ? '#10b981' : '#ef4444'
+  const gradientId = `pfColor-${isPositive ? 'up' : 'down'}`
+
   const ranges = [
     { label: '1H', value: '1h' },
     { label: '1D', value: '1d' },
@@ -167,9 +180,13 @@ export function PortfolioChart() {
               margin={{ top: 10, right: 8, left: 0, bottom: 0 }}
             >
               <defs>
-                <linearGradient id="pfColor" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="pfColor-up" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
                   <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="pfColor-down" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis 
@@ -208,10 +225,10 @@ export function PortfolioChart() {
               <Area 
                 type="monotoneX" 
                 dataKey="value"
-                stroke="#10b981"
+                stroke={strokeColor}
                 strokeWidth={2}
                 fillOpacity={1}
-                fill="url(#pfColor)"
+                fill={`url(#${gradientId})`}
                 dot={false}
                 isAnimationActive
                 animationDuration={350}

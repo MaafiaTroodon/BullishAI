@@ -31,10 +31,11 @@ export function HoldingSparkline({ symbol, width = 120, height = 40 }: Sparkline
       return []
     }
     // Take last 30 days for sparkline
+    // Use price per share, not total value, to show actual stock movement
     return data.series.slice(-30).map((p: any) => ({
       t: p.t,
-      value: p.value || 0
-    }))
+      price: p.price || 0
+    })).filter((p: any) => p.price > 0)
   }, [data])
 
   if (points.length === 0) {
@@ -45,10 +46,10 @@ export function HoldingSparkline({ symbol, width = 120, height = 40 }: Sparkline
     )
   }
 
-  const min = Math.min(...points.map(p => p.value))
-  const max = Math.max(...points.map(p => p.value))
-  const range = max - min || 1
-  const isPositive = points[points.length - 1]?.value >= points[0]?.value
+  // Calculate trend based on price movement (not value)
+  const firstPrice = points[0]?.price || 0
+  const lastPrice = points[points.length - 1]?.price || 0
+  const isPositive = lastPrice >= firstPrice
 
   return (
     <div style={{ width, height }}>
@@ -56,7 +57,7 @@ export function HoldingSparkline({ symbol, width = 120, height = 40 }: Sparkline
         <LineChart data={points} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
           <Line
             type="monotone"
-            dataKey="value"
+            dataKey="price"
             stroke={isPositive ? '#10b981' : '#ef4444'}
             strokeWidth={1.5}
             dot={false}
