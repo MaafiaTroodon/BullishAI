@@ -236,6 +236,7 @@ export function PortfolioChart() {
                   const moneyInvestedToDate = data?.moneyInvestedToDate || 0 // Lifetime net deposits
                   const deltaFromStart$ = data?.deltaFromStart$ || 0
                   const deltaFromStartPct = data?.deltaFromStartPct || 0
+                  const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
                   
                   // Get range label
                   const rangeLabels: Record<string, string> = {
@@ -261,7 +262,7 @@ export function PortfolioChart() {
                         </div>
                         <div className="text-sm">
                           <span className="text-slate-400">Change ({rangeLabel}): </span>
-                          {deltaFromStartPct !== 0 ? (
+                          {startPortfolioAbs > 0 && deltaFromStartPct !== 0 ? (
                             <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                               {deltaFromStart$ >= 0 ? '+' : ''}${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({deltaFromStartPct >= 0 ? '+' : ''}{deltaFromStartPct.toFixed(2)}%)
                             </span>
