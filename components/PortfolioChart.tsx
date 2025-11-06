@@ -47,6 +47,45 @@ export function PortfolioChart() {
       mutatePf()
       mutateTimeseries()
     }
+    
+    // Sync transactions from localStorage on mount
+    async function syncData() {
+      try {
+        const txRaw = localStorage.getItem('bullish_demo_transactions')
+        const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
+        const positionsRaw = localStorage.getItem('bullish_demo_pf_positions')
+        
+        const syncData: any = {}
+        if (txRaw) {
+          try {
+            syncData.syncTransactions = JSON.parse(txRaw)
+          } catch {}
+        }
+        if (walletTxRaw) {
+          try {
+            syncData.syncWalletTransactions = JSON.parse(walletTxRaw)
+          } catch {}
+        }
+        if (positionsRaw) {
+          try {
+            syncData.syncPositions = Object.values(JSON.parse(positionsRaw))
+          } catch {}
+        }
+        
+        if (Object.keys(syncData).length > 0) {
+          await fetch('/api/portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(syncData)
+          })
+          mutatePf()
+          mutateTimeseries()
+        }
+      } catch {}
+    }
+    
+    syncData()
+    
     window.addEventListener('portfolioUpdated', onUpd as any)
     window.addEventListener('walletUpdated', onUpd as any)
     return () => {
@@ -86,6 +125,8 @@ export function PortfolioChart() {
       return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     } else if (chartRange === '3d' || chartRange === '1week') {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
+    } else if (chartRange === 'ALL') {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     } else {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     }
