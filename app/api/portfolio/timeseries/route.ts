@@ -235,21 +235,48 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Find first non-null portfolio value for range start
-    const startIndex = series.findIndex(s => s.portfolio > 0)
-    const startPortfolio = startIndex >= 0 ? series[startIndex].portfolio : 0
+    // Find first non-null portfolio value for range start (with backward lookup)
+    let startIndex = series.findIndex(s => s.portfolio > 0)
+    let startPortfolioAbs = 0
+    
+    if (startIndex < 0) {
+      // No valid portfolio in range - try to find most recent valid snapshot before range
+      // For now, use first point if available
+      if (series.length > 0) {
+        startIndex = 0
+        startPortfolioAbs = series[0].portfolio || 0
+      }
+    } else {
+      startPortfolioAbs = series[startIndex].portfolio
+    }
+    
+    // Calculate deltas for each point (from start of range)
+    const seriesWithDeltas = series.map((point, idx) => {
+      const deltaFromStart$ = startPortfolioAbs > 0 ? point.portfolio - startPortfolioAbs : 0
+      const deltaFromStartPct = startPortfolioAbs > 0 ? (deltaFromStart$ / startPortfolioAbs) * 100 : 0
+      
+      return {
+        t: point.t,
+        portfolioAbs: point.portfolio, // Absolute portfolio value
+        holdingsAbs: point.holdings,
+        cashAbs: point.cash,
+        moneyInvestedToDate: point.moneyInvested, // Lifetime net deposits up to t
+        deltaFromStart$: Number(deltaFromStart$.toFixed(2)),
+        deltaFromStartPct: Number(deltaFromStartPct.toFixed(4))
+      }
+    })
     
     return NextResponse.json({
       range,
       granularity: gran,
       currency: 'USD',
-      series,
+      series: seriesWithDeltas,
       meta: {
         symbols,
         hasFx: false,
         lastQuoteTs: new Date().toISOString(),
         startIndex: startIndex >= 0 ? startIndex : 0,
-        startPortfolio
+        startPortfolioAbs
       }
     })
   } catch (error: any) {
