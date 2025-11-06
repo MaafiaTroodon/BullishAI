@@ -304,8 +304,8 @@ export function PortfolioChart() {
                           </span>
                         </div>
                         <div className="text-sm text-white">
-                          <span className="text-slate-400">Money invested: </span>
-                          <span className="font-semibold">${costBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-slate-400">Money invested to date: </span>
+                          <span className="font-semibold">${moneyInvested.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
