@@ -154,6 +154,7 @@ export async function GET(req: NextRequest) {
     const holdings: Record<string, { shares: number; avgCost: number; costBasis: number }> = {}
     let cashBalance = 0
     let totalDeposits = 0
+    let netDepositsInStocks = 0 // Track total money invested in stocks (buy transactions only)
     
     const series: Array<{
       t: number
@@ -162,6 +163,7 @@ export async function GET(req: NextRequest) {
       cash: number
       costBasis: number
       unrealized: number
+      netDepositsInStocks: number
     }> = []
     
     let eventIndex = 0
@@ -197,6 +199,7 @@ export async function GET(req: NextRequest) {
               costBasis: newShares * newAvg
             }
             cashBalance -= qty * price
+            netDepositsInStocks += qty * price // Track money invested in stocks
           } else if (event.action === 'sell') {
             const qty = Math.min(event.quantity || 0, holdings[sym].shares)
             holdings[sym].shares -= qty
@@ -231,7 +234,8 @@ export async function GET(req: NextRequest) {
         holdings: Number(holdingsValue.toFixed(2)),
         cash: Number(cashBalance.toFixed(2)),
         costBasis: Number(costBasis.toFixed(2)),
-        unrealized: Number(unrealized.toFixed(2))
+        unrealized: Number(unrealized.toFixed(2)),
+        netDepositsInStocks: Number(netDepositsInStocks.toFixed(2))
       })
     }
     

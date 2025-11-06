@@ -103,9 +103,31 @@ export function PortfolioChart() {
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
       value: p.portfolio || 0,
-      costBasis: p.costBasis || 0
+      costBasis: p.costBasis || 0,
+      netDepositsInStocks: p.netDepositsInStocks || 0
     }))
   }, [timeseriesData])
+
+  // Calculate daily changes for tooltip
+  const getDailyChange = useMemo(() => {
+    // Group points by day and calculate change from start of day
+    const dayStarts = new Map<number, number>()
+    const changes = new Map<number, { change: number; startValue: number }>()
+    
+    for (const point of points) {
+      const date = new Date(point.t)
+      const dayKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+      
+      if (!dayStarts.has(dayKey)) {
+        dayStarts.set(dayKey, point.value)
+      }
+      
+      const dayStart = dayStarts.get(dayKey) || 0
+      changes.set(point.t, { change: point.value - dayStart, startValue: dayStart })
+    }
+    
+    return (timestamp: number) => changes.get(timestamp) || { change: 0, startValue: 0 }
+  }, [points])
 
   // Calculate portfolio return to determine color
   const portfolioReturn = useMemo(() => {
@@ -211,23 +233,45 @@ export function PortfolioChart() {
                 style={{ fontSize: '12px' }}
               />
               <Tooltip 
-                formatter={(v: any, name: string) => {
-                  if (name === 'Portfolio Value') {
-                    return [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']
-                  }
-                  return [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Cost Basis']
+                content={({ active, payload, label }: any) => {
+                  if (!active || !payload || !payload.length) return null
+                  
+                  const data = payload[0]?.payload
+                  const timestamp = label || data?.t
+                  const date = new Date(timestamp)
+                  const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+                  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  const portfolioValue = data?.value || 0
+                  const netDepositsInStocks = data?.netDepositsInStocks || 0
+                  const dailyChange = getDailyChange(timestamp)
+                  const dailyChangePct = portfolioValue > 0 ? (dailyChange / portfolioValue) * 100 : 0
+                  
+                  return (
+                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
+                      <div className="text-xs text-slate-400 mb-2">{dayName}, {dateStr}</div>
+                      <div className="space-y-1">
+                        <div className="text-sm text-white">
+                          <span className="text-slate-400">Portfolio value: </span>
+                          <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-slate-400">Change today: </span>
+                          <span className={`font-semibold ${dailyChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {dailyChange >= 0 ? '+' : ''}${dailyChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({dailyChangePct >= 0 ? '+' : ''}{dailyChangePct.toFixed(2)}%)
+                          </span>
+                        </div>
+                        <div className="text-sm text-white">
+                          <span className="text-slate-400">Net deposits in stocks: </span>
+                          <span className="font-semibold">${netDepositsInStocks.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-700">
+                          Cost basis: ${(data?.costBasis || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    </div>
+                  )
                 }}
-                labelFormatter={(l: any) => {
-                  const date = new Date(l)
-                  return date.toLocaleString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: true 
-                  })
-                }}
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0', borderRadius: '8px' }}
+                cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '5 5' }}
               />
               <Area 
                 type="monotoneX" 

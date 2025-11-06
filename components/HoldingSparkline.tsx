@@ -21,18 +21,18 @@ type SparklineProps = {
 
 export function HoldingSparkline({ symbol, width = 120, height = 40 }: SparklineProps) {
   const { data } = useSWR(
-    `/api/holdings/${symbol}/timeseries?range=1M&gran=1d`,
+    `/api/holdings/${symbol}/timeseries?range=1d&gran=5m`,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 15000 } // Update every 15 seconds for real-time during market hours
   )
 
   const points = useMemo(() => {
     if (!data?.series || !Array.isArray(data.series)) {
       return []
     }
-    // Take last 30 days for sparkline
+    // Use all available points for 1 day (should be 5-minute intervals)
     // Use price per share, not total value, to show actual stock movement
-    return data.series.slice(-30).map((p: any) => ({
+    return data.series.map((p: any) => ({
       t: p.t,
       price: p.price || 0
     })).filter((p: any) => p.price > 0)
