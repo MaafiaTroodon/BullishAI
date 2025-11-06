@@ -17,6 +17,9 @@ const fetcher = async (url: string) => {
 
 export function PortfolioSummary() {
   const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 1000 })
+  // Get latest snapshot from timeseries API for header cards
+  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=1d&gran=1d', fetcher, { refreshInterval: 1000 })
+  
   const [localItems, setLocalItems] = useState<any[]>([])
   // Flash animation on value change
   const [flash, setFlash] = useState<'up'|'down'|null>(null)
@@ -93,8 +96,27 @@ export function PortfolioSummary() {
   // Filter out zero-share positions
   const activePositions = enrichedItems.filter((p: any) => (p.totalShares || 0) > 0)
 
-  // Calculate portfolio metrics
+  // Calculate portfolio metrics from latest snapshot (prefer timeseries, fallback to positions)
   const metrics = useMemo(() => {
+    // Use latest snapshot from timeseries API if available
+    if (timeseriesData?.series && timeseriesData.series.length > 0) {
+      const latest = timeseriesData.series[timeseriesData.series.length - 1]
+      const portfolioAbs = latest.portfolioAbs || 0
+      const netDepositsAbs = latest.netDepositsAbs || 0
+      const totalReturn$ = portfolioAbs - netDepositsAbs
+      const totalReturnPercent = netDepositsAbs > 0 ? (totalReturn$ / netDepositsAbs) * 100 : 0
+      
+      return {
+        totalValue: Number(portfolioAbs.toFixed(2)),
+        totalCost: Number(netDepositsAbs.toFixed(2)),
+        totalReturn: Number(totalReturn$.toFixed(2)),
+        totalReturnPercent: Number(totalReturnPercent.toFixed(2)),
+        holdingCount: activePositions.length,
+        isPositive: totalReturn$ >= 0
+      }
+    }
+    
+    // Fallback to position-based calculation
     let totalValue = 0
     let totalCost = 0
     let realizedPnl = 0
@@ -129,7 +151,7 @@ export function PortfolioSummary() {
       holdingCount,
       isPositive: totalReturn >= 0
     }
-  }, [JSON.stringify(activePositions)])
+  }, [timeseriesData, JSON.stringify(activePositions)])
 
   // Flash animation effect
   useEffect(() => {
