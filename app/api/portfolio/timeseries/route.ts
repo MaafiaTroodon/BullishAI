@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic'
 function getUserId() { return 'demo-user' }
 
 // Helper to get historical prices for a symbol
-async function getHistoricalPrices(symbol: string, range: string, startTime: number, endTime: number): Promise<Array<{t: number, c: number}>> {
+async function getHistoricalPrices(symbol: string, range: string, startTime: number, endTime: number, baseUrl: string): Promise<Array<{t: number, c: number}>> {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`, { cache: 'no-store' })
+    const res = await fetch(`${baseUrl}/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`, { cache: 'no-store' })
     if (!res.ok) return []
     const data = await res.json()
     if (!data?.data || !Array.isArray(data.data)) return []
@@ -58,6 +58,11 @@ export async function GET(req: NextRequest) {
     const range = url.searchParams.get('range') || '1M'
     const gran = url.searchParams.get('gran') || '1d'
     
+    // Determine base URL
+    const protocol = req.headers.get('x-forwarded-proto') || 'http'
+    const host = req.headers.get('host') || 'localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
+    
     // Get all transactions
     let transactions = listTransactions(userId)
     let walletTx = listWalletTransactions(userId)
@@ -66,6 +71,21 @@ export async function GET(req: NextRequest) {
     if (transactions.length === 0 && typeof window === 'undefined') {
       // Server-side: transactions should be in memory store
       // But we can't access localStorage here, so rely on sync from client
+    }
+    
+    // If no transactions at all, return empty series
+    if (transactions.length === 0 && walletTx.length === 0) {
+      return NextResponse.json({
+        range,
+        granularity: gran,
+        currency: 'USD',
+        series: [],
+        meta: {
+          symbols: [],
+          hasFx: false,
+          lastQuoteTs: new Date().toISOString()
+        }
+      })
     }
     
     // Determine time range
@@ -115,7 +135,7 @@ export async function GET(req: NextRequest) {
     // Fetch historical prices for all symbols
     const symbolPrices: Record<string, Array<{t: number, c: number}>> = {}
     await Promise.all(symbols.map(async (sym) => {
-      symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now)
+      symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now, baseUrl)
     }))
     
     // Forward fill prices for each symbol

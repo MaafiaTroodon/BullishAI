@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic'
 
 function getUserId() { return 'demo-user' }
 
-async function getHistoricalPrices(symbol: string, range: string, startTime: number, endTime: number): Promise<Array<{t: number, c: number}>> {
+async function getHistoricalPrices(symbol: string, range: string, startTime: number, endTime: number, baseUrl: string): Promise<Array<{t: number, c: number}>> {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`, { cache: 'no-store' })
+    const res = await fetch(`${baseUrl}/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`, { cache: 'no-store' })
     if (!res.ok) return []
     const data = await res.json()
     if (!data?.data || !Array.isArray(data.data)) return []
@@ -56,6 +56,15 @@ export async function GET(req: NextRequest) {
     const symbol = symbolIndex >= 0 && pathParts[symbolIndex + 1] ? pathParts[symbolIndex + 1].toUpperCase() : ''
     const range = url.searchParams.get('range') || '1M'
     const gran = url.searchParams.get('gran') || '1d'
+    
+    if (!symbol) {
+      return NextResponse.json({ error: 'symbol_required' }, { status: 400 })
+    }
+    
+    // Determine base URL
+    const protocol = req.headers.get('x-forwarded-proto') || 'http'
+    const host = req.headers.get('host') || 'localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
     
     const transactions = listTransactions(userId).filter(t => t.symbol.toUpperCase() === symbol)
     
