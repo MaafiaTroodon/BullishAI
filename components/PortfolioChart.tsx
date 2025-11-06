@@ -120,15 +120,17 @@ export function PortfolioChart() {
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   const gradientId = `pfColor-${isPositive ? 'up' : 'down'}`
   
-  // Calculate Y-axis domain from absolute portfolio values
+  // Calculate Y-axis domain from absolute portfolio values (with padding)
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
     const values = points.map(p => p.value).filter(v => v > 0)
-    if (values.length === 0) return [0, 100]
-    const min = Math.min(...values)
-    const max = Math.max(...values)
+    const netDepositValues = points.map(p => p.netDeposits).filter(v => v > 0)
+    const allValues = [...values, ...netDepositValues]
+    if (allValues.length === 0) return [0, 100]
+    const min = Math.min(...allValues)
+    const max = Math.max(...allValues)
     const range = max - min || max || 1
-    const padding = range * 0.02
+    const padding = range * 0.06 // 6% padding
     return [Math.max(0, min - padding), max + padding]
   }, [points])
 
@@ -233,7 +235,7 @@ export function PortfolioChart() {
                     hour12: true
                   })
                   const portfolioValue = data?.value || 0 // portfolioAbs
-                  const moneyInvestedToDate = data?.moneyInvestedToDate || 0 // Lifetime net deposits
+                  const netDepositsToDate = data?.netDeposits || 0 // Lifetime net deposits
                   const deltaFromStart$ = data?.deltaFromStart$ || 0
                   const deltaFromStartPct = data?.deltaFromStartPct || 0
                   const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
@@ -273,8 +275,8 @@ export function PortfolioChart() {
                           )}
                         </div>
                         <div className="text-sm text-white">
-                          <span className="text-slate-400">Money invested to date: </span>
-                          <span className="font-semibold">${moneyInvestedToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-slate-400">Net deposits (to date): </span>
+                          <span className="font-semibold">${netDepositsToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
@@ -291,11 +293,12 @@ export function PortfolioChart() {
                 fill={`url(#${gradientId})`}
                 dot={false}
                 isAnimationActive
-                animationDuration={350}
+                animationDuration={300}
+                style={{ transition: 'stroke 300ms ease-in-out' }}
               />
               <Line
                 type="monotoneX"
-                dataKey="costBasis"
+                dataKey="netDeposits"
                 stroke="#64748b"
                 strokeWidth={1.5}
                 strokeDasharray="5 5"

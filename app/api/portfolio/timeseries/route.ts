@@ -273,7 +273,7 @@ export async function GET(req: NextRequest) {
         portfolioAbs: point.portfolio, // Absolute portfolio value
         holdingsAbs: point.holdings,
         cashAbs: point.cash,
-        moneyInvestedToDate: point.moneyInvested, // Lifetime net deposits up to t
+        netDepositsAbs: point.moneyInvested, // Lifetime net deposits (DEPOSIT - WITHDRAW) up to t
         deltaFromStart$: Number(deltaFromStart$.toFixed(2)),
         deltaFromStartPct: Number(deltaFromStartPct.toFixed(4))
       }
