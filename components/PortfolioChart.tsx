@@ -310,7 +310,7 @@ export function PortfolioChart() {
                 fillOpacity={1}
                 fill={`url(#${gradientId})`}
                 dot={false}
-                isAnimationActive
+                isAnimationActive={typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches}
                 animationDuration={300}
                 style={{ transition: 'stroke 300ms ease-in-out' }}
               />
@@ -322,6 +322,7 @@ export function PortfolioChart() {
                 strokeDasharray="5 5"
                 dot={false}
                 isAnimationActive={false}
+                name="Net Deposits"
               />
             </AreaChart>
           </ResponsiveContainer>
