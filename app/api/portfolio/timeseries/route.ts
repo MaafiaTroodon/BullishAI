@@ -37,12 +37,26 @@ function forwardFillPrices(prices: Array<{t: number, c: number}>, timestamps: nu
   const priceMap = new Map<number, number>()
   let lastPrice = 0
   
+  // Sort prices by timestamp
+  const sortedPrices = [...prices].sort((a, b) => a.t - b.t)
+  
   for (const ts of timestamps) {
     // Find closest price at or before this timestamp
-    const priceAt = prices.find(p => p.t <= ts && p.c > 0)
+    let priceAt: {t: number, c: number} | undefined
+    
+    // Binary search for efficiency (or linear search for small arrays)
+    for (let i = sortedPrices.length - 1; i >= 0; i--) {
+      if (sortedPrices[i].t <= ts && sortedPrices[i].c > 0) {
+        priceAt = sortedPrices[i]
+        break
+      }
+    }
+    
     if (priceAt) {
       lastPrice = priceAt.c
     }
+    
+    // Only set price if we have a valid lastPrice
     if (lastPrice > 0) {
       priceMap.set(ts, lastPrice)
     }
@@ -138,6 +152,26 @@ export async function GET(req: NextRequest) {
       symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now, baseUrl)
     }))
     
+    // Fetch current quotes for latest point accuracy
+    const currentQuotes: Record<string, number> = {}
+    if (symbols.length > 0) {
+      try {
+        const quoteRes = await fetch(`${baseUrl}/api/quotes?symbols=${symbols.join(',')}`, { cache: 'no-store' })
+        if (quoteRes.ok) {
+          const quoteData = await quoteRes.json()
+          if (quoteData.quotes && Array.isArray(quoteData.quotes)) {
+            quoteData.quotes.forEach((q: any) => {
+              if (q.symbol && q.price) {
+                currentQuotes[q.symbol.toUpperCase()] = q.price
+              }
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching current quotes:', err)
+      }
+    }
+    
     // Forward fill prices for each symbol
     const symbolPriceMaps: Record<string, Map<number, number>> = {}
     for (const sym of symbols) {
@@ -231,7 +265,21 @@ export async function GET(req: NextRequest) {
       
       for (const [sym, holding] of Object.entries(holdings)) {
         const priceMap = symbolPriceMaps[sym]
-        const price = priceMap?.get(bucket) || holding.avgCost || 0
+        let price = 0
+        
+        // For the most recent bucket (now), use current quote if available
+        if (bucket === now || Math.abs(bucket - now) < interval) {
+          price = currentQuotes[sym] || priceMap?.get(bucket) || 0
+        } else {
+          // For older buckets, use historical price
+          price = priceMap?.get(bucket) || 0
+        }
+        
+        // Only use avgCost as absolute last resort (should rarely happen)
+        if (price === 0 && holding.avgCost > 0) {
+          price = holding.avgCost
+        }
+        
         holdingsValue += holding.shares * price
         costBasis += holding.costBasis
       }
