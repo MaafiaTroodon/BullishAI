@@ -104,11 +104,27 @@ export function PortfolioChart() {
       t: p.t,
       value: p.portfolio || 0,
       costBasis: p.costBasis || 0,
-      netDepositsInStocks: p.netDepositsInStocks || 0
+      holdings: p.holdings || 0 // Current market value of stock holdings
     }))
   }, [timeseriesData])
 
-  // Calculate daily changes for tooltip
+  // Calculate change for selected time range
+  const getRangeChange = useMemo(() => {
+    if (points.length < 2) return { change: 0, changePct: 0, startValue: 0 }
+    
+    // Get the first and last points in the current range
+    const first = points[0]
+    const last = points[points.length - 1]
+    
+    const startValue = first?.value || 0
+    const endValue = last?.value || 0
+    const change = endValue - startValue
+    const changePct = startValue > 0 ? (change / startValue) * 100 : 0
+    
+    return { change, changePct, startValue }
+  }, [points, chartRange])
+
+  // Calculate daily changes for tooltip (for reference, but we'll use range change)
   const getDailyChange = useMemo(() => {
     // Group points by day and calculate change from start of day
     const dayStarts = new Map<number, number>()
@@ -242,7 +258,7 @@ export function PortfolioChart() {
                   const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
                   const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                   const portfolioValue = data?.value || 0
-                  const netDepositsInStocks = data?.netDepositsInStocks || 0
+                  const holdingsValue = data?.holdings || 0 // Current market value of stock holdings
                   const dailyChangeData = getDailyChange(timestamp)
                   const dailyChange = dailyChangeData.change
                   const dailyChangePct = dailyChangeData.startValue > 0 ? (dailyChange / dailyChangeData.startValue) * 100 : 0
@@ -262,8 +278,8 @@ export function PortfolioChart() {
                           </span>
                         </div>
                         <div className="text-sm text-white">
-                          <span className="text-slate-400">Net deposits in stocks: </span>
-                          <span className="font-semibold">${netDepositsInStocks.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-slate-400">Holdings value: </span>
+                          <span className="font-semibold">${holdingsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-700">
                           Cost basis: ${(data?.costBasis || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
