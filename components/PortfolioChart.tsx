@@ -234,8 +234,13 @@ export function PortfolioChart() {
                     minute: '2-digit',
                     hour12: true
                   })
-                  const portfolioValue = data?.value || 0 // portfolioAbs
-                  const netDepositsToDate = data?.netDeposits || 0 // Lifetime net deposits
+                  
+                  // Get values from payload (both lines)
+                  const portfolioPayload = payload.find((p: any) => p.dataKey === 'value')
+                  const netDepositsPayload = payload.find((p: any) => p.dataKey === 'netDeposits')
+                  
+                  const portfolioValue = portfolioPayload?.value || data?.value || 0 // portfolioAbs
+                  const netDepositsToDate = netDepositsPayload?.value || data?.netDeposits || 0 // Lifetime net deposits
                   const deltaFromStart$ = data?.deltaFromStart$ || 0
                   const deltaFromStartPct = data?.deltaFromStartPct || 0
                   const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
