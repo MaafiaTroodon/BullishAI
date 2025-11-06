@@ -178,12 +178,6 @@ export async function GET(req: NextRequest) {
           } else if (event.action === 'withdraw') {
             cashBalance -= event.amount || 0
           }
-        } else if (event.type === 'trade') {
-          const sym = event.symbol.toUpperCase()
-          if (!holdings[sym]) {
-            holdings[sym] = { shares: 0, avgCost: 0, costBasis: 0 }
-          }
-          
         if (event.type === 'wallet') {
           if (event.action === 'deposit') {
             cashBalance += event.amount || 0
