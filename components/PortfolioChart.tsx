@@ -367,5 +367,3 @@ export function PortfolioChart() {
     </div>
   )
 }
-
-
