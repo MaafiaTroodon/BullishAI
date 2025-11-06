@@ -103,7 +103,7 @@ export function PortfolioSummarySandbox() {
   // Calculate portfolio metrics from latest snapshot (prefer timeseries, fallback to positions)
   const metrics = useMemo(() => {
     // Use latest snapshot from timeseries API if available
-    if (timeseriesData?.series && timeseriesData.series.length > 0) {
+    if (timeseriesData?.series && Array.isArray(timeseriesData.series) && timeseriesData.series.length > 0) {
       const latest = timeseriesData.series[timeseriesData.series.length - 1]
       const portfolioAbs = latest.portfolioAbs || 0
       const netDepositsAbs = latest.netDepositsAbs || 0
