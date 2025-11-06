@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance } from '@/lib/portfolio'
+import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance, TransactionSchema, syncTransactions, syncWalletTransactions } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -114,6 +114,22 @@ export async function POST(req: NextRequest) {
       if (validated.length > 0) {
         mergePositions(userId, validated)
       }
+    }
+
+    // Optional: sync transactions from client localStorage
+    if (Array.isArray(body?.syncTransactions)) {
+      const validated: any[] = []
+      for (const tx of body.syncTransactions) {
+        try { validated.push(TransactionSchema.parse(tx)) } catch {}
+      }
+      if (validated.length > 0) {
+        syncTransactions(userId, validated)
+      }
+    }
+
+    // Optional: sync wallet transactions from client localStorage
+    if (Array.isArray(body?.syncWalletTransactions)) {
+      syncWalletTransactions(userId, body.syncWalletTransactions)
     }
 
     // Process single trade

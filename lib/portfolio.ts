@@ -164,4 +164,32 @@ export function listWalletTransactions(userId: string) {
   return (getPf(userId).walletTransactions || []).slice().sort((a,b)=>a.timestamp-b.timestamp)
 }
 
+// Sync transactions from client (for persistence)
+export function syncTransactions(userId: string, transactions: Transaction[]): void {
+  const pf = getPf(userId)
+  // Merge transactions, avoiding duplicates by id
+  const existingIds = new Set(pf.transactions.map(t => t.id))
+  for (const tx of transactions) {
+    if (!existingIds.has(tx.id)) {
+      pf.transactions.push(tx)
+    }
+  }
+  // Sort by timestamp
+  pf.transactions.sort((a, b) => a.timestamp - b.timestamp)
+}
+
+// Sync wallet transactions from client
+export function syncWalletTransactions(userId: string, walletTx: Array<{ action: 'deposit'|'withdraw'; amount: number; timestamp: number }>): void {
+  const pf = getPf(userId)
+  if (!pf.walletTransactions) pf.walletTransactions = []
+  const existingIds = new Set(pf.walletTransactions.map((w: any) => `${w.timestamp}-${w.amount}-${w.action}`))
+  for (const wt of walletTx) {
+    const id = `${wt.timestamp}-${wt.amount}-${wt.action}`
+    if (!existingIds.has(id)) {
+      pf.walletTransactions.push(wt)
+    }
+  }
+  pf.walletTransactions.sort((a, b) => a.timestamp - b.timestamp)
+}
+
 

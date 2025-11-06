@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
     buckets.push(now)
     
     // Fetch prices
-    const prices = await getHistoricalPrices(symbol, range, startTime, now)
+    const prices = await getHistoricalPrices(symbol, range, startTime, now, baseUrl)
     const priceMap = forwardFillPrices(prices, buckets)
     
     // Process transactions to build position over time
