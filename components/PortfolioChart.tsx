@@ -102,71 +102,35 @@ export function PortfolioChart() {
     
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
-      value: p.portfolio || 0,
-      costBasis: p.costBasis || 0,
-      holdings: p.holdings || 0,
-      cash: p.cash || 0,
-      moneyInvested: p.moneyInvested || 0 // Net deposits to date
+      value: p.portfolioAbs || 0, // Use absolute portfolio value for chart
+      deltaFromStart$: p.deltaFromStart$ || 0,
+      deltaFromStartPct: p.deltaFromStartPct || 0,
+      moneyInvestedToDate: p.moneyInvestedToDate || 0 // Lifetime net deposits
     }))
   }, [timeseriesData])
 
-  // Calculate change for selected time range using API meta
-  const getRangeChange = useMemo(() => {
-    const startPortfolio = timeseriesData?.meta?.startPortfolio || 0
-    const startIndex = timeseriesData?.meta?.startIndex || 0
-    
-    if (points.length === 0 || startPortfolio === 0) {
-      return { change: 0, changePct: 0, startValue: 0 }
-    }
-    
-    // Use the start portfolio value from API meta
-    return { 
-      change: 0, // Will be calculated per hover point
-      changePct: 0,
-      startValue: startPortfolio
-    }
-  }, [points, timeseriesData, chartRange])
-
-  // Calculate daily changes for tooltip (for reference, but we'll use range change)
-  const getDailyChange = useMemo(() => {
-    // Group points by day and calculate change from start of day
-    const dayStarts = new Map<number, number>()
-    const changes = new Map<number, { change: number; startValue: number }>()
-    
-    for (const point of points) {
-      const date = new Date(point.t)
-      const dayKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-      
-      if (!dayStarts.has(dayKey)) {
-        dayStarts.set(dayKey, point.value)
-      }
-      
-      const dayStart = dayStarts.get(dayKey) || 0
-      changes.set(point.t, { change: point.value - dayStart, startValue: dayStart })
-    }
-    
-    return (timestamp: number) => changes.get(timestamp) || { change: 0, startValue: 0 }
-  }, [points])
-
-  // Calculate portfolio return to determine color
+  // Calculate portfolio return to determine color (based on delta sign)
   const portfolioReturn = useMemo(() => {
-    if (points.length < 2) return 0
-    const first = points[0]?.value || 0
-    const last = points[points.length - 1]?.value || 0
-    
-    // Simple comparison: if last > first, it's positive (green)
-    // If last < first, it's negative (red)
-    if (Math.abs(first) < 0.01) {
-      // Starting from near zero - check if we're above or below zero
-      return last >= 0 ? 0.01 : -0.01
-    }
-    
-    return (last - first) / Math.abs(first)
+    if (points.length === 0) return 0
+    const lastPoint = points[points.length - 1]
+    return lastPoint.deltaFromStartPct || 0
   }, [points])
 
   const isPositive = portfolioReturn >= 0
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   const gradientId = `pfColor-${isPositive ? 'up' : 'down'}`
+  
+  // Calculate Y-axis domain from absolute portfolio values
+  const yDomain = useMemo(() => {
+    if (points.length === 0) return [0, 100]
+    const values = points.map(p => p.value).filter(v => v > 0)
+    if (values.length === 0) return [0, 100]
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const range = max - min || max || 1
+    const padding = range * 0.02
+    return [Math.max(0, min - padding), max + padding]
+  }, [points])
 
   const ranges = [
     { label: '1H', value: '1h' },
@@ -250,6 +214,7 @@ export function PortfolioChart() {
                 stroke="#94a3b8"
                 tickFormatter={(v) => `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 style={{ fontSize: '12px' }}
+                domain={yDomain}
               />
               <Tooltip 
                 content={({ active, payload, label }: any) => {
@@ -267,13 +232,10 @@ export function PortfolioChart() {
                     minute: '2-digit',
                     hour12: true
                   })
-                  const portfolioValue = data?.value || 0
-                  const moneyInvested = data?.moneyInvested || 0 // Net deposits to date
-                  
-                  // Calculate change from start of selected range to this point
-                  const startPortfolio = timeseriesData?.meta?.startPortfolio || 0
-                  const rangeChange = portfolioValue - startPortfolio
-                  const rangeChangePct = startPortfolio > 0 ? (rangeChange / startPortfolio) * 100 : 0
+                  const portfolioValue = data?.value || 0 // portfolioAbs
+                  const moneyInvestedToDate = data?.moneyInvestedToDate || 0 // Lifetime net deposits
+                  const deltaFromStart$ = data?.deltaFromStart$ || 0
+                  const deltaFromStartPct = data?.deltaFromStartPct || 0
                   
                   // Get range label
                   const rangeLabels: Record<string, string> = {
@@ -299,19 +261,19 @@ export function PortfolioChart() {
                         </div>
                         <div className="text-sm">
                           <span className="text-slate-400">Change ({rangeLabel}): </span>
-                          {startPortfolio > 0 ? (
-                            <span className={`font-semibold ${rangeChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {rangeChange >= 0 ? '+' : ''}${rangeChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({rangeChangePct >= 0 ? '+' : ''}{rangeChangePct.toFixed(2)}%)
+                          {deltaFromStartPct !== 0 ? (
+                            <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {deltaFromStart$ >= 0 ? '+' : ''}${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({deltaFromStartPct >= 0 ? '+' : ''}{deltaFromStartPct.toFixed(2)}%)
                             </span>
                           ) : (
                             <span className="font-semibold text-slate-400">
-                              ${rangeChange.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
+                              ${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
                             </span>
                           )}
                         </div>
                         <div className="text-sm text-white">
                           <span className="text-slate-400">Money invested to date: </span>
-                          <span className="font-semibold">${moneyInvested.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="font-semibold">${moneyInvestedToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
