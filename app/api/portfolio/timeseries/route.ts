@@ -176,25 +176,34 @@ export async function GET(req: NextRequest) {
         }
       })
       
-      return NextResponse.json({
-        range,
-        granularity: gran,
-        currency: 'USD',
-        series: series.map((p: any) => ({
+      // Calculate deltas from start
+      const startPortfolioValue = series.length > 0 ? series[0].portfolio : 0
+      const seriesWithDeltas = series.map((p: any) => {
+        const deltaFromStart$ = startPortfolioValue > 0 ? p.portfolio - startPortfolioValue : 0
+        const deltaFromStartPct = startPortfolioValue > 0 ? (deltaFromStart$ / startPortfolioValue) * 100 : 0
+        
+        return {
           t: p.t,
           portfolioAbs: p.portfolio,
           holdingsAbs: p.holdings,
           cashAbs: p.cash,
           netDepositsAbs: p.moneyInvested,
-          deltaFromStart$: 0,
-          deltaFromStartPct: 0
-        })),
+          deltaFromStart$: Number(deltaFromStart$.toFixed(2)),
+          deltaFromStartPct: Number(deltaFromStartPct.toFixed(4))
+        }
+      })
+      
+      return NextResponse.json({
+        range,
+        granularity: gran,
+        currency: 'USD',
+        series: seriesWithDeltas,
         meta: {
           symbols,
           hasFx: false,
           lastQuoteTs: new Date().toISOString(),
           startIndex: 0,
-          startPortfolioAbs: currentPortfolioValue
+          startPortfolioAbs: startPortfolioValue
         }
       })
     }
