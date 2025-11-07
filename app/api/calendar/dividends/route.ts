@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/calendar/dividends
- * Fetch dividends calendar from Finnhub (primary) or fallback providers
+ * Fetch dividends calendar from Finnhub (primary), Polygon.io (fallback), or EODHD (last fallback)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -26,8 +26,9 @@ export async function GET(req: NextRequest) {
     const from = startDate.toISOString().split('T')[0]
     const to = now.toISOString().split('T')[0]
 
-    // Try Finnhub first
     let items: any[] = []
+
+    // 1. Try Finnhub first
     try {
       const finnhubKey = process.env.FINNHUB_API_KEY
       if (finnhubKey) {
@@ -45,19 +46,64 @@ export async function GET(req: NextRequest) {
               yield: d.yield
             }))
           }
-        } else {
-          console.warn('Finnhub dividends API returned non-OK status:', res.status)
         }
-      } else {
-        console.warn('FINNHUB_API_KEY not set')
       }
     } catch (err) {
       console.error('Finnhub dividends error:', err)
     }
 
-    // If no items from Finnhub, try alternative approach or return empty with helpful message
+    // 2. Fallback to Polygon.io if no items from Finnhub
     if (items.length === 0) {
-      console.log('No dividends data from Finnhub, returning empty array')
+      try {
+        const polygonKey = process.env.POLYGON_API_KEY || 'EITKB2FpN6B8MKdYBnzo_m0ve3HMDFB1'
+        const polygonUrl = `https://api.polygon.io/v3/reference/dividends?ex_dividend_date.gte=${from}&ex_dividend_date.lte=${to}&order=ex_dividend_date&sort=asc&limit=1000&apiKey=${polygonKey}`
+        const res = await fetch(polygonUrl, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.results && Array.isArray(data.results)) {
+            items = data.results.map((d: any) => ({
+              symbol: d.ticker,
+              company: d.name || d.ticker,
+              date: d.ex_dividend_date || d.pay_date || d.record_date,
+              exDate: d.ex_dividend_date,
+              amount: d.cash_amount,
+              yield: d.yield ? (d.yield * 100).toFixed(2) : null
+            }))
+          }
+        }
+      } catch (err) {
+        console.error('Polygon.io dividends error:', err)
+      }
+    }
+
+    // 3. Last fallback to EODHD if still no items
+    if (items.length === 0) {
+      try {
+        const eodhdKey = process.env.EODHD_API_KEY
+        if (eodhdKey) {
+          const eodhdUrl = `https://eodhd.com/api/div/${from}/${to}?api_token=${eodhdKey}&fmt=json`
+          const res = await fetch(eodhdUrl, { cache: 'no-store' })
+          if (res.ok) {
+            const data = await res.json()
+            if (Array.isArray(data)) {
+              items = data.map((d: any) => ({
+                symbol: d.code?.split('.')[0] || d.symbol,
+                company: d.name || d.code?.split('.')[0],
+                date: d.date || d.exDate,
+                exDate: d.exDate || d.date,
+                amount: d.amount || d.value,
+                yield: d.yield
+              }))
+            }
+          }
+        }
+      } catch (err) {
+        console.error('EODHD dividends error:', err)
+      }
+    }
+
+    if (items.length === 0) {
+      console.log('No dividends data from any provider, returning empty array')
     }
 
     return NextResponse.json({

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/calendar/earnings
- * Fetch earnings calendar from Finnhub (primary) or fallback providers
+ * Fetch earnings calendar from Finnhub (primary) or Polygon.io (last fallback)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -50,6 +50,31 @@ export async function GET(req: NextRequest) {
       }
     } catch (err) {
       console.error('Finnhub earnings error:', err)
+    }
+
+    // Fallback to Polygon.io if no items from Finnhub (last resort since earnings is working fine)
+    if (items.length === 0) {
+      try {
+        const polygonKey = process.env.POLYGON_API_KEY || 'EITKB2FpN6B8MKdYBnzo_m0ve3HMDFB1'
+        const polygonUrl = `https://api.polygon.io/v3/reference/earnings?filing_date.gte=${from}&filing_date.lte=${to}&order=filing_date&sort=asc&limit=1000&apiKey=${polygonKey}`
+        const res = await fetch(polygonUrl, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.results && Array.isArray(data.results)) {
+            items = data.results.map((e: any) => ({
+              symbol: e.ticker,
+              company: e.name || e.ticker,
+              date: e.filing_date || e.period_ending,
+              estimate: e.eps?.estimate,
+              actual: e.eps?.actual,
+              revenueEstimate: e.revenue?.estimate,
+              revenueActual: e.revenue?.actual
+            }))
+          }
+        }
+      } catch (err) {
+        console.error('Polygon.io earnings error:', err)
+      }
     }
 
     return NextResponse.json({
