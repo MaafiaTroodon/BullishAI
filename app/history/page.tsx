@@ -29,8 +29,42 @@ export default function HistoryPage() {
   // Sync wallet transactions from localStorage on mount and when wallet tab is active
   useEffect(() => {
     async function syncWalletTransactions() {
+      // Always sync on mount, and when switching to wallet tab
       if (activeTab !== 'wallet') return
       
+      try {
+        const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
+        if (walletTxRaw) {
+          try {
+            const walletTx = JSON.parse(walletTxRaw)
+            if (Array.isArray(walletTx) && walletTx.length > 0) {
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+              const syncRes = await fetch(`${baseUrl}/api/portfolio`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ syncWalletTransactions: walletTx })
+              })
+              if (syncRes.ok) {
+                // Refetch wallet transactions after sync
+                mutateWallet()
+              }
+            }
+          } catch (err) {
+            console.error('Error syncing wallet transactions:', err)
+          }
+        }
+      } catch (err) {
+        console.error('Error reading wallet transactions from localStorage:', err)
+      }
+    }
+    
+    // Sync immediately when wallet tab is active
+    syncWalletTransactions()
+  }, [activeTab, mutateWallet])
+  
+  // Also sync on initial mount regardless of tab
+  useEffect(() => {
+    async function initialSync() {
       try {
         const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
         if (walletTxRaw) {
@@ -43,19 +77,18 @@ export default function HistoryPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ syncWalletTransactions: walletTx })
               })
-              mutateWallet()
             }
           } catch (err) {
-            console.error('Error syncing wallet transactions:', err)
+            console.error('Error in initial wallet sync:', err)
           }
         }
       } catch (err) {
-        console.error('Error reading wallet transactions from localStorage:', err)
+        console.error('Error reading wallet transactions on mount:', err)
       }
     }
     
-    syncWalletTransactions()
-  }, [activeTab, mutateWallet])
+    initialSync()
+  }, [])
 
   // Listen for wallet updates
   useEffect(() => {
