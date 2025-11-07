@@ -274,9 +274,12 @@ export function PortfolioChart() {
                   }) + ' ET'
                   
                   const portfolioValue = data?.value || 0
+                  const costBasis = data?.costBasis || 0
                   const netInvestedToDate = data?.netInvested || 0
                   const deltaFromStart$ = data?.deltaFromStart$ || 0
                   const deltaFromStartPct = data?.deltaFromStartPct || 0
+                  const overallReturn$ = data?.overallReturn$ || 0
+                  const overallReturnPct = data?.overallReturnPct || 0
                   const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
                   
                   const rangeLabels: Record<string, string> = {
@@ -307,6 +310,16 @@ export function PortfolioChart() {
                           <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm">
+                          <span className="text-slate-400">Overall return: </span>
+                          {costBasis > 0 ? (
+                            <span className={`font-semibold ${overallReturn$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {overallReturn$ >= 0 ? '+' : ''}${overallReturn$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({overallReturnPct >= 0 ? '+' : ''}{overallReturnPct.toFixed(2)}%)
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-slate-400">—</span>
+                          )}
+                        </div>
+                        <div className="text-sm">
                           <span className="text-slate-400">Change ({rangeLabel}): </span>
                           {startPortfolioAbs > 0 && deltaFromStartPct !== 0 ? (
                             <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -329,6 +342,10 @@ export function PortfolioChart() {
                               ${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
                             </span>
                           )}
+                        </div>
+                        <div className="text-sm text-white">
+                          <span className="text-slate-400">Cost basis: </span>
+                          <span className="font-semibold">${costBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm text-white">
                           <span className="text-slate-400">Net invested (to date): </span>
