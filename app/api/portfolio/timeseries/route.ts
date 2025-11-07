@@ -101,10 +101,17 @@ export async function GET(req: NextRequest) {
       const rangeBack = rangeMs[range] || 30 * 24 * 60 * 60 * 1000
       const startTime = now - rangeBack
       
-      // Get current quotes for all positions
+      // Get symbols from positions
       const symbols = positions.map(p => p.symbol.toUpperCase())
-      const currentQuotes: Record<string, number> = {}
       
+      // Fetch historical prices for all positions
+      const symbolPrices: Record<string, Array<{t: number, c: number}>> = {}
+      await Promise.all(symbols.map(async (sym) => {
+        symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now, baseUrl)
+      }))
+      
+      // Fetch current quotes for latest point accuracy
+      const currentQuotes: Record<string, number> = {}
       await Promise.all(symbols.map(async (sym) => {
         try {
           const res = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(sym)}`, { cache: 'no-store' })
@@ -116,12 +123,9 @@ export async function GET(req: NextRequest) {
         } catch {}
       }))
       
-      // Calculate current portfolio value
-      let currentPortfolioValue = 0
+      // Calculate current cost basis (sum of avgPrice * shares for all positions)
       let currentCostBasis = 0
       positions.forEach((p: any) => {
-        const price = currentQuotes[p.symbol.toUpperCase()] || p.avgPrice || 0
-        currentPortfolioValue += price * p.totalShares
         currentCostBasis += (p.totalCost || p.avgPrice * p.totalShares) || 0
       })
       
@@ -135,15 +139,42 @@ export async function GET(req: NextRequest) {
         buckets.push(now)
       }
       
-      // Generate series with flat line at current value (since no historical transactions)
-      const series = buckets.map((bucket) => ({
-        t: bucket,
-        portfolio: currentPortfolioValue,
-        holdings: currentPortfolioValue,
-        cash: 0,
-        costBasis: currentCostBasis,
-        moneyInvested: currentCostBasis // Use cost basis as money invested
-      }))
+      // Forward fill prices for each symbol
+      const symbolPriceMaps: Record<string, Map<number, number>> = {}
+      for (const sym of symbols) {
+        symbolPriceMaps[sym] = forwardFillPrices(symbolPrices[sym] || [], buckets)
+      }
+      
+      // Generate series with historical prices
+      const series = buckets.map((bucket) => {
+        let portfolioValue = 0
+        
+        // Calculate portfolio value at this bucket using historical prices
+        positions.forEach((p: any) => {
+          const sym = p.symbol.toUpperCase()
+          const priceMap = symbolPriceMaps[sym]
+          let price = 0
+          
+          // For the most recent bucket (now), use current quote if available
+          if (bucket === now || Math.abs(bucket - now) < interval) {
+            price = currentQuotes[sym] || priceMap?.get(bucket) || p.avgPrice || 0
+          } else {
+            // For older buckets, use historical price
+            price = priceMap?.get(bucket) || p.avgPrice || 0
+          }
+          
+          portfolioValue += price * p.totalShares
+        })
+        
+        return {
+          t: bucket,
+          portfolio: portfolioValue,
+          holdings: portfolioValue,
+          cash: 0,
+          costBasis: currentCostBasis,
+          moneyInvested: currentCostBasis // Use cost basis as money invested
+        }
+      })
       
       return NextResponse.json({
         range,
