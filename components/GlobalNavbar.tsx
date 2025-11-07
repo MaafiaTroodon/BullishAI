@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, Calendar, Newspaper, History, Wallet, TrendingUp as TrendingUpIcon } from 'lucide-react'
+import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, Calendar, Newspaper, History, Wallet } from 'lucide-react'
 import { DevStatus } from './DevStatus'
 import useSWR from 'swr'
 
@@ -189,7 +189,7 @@ export function GlobalNavbar() {
                             href="/history?tab=trades"
                             className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
                           >
-                            <TrendingUpIcon className="h-4 w-4" />
+                            <TrendingUp className="h-4 w-4" />
                             <span>Trades History</span>
                           </Link>
                         </div>
