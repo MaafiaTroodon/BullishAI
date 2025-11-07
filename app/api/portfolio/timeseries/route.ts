@@ -284,15 +284,17 @@ export async function GET(req: NextRequest) {
         costBasis += holding.costBasis
       }
       
-      const portfolioValue = holdingsValue + currentCash
+      // Portfolio Value = mark-to-market positions only (exclude idle wallet cash)
+      // Deposits should NOT affect Portfolio Value - only Net Deposits line
+      const portfolioValue = holdingsValue
       
       series.push({
         t: bucket,
-        portfolio: Number(portfolioValue.toFixed(2)),
+        portfolio: Number(portfolioValue.toFixed(2)), // Portfolio Value = positions only (no cash)
         holdings: Number(holdingsValue.toFixed(2)),
         cash: Number(currentCash.toFixed(2)),
         costBasis: Number(costBasis.toFixed(2)),
-        moneyInvested: Number(currentMoneyInvested.toFixed(2)) // Lifetime net deposits
+        moneyInvested: Number(currentMoneyInvested.toFixed(2)) // Lifetime net deposits (DEPOSIT - WITHDRAW) up to t
       })
     }
     
