@@ -13,18 +13,40 @@ export default function HistoryPage() {
   const [filter, setFilter] = useState<FilterType>('all')
 
   // Fetch wallet transactions
-  const { data: walletData, isLoading: isLoadingWallet } = useSWR(
+  const { data: walletData, isLoading: isLoadingWallet, mutate: mutateWallet } = useSWR(
     activeTab === 'wallet' ? '/api/wallet/transactions' : null,
     safeJsonFetcher,
     { refreshInterval: 30000 }
   )
 
   // Fetch trade transactions
-  const { data: tradesData, isLoading: isLoadingTrades } = useSWR(
+  const { data: tradesData, isLoading: isLoadingTrades, mutate: mutateTrades } = useSWR(
     activeTab === 'trades' ? '/api/portfolio/transactions' : null,
     safeJsonFetcher,
     { refreshInterval: 30000 }
   )
+
+  // Listen for wallet updates
+  useEffect(() => {
+    const handleWalletUpdate = () => {
+      if (activeTab === 'wallet') {
+        mutateWallet()
+      }
+    }
+    window.addEventListener('walletUpdated', handleWalletUpdate)
+    return () => window.removeEventListener('walletUpdated', handleWalletUpdate)
+  }, [activeTab, mutateWallet])
+
+  // Listen for portfolio updates
+  useEffect(() => {
+    const handlePortfolioUpdate = () => {
+      if (activeTab === 'trades') {
+        mutateTrades()
+      }
+    }
+    window.addEventListener('portfolioUpdated', handlePortfolioUpdate)
+    return () => window.removeEventListener('portfolioUpdated', handlePortfolioUpdate)
+  }, [activeTab, mutateTrades])
 
   const isLoading = activeTab === 'wallet' ? isLoadingWallet : isLoadingTrades
   const data = activeTab === 'wallet' ? walletData : tradesData
