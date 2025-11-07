@@ -245,14 +245,17 @@ export default function HistoryPage() {
               <div className="h-4 bg-slate-700 rounded w-1/2"></div>
             </div>
           </div>
-        ) : !data || Object.keys(processedTransactions).length === 0 ? (
+        ) : !data ? (
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
+            <p className="text-slate-400">Loading transactions...</p>
+          </div>
+        ) : Object.keys(processedTransactions).length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
             <p className="text-slate-400">
-              {!data ? 'Loading transactions...' : `No ${activeTab} transactions found for the selected filter.`}
+              {data?.transactions && Array.isArray(data.transactions) && data.transactions.length > 0
+                ? `No ${activeTab} transactions found for the selected filter.`
+                : `No ${activeTab} transactions found. Make a ${activeTab === 'wallet' ? 'deposit or withdrawal' : 'trade'} to see your history.`}
             </p>
-            {activeTab === 'wallet' && !data && (
-              <p className="text-slate-500 text-sm mt-2">Make a deposit or withdrawal to see your wallet history.</p>
-            )}
           </div>
         ) : (
           <div className="space-y-6">
