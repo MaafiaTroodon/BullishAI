@@ -54,12 +54,10 @@ export default function HistoryPage() {
   // Process and filter transactions
   const processedTransactions = useMemo(() => {
     if (!data || !data.transactions || !Array.isArray(data.transactions)) {
-      console.log('[History] No transactions data:', { data, hasTransactions: !!data?.transactions })
       return []
     }
 
     let transactions = [...data.transactions]
-    console.log('[History] Processing transactions:', transactions.length)
 
     // Filter by type
     if (filter !== 'all') {
