@@ -61,8 +61,26 @@ function TradingViewTickerTape() {
       }
     }, 150)
 
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (container.current) {
+        const copyrightElements = container.current.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (container.current) {
+      observer.observe(container.current, { childList: true, subtree: true })
+    }
+
     return () => {
       clearTimeout(timeoutId)
+      observer.disconnect()
       // Cleanup on unmount
       if (container.current) {
         const scripts = container.current.querySelectorAll('script')
@@ -73,23 +91,7 @@ function TradingViewTickerTape() {
 
   return (
     <div className="tradingview-widget-container w-full" ref={container} style={{ height: '46px' }}>
-      <style jsx>{`
-        .tradingview-widget-container :global(.tradingview-widget-copyright) {
-          display: none !important;
-        }
-      `}</style>
       <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright" style={{ display: 'none' }}>
-        <a 
-          href="https://www.tradingview.com/markets/" 
-          rel="noopener nofollow" 
-          target="_blank"
-          className="text-slate-500 hover:text-slate-400"
-        >
-          <span className="text-blue-400">Ticker tape</span>
-        </a>
-        <span className="text-slate-500"> by TradingView</span>
-      </div>
     </div>
   )
 }
