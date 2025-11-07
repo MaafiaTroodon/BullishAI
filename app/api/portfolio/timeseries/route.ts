@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listTransactions, listWalletTransactions, listPositions } from '@/lib/portfolio'
+import { listTransactions } from '@/lib/portfolio'
+import { listWalletTransactions } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -76,140 +77,18 @@ export async function GET(req: NextRequest) {
     const host = req.headers.get('host') || 'localhost:3000'
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
     
-    // Get all transactions and current positions
+    // Get all transactions
     let transactions = listTransactions(userId)
     let walletTx = listWalletTransactions(userId)
-    const positions = listPositions(userId)
     
-    // If no transactions but we have positions, generate chart data from current holdings
-    // This ensures the graph displays even if transactions aren't synced yet
-    if (transactions.length === 0 && walletTx.length === 0 && positions.length > 0) {
-      // Generate a simple chart from current holdings
-      const now = Date.now()
-      const rangeMs: Record<string, number> = {
-        '1h': 60 * 60 * 1000,
-        '1d': 24 * 60 * 60 * 1000,
-        '3d': 3 * 24 * 60 * 60 * 1000,
-        '1week': 7 * 24 * 60 * 60 * 1000,
-        '1M': 30 * 24 * 60 * 60 * 1000,
-        '3M': 90 * 24 * 60 * 60 * 1000,
-        '6M': 180 * 24 * 60 * 60 * 1000,
-        '1Y': 365 * 24 * 60 * 60 * 1000,
-        'ALL': 365 * 24 * 60 * 60 * 1000 // Limit ALL to 1 year for performance
-      }
-      
-      const rangeBack = rangeMs[range] || 30 * 24 * 60 * 60 * 1000
-      const startTime = now - rangeBack
-      
-      // Get symbols from positions
-      const symbols = positions.map(p => p.symbol.toUpperCase())
-      
-      // Fetch historical prices for all positions
-      const symbolPrices: Record<string, Array<{t: number, c: number}>> = {}
-      await Promise.all(symbols.map(async (sym) => {
-        symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now, baseUrl)
-      }))
-      
-      // Fetch current quotes for latest point accuracy
-      const currentQuotes: Record<string, number> = {}
-      await Promise.all(symbols.map(async (sym) => {
-        try {
-          const res = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(sym)}`, { cache: 'no-store' })
-          if (res.ok) {
-            const data = await res.json()
-            const price = data?.data?.price ?? data?.price ?? null
-            if (price) currentQuotes[sym] = price
-          }
-        } catch {}
-      }))
-      
-      // Calculate current cost basis (sum of avgPrice * shares for all positions)
-      let currentCostBasis = 0
-      positions.forEach((p: any) => {
-        currentCostBasis += (p.totalCost || p.avgPrice * p.totalShares) || 0
-      })
-      
-      // Generate buckets
-      const interval = gran === '5m' ? 5 * 60 * 1000 : gran === '1m' ? 60 * 1000 : 24 * 60 * 60 * 1000
-      const buckets: number[] = []
-      for (let t = startTime; t <= now; t += interval) {
-        buckets.push(t)
-      }
-      if (buckets[buckets.length - 1] !== now) {
-        buckets.push(now)
-      }
-      
-      // Forward fill prices for each symbol
-      const symbolPriceMaps: Record<string, Map<number, number>> = {}
-      for (const sym of symbols) {
-        symbolPriceMaps[sym] = forwardFillPrices(symbolPrices[sym] || [], buckets)
-      }
-      
-      // Generate series with historical prices
-      const series = buckets.map((bucket) => {
-        let portfolioValue = 0
-        
-        // Calculate portfolio value at this bucket using historical prices
-        positions.forEach((p: any) => {
-          const sym = p.symbol.toUpperCase()
-          const priceMap = symbolPriceMaps[sym]
-          let price = 0
-          
-          // For the most recent bucket (now), use current quote if available
-          if (bucket === now || Math.abs(bucket - now) < interval) {
-            price = currentQuotes[sym] || priceMap?.get(bucket) || p.avgPrice || 0
-          } else {
-            // For older buckets, use historical price
-            price = priceMap?.get(bucket) || p.avgPrice || 0
-          }
-          
-          portfolioValue += price * p.totalShares
-        })
-        
-        return {
-          t: bucket,
-          portfolio: portfolioValue,
-          holdings: portfolioValue,
-          cash: 0,
-          costBasis: currentCostBasis,
-          moneyInvested: currentCostBasis // Use cost basis as money invested
-        }
-      })
-      
-      // Calculate deltas from start
-      const startPortfolioValue = series.length > 0 ? series[0].portfolio : 0
-      const seriesWithDeltas = series.map((p: any) => {
-        const deltaFromStart$ = startPortfolioValue > 0 ? p.portfolio - startPortfolioValue : 0
-        const deltaFromStartPct = startPortfolioValue > 0 ? (deltaFromStart$ / startPortfolioValue) * 100 : 0
-        
-        return {
-          t: p.t,
-          portfolioAbs: p.portfolio,
-          holdingsAbs: p.holdings,
-          cashAbs: p.cash,
-          netDepositsAbs: p.moneyInvested,
-          deltaFromStart$: Number(deltaFromStart$.toFixed(2)),
-          deltaFromStartPct: Number(deltaFromStartPct.toFixed(4))
-        }
-      })
-      
-      return NextResponse.json({
-        range,
-        granularity: gran,
-        currency: 'USD',
-        series: seriesWithDeltas,
-        meta: {
-          symbols,
-          hasFx: false,
-          lastQuoteTs: new Date().toISOString(),
-          startIndex: 0,
-          startPortfolioAbs: startPortfolioValue
-        }
-      })
+    // If no transactions in memory, try to load from localStorage (for client-side persistence)
+    if (transactions.length === 0 && typeof window === 'undefined') {
+      // Server-side: transactions should be in memory store
+      // But we can't access localStorage here, so rely on sync from client
     }
     
-    // If no transactions and no positions, return empty series
-    if (transactions.length === 0 && walletTx.length === 0 && positions.length === 0) {
+    // If no transactions at all, return empty series
+    if (transactions.length === 0 && walletTx.length === 0) {
       return NextResponse.json({
         range,
         granularity: gran,
@@ -299,86 +178,76 @@ export async function GET(req: NextRequest) {
       symbolPriceMaps[sym] = forwardFillPrices(symbolPrices[sym] || [], buckets)
     }
     
-    // Process transactions chronologically to build position snapshots
-    const allEvents = [
-      ...transactions.map(t => ({ ...t, type: 'trade' as const })),
-      ...walletTx.map(w => ({ ...w, type: 'wallet' as const }))
-    ].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+    // Process ONLY trade transactions (fills) - ignore wallet deposits/withdrawals for portfolio chart
+    const tradeEvents = transactions
+      .filter(t => t.action === 'buy' || t.action === 'sell')
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
     
     // Build portfolio value over time
     const holdings: Record<string, { shares: number; avgCost: number; costBasis: number }> = {}
-    let cashBalance = 0
-    let moneyInvested = 0 // Net deposits (DEPOSIT - WITHDRAW), lifetime cumulative
     
-    // Track last known values for forward-fill
-    let lastCashBalance = 0
-    let lastMoneyInvested = 0
+    // net_invested = cumulative cash invested in stocks (from fills only, NOT wallet deposits)
+    let netInvested = 0 // Cumulative: + for BUY fills, - for SELL fills
     
     const series: Array<{
       t: number
       portfolio: number
       holdings: number
-      cash: number
       costBasis: number
-      moneyInvested: number
+      netInvested: number
     }> = []
     
     let eventIndex = 0
     
     for (const bucket of buckets) {
-      // Process all events up to this bucket
-      while (eventIndex < allEvents.length && (allEvents[eventIndex].timestamp || 0) <= bucket) {
-        const event = allEvents[eventIndex]
+      // Process all trade events (fills) up to this bucket
+      while (eventIndex < tradeEvents.length && (tradeEvents[eventIndex].timestamp || 0) <= bucket) {
+        const event = tradeEvents[eventIndex]
+        const sym = event.symbol.toUpperCase()
         
-        if (event.type === 'wallet') {
-          if (event.action === 'deposit') {
-            cashBalance += event.amount || 0
-            moneyInvested += event.amount || 0 // Track net deposits (lifetime)
-          } else if (event.action === 'withdraw') {
-            cashBalance -= event.amount || 0
-            moneyInvested -= event.amount || 0 // Subtract withdrawals from net deposits (lifetime)
-          }
-          lastCashBalance = cashBalance
-          lastMoneyInvested = moneyInvested
-        } else if (event.type === 'trade') {
-          const sym = event.symbol.toUpperCase()
-          if (!holdings[sym]) {
-            holdings[sym] = { shares: 0, avgCost: 0, costBasis: 0 }
+        if (!holdings[sym]) {
+          holdings[sym] = { shares: 0, avgCost: 0, costBasis: 0 }
+        }
+        
+        if (event.action === 'buy') {
+          const qty = event.quantity || 0
+          const price = event.price || 0
+          const fees = 0 // Fees not currently tracked, but can be added
+          const totalCost = qty * price + fees
+          
+          // Update position
+          const oldShares = holdings[sym].shares
+          const oldAvg = holdings[sym].avgCost
+          const newShares = oldShares + qty
+          const newAvg = newShares > 0 ? ((oldShares * oldAvg) + totalCost) / newShares : price
+          holdings[sym] = {
+            shares: newShares,
+            avgCost: newAvg,
+            costBasis: newShares * newAvg
           }
           
-          if (event.action === 'buy') {
-            const qty = event.quantity || 0
-            const price = event.price || 0
-            const oldShares = holdings[sym].shares
-            const oldAvg = holdings[sym].avgCost
-            const newShares = oldShares + qty
-            const newAvg = newShares > 0 ? ((oldShares * oldAvg) + (qty * price)) / newShares : price
-            holdings[sym] = {
-              shares: newShares,
-              avgCost: newAvg,
-              costBasis: newShares * newAvg
-            }
-            cashBalance -= qty * price
-            lastCashBalance = cashBalance
-          } else if (event.action === 'sell') {
-            const qty = Math.min(event.quantity || 0, holdings[sym].shares)
-            holdings[sym].shares -= qty
-            holdings[sym].costBasis = holdings[sym].shares * holdings[sym].avgCost
-            cashBalance += qty * (event.price || 0)
-            lastCashBalance = cashBalance
-            if (holdings[sym].shares <= 0) {
-              delete holdings[sym]
-            }
+          // Increase net_invested (cash that left wallet to buy stocks)
+          netInvested += totalCost
+        } else if (event.action === 'sell') {
+          const qty = Math.min(event.quantity || 0, holdings[sym].shares)
+          const price = event.price || 0
+          const fees = 0 // Fees not currently tracked
+          const proceeds = qty * price - fees
+          
+          // Update position
+          holdings[sym].shares -= qty
+          holdings[sym].costBasis = holdings[sym].shares * holdings[sym].avgCost
+          
+          // Decrease net_invested (cash returned to wallet from sell)
+          netInvested -= proceeds
+          
+          if (holdings[sym].shares <= 0) {
+            delete holdings[sym]
           }
         }
         
         eventIndex++
       }
-      
-      // Forward-fill cash and moneyInvested if no events in this bucket
-      // (This ensures continuity even if no transactions occurred)
-      const currentCash = cashBalance || lastCashBalance
-      const currentMoneyInvested = moneyInvested !== 0 ? moneyInvested : lastMoneyInvested
       
       // Calculate portfolio value at this bucket
       let holdingsValue = 0
