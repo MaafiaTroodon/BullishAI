@@ -53,24 +53,20 @@ export default function WalletPage() {
         return
       }
       const j = await r.json()
-      if (!r.ok) {
-        showToast(j?.error || 'Wallet error', 'error')
-      } else {
-        // Update balance from response (maintains old balance + new amount)
-        setBalance(j.balance || 0)
-        // Clear input after successful transaction
-        setAmount('')
-        showToast(
-          action==='deposit' 
-            ? `Deposited $${numAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}` 
-            : `Withdrew $${numAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}`, 
-          'success'
-        )
-        // Trigger global wallet update event
-        try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
-        // Refresh to ensure consistency
-        await refresh()
-      }
+      // Update balance from response (maintains old balance + new amount)
+      setBalance(j.balance || 0)
+      // Clear input after successful transaction
+      setAmount('')
+      showToast(
+        action==='deposit' 
+          ? `Deposited $${numAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}` 
+          : `Withdrew $${numAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}`, 
+        'success'
+      )
+      // Trigger global wallet update event
+      try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
+      // Refresh to ensure consistency
+      await refresh()
     } catch (err: any) {
       showToast(err?.message || 'Transaction failed', 'error')
     } finally {
