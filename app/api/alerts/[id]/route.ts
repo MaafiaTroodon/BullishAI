@@ -6,27 +6,24 @@ export const dynamic = 'force-dynamic'
 
 function getUserId() { return 'demo-user' }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const userId = getUserId()
-  const { id } = await params
-  const item = getAlert(userId, id)
+  const item = getAlert(userId, params.id)
   if (!item) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   return NextResponse.json({ item })
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const userId = getUserId()
-  const { id } = await params
   const body = await req.json()
-  const updated = updateAlert(userId, id, body)
+  const updated = updateAlert(userId, params.id, body)
   if (!updated) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   return NextResponse.json({ item: updated })
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const userId = getUserId()
-  const { id } = await params
-  const ok = deleteAlert(userId, id)
+  const ok = deleteAlert(userId, params.id)
   if (!ok) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }

@@ -9,11 +9,12 @@ import { safeJsonFetcher } from '@/lib/safeFetch'
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export function PortfolioSummary() {
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 15000 })
+  // Update every second for real-time portfolio value
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 1000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Fetch timeseries for Net Deposits (Cost Basis)
-  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 30000 })
+  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 1000 })
   
   useEffect(() => {
     try {
