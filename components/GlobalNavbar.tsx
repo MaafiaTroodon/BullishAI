@@ -27,15 +27,27 @@ export function GlobalNavbar() {
     if (value.length >= 2) {
       try {
         const response = await fetch(`/api/search?query=${encodeURIComponent(value)}`)
+        if (!response.ok) {
+          console.error('Search API error:', response.status, response.statusText)
+          setSearchSuggestions([])
+          setShowSuggestions(false)
+          return
+        }
         const data = await response.json()
-        if (data.results) {
+        if (data.results && Array.isArray(data.results)) {
           setSearchSuggestions(data.results)
-          setShowSuggestions(true)
+          setShowSuggestions(data.results.length > 0)
+        } else {
+          setSearchSuggestions([])
+          setShowSuggestions(false)
         }
       } catch (error) {
         console.error('Search error:', error)
+        setSearchSuggestions([])
+        setShowSuggestions(false)
       }
     } else {
+      setSearchSuggestions([])
       setShowSuggestions(false)
     }
   }

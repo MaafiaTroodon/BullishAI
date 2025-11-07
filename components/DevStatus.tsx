@@ -11,16 +11,27 @@ export function DevStatus() {
     if (process.env.NODE_ENV === 'production') return
 
     fetch('/api/_debug')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) {
+          // API doesn't exist, don't show status
+          setShow(false)
+          return null
+        }
+        return r.json()
+      })
       .then(data => {
+        if (!data) return
         setStatus(data)
         // Show if any env is false or provider is fail
         const hasIssues = 
-          Object.values(data.env).some(v => !v) ||
-          Object.values(data.providers).some(v => v === 'fail')
+          Object.values(data.env || {}).some(v => !v) ||
+          Object.values(data.providers || {}).some(v => v === 'fail')
         setShow(hasIssues)
       })
-      .catch(() => setShow(true))
+      .catch(() => {
+        // Silently fail - don't show status if API doesn't exist
+        setShow(false)
+      })
   }, [])
 
   if (!show || !status) return null

@@ -20,25 +20,28 @@ export async function GET(request: NextRequest) {
     if (FINNHUB_KEY) {
       try {
         const url = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(query)}&token=${FINNHUB_KEY}`
-        const response = await axios.get(url, { timeout: 2000 })
+        const response = await axios.get(url, { timeout: 5000 })
         
         if (response.data && response.data.result && Array.isArray(response.data.result)) {
           const results = response.data.result
             .slice(0, 10)
             .map((item: any) => ({
               symbol: item.symbol,
-              name: item.description || item.displaySymbol,
+              name: item.description || item.displaySymbol || item.symbol,
               displaySymbol: item.displaySymbol || item.symbol,
               type: item.type,
             }))
+            .filter((item: any) => item.symbol && item.name) // Filter out invalid results
           
           return NextResponse.json({ results })
         }
-      } catch (error) {
-        console.log('Finnhub search failed')
+      } catch (error: any) {
+        console.log('Finnhub search failed:', error?.message || 'Unknown error')
+        // Fall through to return empty results
       }
     }
 
+    // Return empty results if Finnhub fails or no API key
     return NextResponse.json({ results: [] })
   } catch (error: any) {
     console.error('Search API error:', error.message)
