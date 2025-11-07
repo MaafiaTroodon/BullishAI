@@ -114,8 +114,26 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
       scriptLoaded.current = true
     }, 150)
 
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (container.current) {
+        const copyrightElements = container.current.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (container.current) {
+      observer.observe(container.current, { childList: true, subtree: true })
+    }
+
     return () => {
       clearTimeout(timeoutId)
+      observer.disconnect()
       if (container.current) {
         const scripts = container.current.querySelectorAll('script')
         scripts.forEach(s => s.remove())
