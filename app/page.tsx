@@ -10,6 +10,7 @@ import TradingViewAdvancedChart from '@/components/TradingViewAdvancedChart'
 import TradingViewTopStories from '@/components/TradingViewTopStories'
 import { HeadlineRotator } from '@/components/HeadlineRotator'
 import { TiltCard } from '@/components/TiltCard'
+import TradingViewTickerTape from '@/components/TradingViewTickerTape'
 import useSWR from 'swr'
 
 const fetcher = async (url: string) => {
@@ -95,6 +96,11 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Navbar removed here; GlobalNavbar renders via app/layout.tsx */}
+
+      {/* Ticker Tape - Just under navbar */}
+      <div className="w-full bg-slate-900 border-b border-slate-800">
+        <TradingViewTickerTape />
+      </div>
 
       {/* Hero Section */}
       <section className="relative max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-once="true" data-anim-stagger="60">
