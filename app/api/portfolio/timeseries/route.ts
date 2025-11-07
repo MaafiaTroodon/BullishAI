@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listTransactions } from '@/lib/portfolio'
+import { listTransactions, listPositions } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -142,11 +142,25 @@ export async function GET(req: NextRequest) {
       symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now, baseUrl)
     }))
     
-    // Fetch current quotes for latest point accuracy
+    // Fetch current positions and quotes for latest point accuracy
+    const currentPositions = listPositions(userId)
     const currentQuotes: Record<string, number> = {}
-    if (symbols.length > 0) {
+    const currentPositionMap: Record<string, { shares: number; avgCost: number }> = {}
+    
+    // Build current position map from actual positions
+    currentPositions.forEach((pos: any) => {
+      const sym = pos.symbol.toUpperCase()
+      currentPositionMap[sym] = {
+        shares: pos.totalShares || 0,
+        avgCost: pos.avgPrice || 0
+      }
+    })
+    
+    // Fetch current quotes for all symbols in current positions
+    const currentSymbols = currentPositions.map((p: any) => p.symbol.toUpperCase())
+    if (currentSymbols.length > 0) {
       try {
-        const quoteRes = await fetch(`${baseUrl}/api/quotes?symbols=${symbols.join(',')}`, { cache: 'no-store' })
+        const quoteRes = await fetch(`${baseUrl}/api/quotes?symbols=${currentSymbols.join(',')}`, { cache: 'no-store' })
         if (quoteRes.ok) {
           const quoteData = await quoteRes.json()
           if (quoteData.quotes && Array.isArray(quoteData.quotes)) {
@@ -243,7 +257,12 @@ export async function GET(req: NextRequest) {
       let holdingsValue = 0
       let costBasis = 0
       
-      for (const [sym, holding] of Object.entries(holdings)) {
+      // For the latest bucket (now), use current positions instead of historical holdings
+      const positionsToUse = (bucket === now || Math.abs(bucket - now) < interval) 
+        ? currentPositionMap 
+        : holdings
+      
+      for (const [sym, holding] of Object.entries(positionsToUse)) {
         const priceMap = symbolPriceMaps[sym]
         let price = 0
         
@@ -260,8 +279,15 @@ export async function GET(req: NextRequest) {
           price = holding.avgCost
         }
         
-        holdingsValue += holding.shares * price
-        costBasis += holding.costBasis
+        const shares = holding.shares || 0
+        holdingsValue += shares * price
+        
+        // Cost basis: for current positions, use avgCost * shares; for historical, use costBasis
+        if (bucket === now || Math.abs(bucket - now) < interval) {
+          costBasis += holding.avgCost * shares
+        } else {
+          costBasis += (holding as any).costBasis || (holding.avgCost * shares)
+        }
       }
       
       // Portfolio Value = mark-to-market positions only
