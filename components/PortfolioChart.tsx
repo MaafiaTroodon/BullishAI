@@ -120,7 +120,7 @@ export function PortfolioChart() {
   const isPositive = portfolioReturn >= 0
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   
-  // Calculate Y-axis domain
+  // Calculate Y-axis domain - ensure never negative unless truly negative
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
     const values = points.map(p => p.value).filter(v => v > 0)
@@ -129,6 +129,7 @@ export function PortfolioChart() {
     const max = Math.max(...values)
     const range = max - min || max || 1
     const padding = range * 0.06
+    // Never show negative Y-axis unless portfolio is truly negative
     return [Math.max(0, min - padding), max + padding]
   }, [points])
 
