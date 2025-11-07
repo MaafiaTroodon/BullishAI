@@ -219,9 +219,14 @@ export default function HistoryPage() {
               <div className="h-4 bg-slate-700 rounded w-1/2"></div>
             </div>
           </div>
-        ) : Object.keys(processedTransactions).length === 0 ? (
+        ) : !data || Object.keys(processedTransactions).length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
-            <p className="text-slate-400">No {activeTab} transactions found for the selected filter.</p>
+            <p className="text-slate-400">
+              {!data ? 'Loading transactions...' : `No ${activeTab} transactions found for the selected filter.`}
+            </p>
+            {activeTab === 'wallet' && !data && (
+              <p className="text-slate-500 text-sm mt-2">Make a deposit or withdrawal to see your wallet history.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-6">

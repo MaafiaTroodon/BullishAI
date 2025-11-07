@@ -18,7 +18,7 @@ export default function WalletPage() {
       }
       const j = await r.json()
       setBalance(j.balance || 0)
-      try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
+      // Don't dispatch event here - only dispatch after actual transactions
     } catch (err) {
       console.error('Error refreshing wallet:', err)
       // Don't show error toast on initial load, only on user actions
@@ -27,8 +27,10 @@ export default function WalletPage() {
 
   useEffect(()=>{ 
     refresh()
-    // Listen for wallet updates from other pages
-    const handleUpdate = () => refresh()
+    // Listen for wallet updates from other pages/components
+    const handleUpdate = () => {
+      refresh()
+    }
     window.addEventListener('walletUpdated', handleUpdate)
     return () => window.removeEventListener('walletUpdated', handleUpdate)
   }, [])
