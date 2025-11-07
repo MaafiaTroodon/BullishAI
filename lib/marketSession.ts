@@ -3,13 +3,15 @@
  * All times in America/New_York timezone
  */
 
-export type MarketSession = 'PRE' | 'REG' | 'POST' | 'CLOSED'
+export type MarketSession = 'PRE' | 'REG' | 'POST' | 'OVERNIGHT' | 'CLOSED'
 
 export interface MarketSessionInfo {
   session: MarketSession
   label: string
   color: string
+  icon: 'sunrise' | 'sun' | 'sunset' | 'moon' | 'closed'
   description?: string
+  endsAt?: string // HH:MM ET format
 }
 
 /**
@@ -29,6 +31,7 @@ export function getMarketSession(): MarketSessionInfo {
       session: 'CLOSED',
       label: 'CLOSED',
       color: 'gray',
+      icon: 'closed',
       description: 'Market is closed (weekend)'
     }
   }
@@ -39,7 +42,9 @@ export function getMarketSession(): MarketSessionInfo {
       session: 'PRE',
       label: 'PRE',
       color: 'amber',
-      description: 'US pre-market trading'
+      icon: 'sunrise',
+      description: 'US pre-market trading',
+      endsAt: '9:30 AM'
     }
   }
 
@@ -49,7 +54,9 @@ export function getMarketSession(): MarketSessionInfo {
       session: 'REG',
       label: 'REG',
       color: 'green',
-      description: 'US regular trading hours'
+      icon: 'sun',
+      description: 'US regular trading hours',
+      endsAt: '4:00 PM'
     }
   }
 
@@ -59,15 +66,30 @@ export function getMarketSession(): MarketSessionInfo {
       session: 'POST',
       label: 'POST',
       color: 'blue',
-      description: 'US post-market trading ends at 8:00 pm ET'
+      icon: 'sunset',
+      description: 'US post-market trading',
+      endsAt: '8:00 PM'
     }
   }
 
-  // Closed: 8:00 PM - 4:00 AM ET
+  // Overnight: 8:00 PM - 4:00 AM ET
+  if (timeInMinutes >= 20 * 60 || timeInMinutes < 4 * 60) {
+    return {
+      session: 'OVERNIGHT',
+      label: 'OVERNIGHT',
+      color: 'purple',
+      icon: 'moon',
+      description: 'Overnight trading',
+      endsAt: '4:00 AM'
+    }
+  }
+
+  // Closed: fallback (shouldn't reach here)
   return {
     session: 'CLOSED',
     label: 'CLOSED',
     color: 'gray',
+    icon: 'closed',
     description: 'Market is closed'
   }
 }
@@ -80,6 +102,7 @@ export function getRefreshInterval(session: MarketSession): number {
     case 'PRE':
     case 'REG':
     case 'POST':
+    case 'OVERNIGHT':
       return 15000 // 15 seconds during active trading
     case 'CLOSED':
       return 60000 // 60 seconds when closed
@@ -96,5 +119,39 @@ export function formatETTime(date: Date): string {
     minute: '2-digit',
     hour12: true
   }) + ' ET'
+}
+
+/**
+ * Calculate countdown to session end
+ */
+export function getSessionCountdown(endsAt?: string): string | null {
+  if (!endsAt) return null
+  
+  const now = new Date()
+  const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const [time, period] = endsAt.split(' ')
+  const [hours, minutes] = time.split(':').map(Number)
+  
+  let endHour = hours
+  if (period === 'PM' && hours !== 12) endHour += 12
+  if (period === 'AM' && hours === 12) endHour = 0
+  
+  const endTime = new Date(etNow)
+  endTime.setHours(endHour, minutes, 0, 0)
+  
+  // If end time is tomorrow
+  if (endTime <= etNow) {
+    endTime.setDate(endTime.getDate() + 1)
+  }
+  
+  const diffMs = endTime.getTime() - etNow.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const hoursLeft = Math.floor(diffMins / 60)
+  const minsLeft = diffMins % 60
+  
+  if (hoursLeft > 0) {
+    return `${hoursLeft}h ${minsLeft}m`
+  }
+  return `${minsLeft}m`
 }
 
