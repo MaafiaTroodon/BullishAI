@@ -8,8 +8,14 @@ import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 
 export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1d') // Default to 1D
-  // Update every second for real-time portfolio value
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { refreshInterval: 1000 })
+  // Update frequently for real-time portfolio value based on market session
+  // During market hours: refresh every 5 seconds for live price updates
+  // When closed: refresh every 30 seconds
+  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { 
+    refreshInterval: typeof window !== 'undefined' && new Date().getHours() >= 9 && new Date().getHours() < 16 ? 5000 : 30000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true
+  })
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Map internal ranges to API ranges (consistent mapping) - REMOVED 1H
@@ -165,6 +171,10 @@ export function PortfolioChart() {
     { label: 'ALL', value: 'ALL' },
   ]
 
+  // Check if there are actual open positions (not just timeseries data)
+  const currentPositions = pf?.items || localItems || []
+  const hasOpenPositions = currentPositions.some((p: any) => (p.totalShares || 0) > 0)
+
   const formatXAxis = (t: number) => {
     const date = new Date(t)
     if (chartRange === '1d') {
@@ -210,11 +220,18 @@ export function PortfolioChart() {
               </button>
             </div>
           </div>
-        ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
+        ) : !hasOpenPositions ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
               <p className="mb-2">No open positions</p>
               <p className="text-sm text-slate-500">Buy stocks to see your portfolio value chart.</p>
+            </div>
+          </div>
+        ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
+          <div className="h-full flex items-center justify-center text-slate-400">
+            <div className="text-center">
+              <p className="mb-2">Loading chart data...</p>
+              <p className="text-sm text-slate-500">Fetching portfolio history...</p>
             </div>
           </div>
         ) : points.length === 0 ? (

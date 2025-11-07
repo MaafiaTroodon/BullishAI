@@ -9,12 +9,18 @@ import { safeJsonFetcher } from '@/lib/safeFetch'
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export function PortfolioSummary() {
-  // Update every second for real-time portfolio value
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 1000 })
+  // Update frequently for real-time portfolio value based on market session
+  // During market hours: refresh every 5 seconds for live price updates
+  // When closed: refresh every 30 seconds
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { 
+    refreshInterval: typeof window !== 'undefined' && new Date().getHours() >= 9 && new Date().getHours() < 16 ? 5000 : 30000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true
+  })
   const [localItems, setLocalItems] = useState<any[]>([])
   
-  // Fetch timeseries for Net Deposits (Cost Basis)
-  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 1000 })
+  // Fetch timeseries for Net Deposits (Cost Basis) - less frequent since it's historical
+  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 30000 })
   
   useEffect(() => {
     try {
