@@ -94,52 +94,22 @@ export function PortfolioChart() {
     syncData()
   }, [mutatePf, mutateTimeseries])
   
-  const items: any[] = (pf?.items && pf.items.length>0) ? pf.items : localItems
-
-  // Calculate current portfolio value from actual holdings (for consistency with summary)
-  const currentPortfolioValue = useMemo(() => {
-    if (!items || items.length === 0) return 0
-    let total = 0
-    items.forEach((p: any) => {
-      if (p.totalShares > 0) {
-        const price = p.currentPrice || p.avgPrice || 0
-        total += price * p.totalShares
-      }
-    })
-    return total
-  }, [items])
-
-  // Use timeseries data from API, but patch the last point with current portfolio value
+  // Use timeseries data from API as single source of truth (no patching)
+  // The API already calculates portfolio value from positions + current quotes
   const points = useMemo(() => {
     if (!timeseriesData?.series || !Array.isArray(timeseriesData.series)) {
       return []
     }
     
-    const mapped = timeseriesData.series.map((p: any) => ({
+    // Map timeseries data directly - trust the API calculation
+    return timeseriesData.series.map((p: any) => ({
       t: p.t,
       value: p.portfolioAbs || 0,
-      netInvested: p.netInvestedAbs || 0, // Changed from netDepositsAbs to netInvestedAbs
+      netInvested: p.netInvestedAbs || 0,
       deltaFromStart$: p.deltaFromStart$ || 0,
       deltaFromStartPct: p.deltaFromStartPct || 0
     }))
-    
-    // Update the last point with current portfolio value for real-time accuracy
-    if (mapped.length > 0 && currentPortfolioValue > 0) {
-      const lastPoint = mapped[mapped.length - 1]
-      const startValue = mapped[0]?.value || currentPortfolioValue
-      const delta$ = currentPortfolioValue - startValue
-      const deltaPct = startValue > 0 ? (delta$ / startValue) * 100 : 0
-      
-      mapped[mapped.length - 1] = {
-        ...lastPoint,
-        value: currentPortfolioValue,
-        deltaFromStart$: delta$,
-        deltaFromStartPct: deltaPct
-      }
-    }
-    
-    return mapped
-  }, [timeseriesData, currentPortfolioValue])
+  }, [timeseriesData])
 
   // Calculate portfolio return to determine color
   const portfolioReturn = useMemo(() => {
