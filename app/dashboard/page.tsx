@@ -9,10 +9,9 @@ import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { DevStatus } from '@/components/DevStatus'
 import { AIInsights } from '@/components/AIInsights'
-import dynamic from 'next/dynamic'
-const PortfolioChartComp = dynamic(() => import('@/components/PortfolioChart').then(m => m.PortfolioChart), { ssr: false })
-const PortfolioHoldingsComp = dynamic(() => import('@/components/PortfolioHoldings').then(m => m.PortfolioHoldings), { ssr: false })
-const PortfolioSummaryComp = dynamic(() => import('@/components/PortfolioSummary').then(m => m.PortfolioSummary), { ssr: false })
+import { PortfolioChart } from '@/components/PortfolioChart'
+import { PortfolioHoldings } from '@/components/PortfolioHoldings'
+import { PortfolioSummary } from '@/components/PortfolioSummary'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -112,13 +111,13 @@ export default function Dashboard() {
         {/* Portfolio Overview - Wealthsimple style */}
         <div className="space-y-6">
           {/* Summary Card at top - shows total balance and return */}
-          <PortfolioSummaryComp />
+          <PortfolioSummary />
           
           {/* Large prominent chart */}
-          <PortfolioChartComp />
+          <PortfolioChart />
           
           {/* Holdings list below */}
-          <PortfolioHoldingsComp />
+          <PortfolioHoldings />
         </div>
         
       </main>
