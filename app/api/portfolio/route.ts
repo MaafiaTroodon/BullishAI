@@ -150,7 +150,12 @@ export async function POST(req: NextRequest) {
         const pos = upsertTrade(userId, input)
         const updatedBal = getWalletBalance(userId)
         const res = NextResponse.json({ item: pos, wallet: { balance: updatedBal, cap: 1_000_000 } })
+        // Persist wallet balance to cookie after trade
         try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+        // Trigger wallet update event
+        try { 
+          res.headers.set('X-Wallet-Updated', 'true')
+        } catch {}
         return res
       } catch (e: any) {
         return NextResponse.json({ error: e?.message || 'trade_failed' }, { status: 400 })

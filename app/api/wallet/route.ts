@@ -9,33 +9,27 @@ function getUserId() { return 'demo-user' }
 export async function GET(req: NextRequest) {
   const userId = getUserId()
   
-  // Restore from cookie if in-memory is empty
+  // Get current balance from in-memory store (this is the source of truth)
+  // It already accounts for deposits, withdrawals, buys, and sells
   let balance = getWalletBalance(userId)
   const walletTx = listWalletTransactions(userId)
   
-  // If we have wallet transactions, recalculate balance from them (more accurate)
-  if (walletTx && walletTx.length > 0) {
-    let calculatedBalance = 0
-    for (const tx of walletTx) {
-      if (tx.action === 'deposit') calculatedBalance += tx.amount
-      else if (tx.action === 'withdraw') calculatedBalance -= tx.amount
-    }
-    balance = Math.max(0, calculatedBalance)
-    // Sync calculated balance back to in-memory store
-    setWalletBalance(userId, balance)
-  } else {
-    // No transactions, try to restore from cookie
+  // If balance is 0 and we have a cookie, try to restore from cookie
+  if (balance === 0) {
     try {
       const cookieBal = req.cookies.get('bullish_wallet')?.value
       if (cookieBal) {
         const parsed = Number(cookieBal)
-        if (!Number.isNaN(parsed) && parsed > 0) {
+        if (!Number.isNaN(parsed) && parsed >= 0) {
           balance = parsed
           initializeWalletFromBalance(userId, parsed)
         }
       }
     } catch {}
   }
+  
+  // Ensure balance is never negative
+  balance = Math.max(0, balance)
   
   const res = NextResponse.json({ balance, cap: 1_000_000, transactions: walletTx })
   // Always persist current balance to cookie
