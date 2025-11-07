@@ -94,6 +94,26 @@ export default function WalletPage() {
       const newBalance = j.balance || 0
       setBalance(newBalance)
       
+      // Save transaction to localStorage for persistence
+      if (j.transaction) {
+        try {
+          const existing = localStorage.getItem('bullish_wallet_transactions')
+          const transactions = existing ? JSON.parse(existing) : []
+          // Check if transaction already exists (avoid duplicates)
+          const exists = transactions.some((t: any) => 
+            t.timestamp === j.transaction.timestamp && 
+            t.amount === j.transaction.amount && 
+            t.action === j.transaction.action
+          )
+          if (!exists) {
+            transactions.push(j.transaction)
+            localStorage.setItem('bullish_wallet_transactions', JSON.stringify(transactions))
+          }
+        } catch (err) {
+          console.error('Error saving transaction to localStorage:', err)
+        }
+      }
+      
       // Clear input after successful transaction
       setAmount('')
       

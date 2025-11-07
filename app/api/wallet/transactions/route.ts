@@ -13,8 +13,32 @@ function getUserId() { return 'demo-user' }
 export async function GET(req: NextRequest) {
   try {
     const userId = getUserId()
-    const transactions = listWalletTransactions(userId)
-    const currentBalance = getWalletBalance(userId)
+    
+    // Try to restore wallet from cookie if in-memory is empty
+    let balance = getWalletBalance(userId)
+    try {
+      const cookieBal = req.cookies.get('bullish_wallet')?.value
+      if (cookieBal) {
+        const parsed = Number(cookieBal)
+        if (!Number.isNaN(parsed) && parsed >= 0) {
+          const { initializeWalletFromBalance } = await import('@/lib/portfolio')
+          initializeWalletFromBalance(userId, parsed)
+          balance = parsed
+        }
+      }
+    } catch {}
+    
+    // Get wallet transactions
+    let transactions = listWalletTransactions(userId)
+    
+    // If no transactions but we have a balance, try to sync from client localStorage
+    // This is a fallback - normally client should sync on mount
+    if (transactions.length === 0 && balance > 0) {
+      // Don't try to sync here - let the client handle it
+      // Just return empty array - client will sync and refetch
+    }
+    
+    const currentBalance = getWalletBalance(userId) || balance
     
     // Sort chronologically (oldest first) for running balance calculation
     const sorted = [...transactions].sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0))
@@ -34,6 +58,9 @@ export async function GET(req: NextRequest) {
         resultingBalance: t.resultingBalance !== undefined ? t.resultingBalance : runningBalance // Ensure resultingBalance is always present
       }
     })
+    
+    // Sort by newest first for display
+    transactionsWithBalance.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))
     
     return NextResponse.json({
       transactions: transactionsWithBalance,

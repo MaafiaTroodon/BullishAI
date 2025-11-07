@@ -26,6 +26,37 @@ export default function HistoryPage() {
     { refreshInterval: 30000 }
   )
 
+  // Sync wallet transactions from localStorage on mount and when wallet tab is active
+  useEffect(() => {
+    async function syncWalletTransactions() {
+      if (activeTab !== 'wallet') return
+      
+      try {
+        const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
+        if (walletTxRaw) {
+          try {
+            const walletTx = JSON.parse(walletTxRaw)
+            if (Array.isArray(walletTx) && walletTx.length > 0) {
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+              await fetch(`${baseUrl}/api/portfolio`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ syncWalletTransactions: walletTx })
+              })
+              mutateWallet()
+            }
+          } catch (err) {
+            console.error('Error syncing wallet transactions:', err)
+          }
+        }
+      } catch (err) {
+        console.error('Error reading wallet transactions from localStorage:', err)
+      }
+    }
+    
+    syncWalletTransactions()
+  }, [activeTab, mutateWallet])
+
   // Listen for wallet updates
   useEffect(() => {
     const handleWalletUpdate = () => {
