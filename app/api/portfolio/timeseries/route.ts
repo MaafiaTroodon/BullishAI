@@ -375,59 +375,6 @@ export async function GET(req: NextRequest) {
       startPortfolioAbs = series[startIndex].portfolio
     }
     
-    // If we have trades before the range start, we need to initialize holdings from those trades
-    // This ensures accurate portfolio value at the start of the visible range
-    if (range !== 'ALL' && allTransactions.length > transactions.length) {
-      // Process trades before the range start to get initial holdings state
-      const preRangeTrades = allTransactions
-        .filter(t => {
-          const txTime = t.timestamp || 0
-          return txTime < startTime && (t.action === 'buy' || t.action === 'sell')
-        })
-        .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      
-      // Build initial holdings state from pre-range trades
-      const initialHoldings: Record<string, { shares: number; avgCost: number; costBasis: number }> = {}
-      let initialNetInvested = 0
-      
-      for (const event of preRangeTrades) {
-        const sym = event.symbol.toUpperCase()
-        if (!initialHoldings[sym]) {
-          initialHoldings[sym] = { shares: 0, avgCost: 0, costBasis: 0 }
-        }
-        
-        if (event.action === 'buy') {
-          const qty = event.quantity || 0
-          const price = event.price || 0
-          const totalCost = qty * price
-          const oldShares = initialHoldings[sym].shares
-          const oldAvg = initialHoldings[sym].avgCost
-          const newShares = oldShares + qty
-          const newAvg = newShares > 0 ? ((oldShares * oldAvg) + totalCost) / newShares : price
-          initialHoldings[sym] = {
-            shares: newShares,
-            avgCost: newAvg,
-            costBasis: newShares * newAvg
-          }
-          initialNetInvested += totalCost
-        } else if (event.action === 'sell') {
-          const qty = Math.min(event.quantity || 0, initialHoldings[sym].shares)
-          const price = event.price || 0
-          const proceeds = qty * price
-          initialHoldings[sym].shares -= qty
-          initialHoldings[sym].costBasis = initialHoldings[sym].shares * initialHoldings[sym].avgCost
-          initialNetInvested -= proceeds
-          if (initialHoldings[sym].shares <= 0) {
-            delete initialHoldings[sym]
-          }
-        }
-      }
-      
-      // Merge initial holdings into holdings for accurate range start
-      Object.assign(holdings, initialHoldings)
-      netInvested = initialNetInvested
-    }
-    
     // Calculate deltas for each point (from start of range)
     const seriesWithDeltas = series.map((point, idx) => {
       const deltaFromStart$ = startPortfolioAbs > 0 ? point.portfolio - startPortfolioAbs : 0
