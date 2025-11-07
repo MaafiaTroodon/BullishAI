@@ -181,9 +181,9 @@ export default function WalletPage() {
         {amount && parseFloat(amount) > 0 && (
           <div className="mt-4 text-sm text-slate-400">
             <span>
-              Preview: After {parseFloat(amount) > 0 ? 'deposit' : 'withdrawal'} of ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}, 
+              Preview: After deposit of ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}, 
               balance will be <span className="text-white font-semibold ml-1">
-                ${Math.max(0, Math.min(1_000_000, balance + (parseFloat(amount) || 0))).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}
+                ${Math.max(0, Math.min(1_000_000, balance + parseFloat(amount))).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}
               </span>
             </span>
           </div>
