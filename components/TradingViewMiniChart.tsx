@@ -64,40 +64,49 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
   }, [])
 
   useEffect(() => {
-    if (!container.current || !isVisible || scriptLoaded.current) return
+    if (!container.current || !isVisible) return
 
-    // Clean up any existing script first
-    const existingScript = container.current.querySelector('script')
-    if (existingScript) {
-      existingScript.remove()
+    // Always clean up existing scripts when symbol changes
+    const existingScripts = container.current.querySelectorAll('script')
+    existingScripts.forEach(s => s.remove())
+    const existingWidget = container.current.querySelector('.tradingview-widget-container__widget')
+    if (existingWidget) {
+      existingWidget.innerHTML = ''
     }
+    scriptLoaded.current = false
 
-    const script = document.createElement('script')
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
-    script.type = 'text/javascript'
-    script.async = true
-    
-    // Ensure valid settings - TradingView requires specific format
-    // Use 1D range to show daily performance (reflects actual stock movement)
-    const widgetConfig = {
-      symbol: `${detectedExchange}:${symbol.toUpperCase()}`,
-      chartOnly: false,
-      dateRange: '1D', // Changed from 12M to 1D to show daily performance
-      noTimeScale: false,
-      colorTheme: 'dark' as const,
-      isTransparent: false,
-      locale: 'en',
-      autosize: true
-    }
-    
-    script.innerHTML = JSON.stringify(widgetConfig)
-    script.setAttribute('data-symbol', symbol.toUpperCase())
-    script.setAttribute('data-exchange', detectedExchange)
+    // Small delay to ensure cleanup is complete
+    const timeoutId = setTimeout(() => {
+      if (!container.current) return
 
-    container.current.appendChild(script)
-    scriptLoaded.current = true
+      const script = document.createElement('script')
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
+      script.type = 'text/javascript'
+      script.async = true
+      
+      // Ensure valid settings - TradingView requires specific format
+      // Use 1D range to show daily performance (reflects actual stock movement)
+      const widgetConfig = {
+        symbol: `${detectedExchange}:${symbol.toUpperCase()}`,
+        chartOnly: false,
+        dateRange: '1D', // Changed from 12M to 1D to show daily performance
+        noTimeScale: false,
+        colorTheme: 'dark' as const,
+        isTransparent: false,
+        locale: 'en',
+        autosize: true
+      }
+      
+      script.innerHTML = JSON.stringify(widgetConfig)
+      script.setAttribute('data-symbol', symbol.toUpperCase())
+      script.setAttribute('data-exchange', detectedExchange)
+
+      container.current.appendChild(script)
+      scriptLoaded.current = true
+    }, 100)
 
     return () => {
+      clearTimeout(timeoutId)
       if (container.current) {
         const scripts = container.current.querySelectorAll('script')
         scripts.forEach(s => s.remove())

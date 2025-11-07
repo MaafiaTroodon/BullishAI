@@ -77,10 +77,10 @@ export function GlobalNavbar() {
               <span className="ml-2 text-2xl font-bold text-white">BullishAI</span>
             </Link>
 
-            {/* Search Bar in Navbar */}
-            <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-2xl mx-8 relative">
+            {/* Big Search Bar in Navbar */}
+            <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-3xl mx-8 relative">
               <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -95,10 +95,10 @@ export function GlobalNavbar() {
                     }
                   }}
                   placeholder="Search stocks (e.g., AAPL, TSLA, MSFT)"
-                  className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 text-lg bg-slate-800 border-2 border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                 />
                 {showSuggestions && searchSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-80 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-slate-800 border-2 border-slate-700 rounded-xl shadow-xl max-h-80 overflow-y-auto">
                     {searchSuggestions.map((item, idx) => (
                       <button
                         key={`${item.symbol}-${idx}`}
@@ -106,7 +106,7 @@ export function GlobalNavbar() {
                         onClick={() => handleSelectSuggestion(item.symbol, item.name)}
                         className="w-full text-left px-4 py-3 hover:bg-slate-700 transition text-white border-b border-slate-700 last:border-b-0"
                       >
-                        <div className="font-semibold">{item.symbol}</div>
+                        <div className="font-semibold text-lg">{item.symbol}</div>
                         <div className="text-sm text-slate-400">{item.name}</div>
                       </button>
                     ))}
