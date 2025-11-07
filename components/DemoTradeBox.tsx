@@ -144,19 +144,27 @@ export function DemoTradeBox({ symbol, price }: Props) {
           setLocalItems(items)
           console.log('[DemoTradeBox] Position updated after trade:', items)
           
-          // Persist transaction history
+          // Persist transaction history - use transaction from server response if available
           const txKey = 'bullish_demo_transactions'
           const txRaw = localStorage.getItem(txKey)
           const transactions = txRaw ? JSON.parse(txRaw) : []
-          transactions.push({
+          const transaction = j.transaction || {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             symbol: symbol.toUpperCase(),
             action: mode,
             price: currentPrice,
             quantity: estShares,
             timestamp: Date.now(),
-          })
-          localStorage.setItem(txKey, JSON.stringify(transactions))
+          }
+          // Check if transaction already exists (avoid duplicates)
+          const exists = transactions.some((t: any) => 
+            t.id === transaction.id || 
+            (t.timestamp === transaction.timestamp && t.symbol === transaction.symbol && t.action === transaction.action)
+          )
+          if (!exists) {
+            transactions.push(transaction)
+            localStorage.setItem(txKey, JSON.stringify(transactions))
+          }
           
           window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
           // Trigger wallet update event since trades affect wallet balance
