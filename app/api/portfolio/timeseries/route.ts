@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listTransactions } from '@/lib/portfolio'
-import { listWalletTransactions } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
