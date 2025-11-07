@@ -112,10 +112,12 @@ export function upsertTrade(userId: string, input: TradeInput): Position {
 
   if (input.action === 'buy') {
     const totalCost = input.price * input.quantity
-    if (pf.walletBalance < totalCost) {
+    const currentBalance = pf.walletBalance || 0
+    if (currentBalance < totalCost) {
       throw new Error('insufficient_funds')
     }
-    pf.walletBalance -= totalCost
+    // Subtract cost from wallet (simple subtraction)
+    pf.walletBalance = currentBalance - totalCost
     const newTotalCost = existing.totalCost + input.price * input.quantity
     const newTotalShares = existing.totalShares + input.quantity
     const newAvg = newTotalShares > 0 ? newTotalCost / newTotalShares : 0
@@ -129,8 +131,10 @@ export function upsertTrade(userId: string, input: TradeInput): Position {
     const realized = (input.price - existing.avgPrice) * sellQty
     const newTotalCost = existing.avgPrice * newTotalShares
     pf.positions[s] = { ...existing, totalShares: newTotalShares, totalCost: newTotalCost, realizedPnl: existing.realizedPnl + realized }
-    // credit proceeds
-    pf.walletBalance += input.price * sellQty
+    // Add proceeds to wallet (simple addition)
+    const currentBalance = pf.walletBalance || 0
+    const proceeds = input.price * sellQty
+    pf.walletBalance = currentBalance + proceeds
   }
 
   return pf.positions[s]
@@ -153,7 +157,7 @@ export function depositToWallet(userId: string, amount: number, method: string =
   
   const pf = getPf(userId)
   const cap = 1_000_000
-  const oldBalance = pf.walletBalance
+  const oldBalance = pf.walletBalance || 0
   const newBalance = Math.min(cap, oldBalance + roundedAmount)
   
   // Check if transaction already exists (idempotency)
@@ -166,7 +170,7 @@ export function depositToWallet(userId: string, amount: number, method: string =
     }
   }
   
-  // Atomically update balance and create transaction
+  // Atomically update balance: ADD the amount (simple addition)
   pf.walletBalance = newBalance
   
   const timestamp = Date.now()
@@ -198,7 +202,8 @@ export function withdrawFromWallet(userId: string, amount: number, method: strin
   }
   
   const pf = getPf(userId)
-  if (pf.walletBalance < roundedAmount) throw new Error('insufficient_funds')
+  const oldBalance = pf.walletBalance || 0
+  if (oldBalance < roundedAmount) throw new Error('insufficient_funds')
   
   // Check if transaction already exists (idempotency)
   if (idempotencyKey && pf.walletTransactions) {
@@ -210,9 +215,9 @@ export function withdrawFromWallet(userId: string, amount: number, method: strin
     }
   }
   
-  // Atomically update balance and create transaction
-  const oldBalance = pf.walletBalance
-  pf.walletBalance -= roundedAmount
+  // Atomically update balance: SUBTRACT the amount (simple subtraction)
+  const newBalance = oldBalance - roundedAmount
+  pf.walletBalance = newBalance
   
   const timestamp = Date.now()
   const transaction = {
@@ -221,7 +226,7 @@ export function withdrawFromWallet(userId: string, amount: number, method: strin
     amount: roundedAmount,
     timestamp,
     method: method || 'Manual',
-    resultingBalance: pf.walletBalance,
+    resultingBalance: newBalance,
     idempotencyKey: idempotencyKey || undefined
   }
   
