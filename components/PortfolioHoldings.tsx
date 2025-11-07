@@ -3,8 +3,9 @@
 import useSWR from 'swr'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { HoldingSparkline } from './HoldingSparkline'
 import { safeJsonFetcher } from '@/lib/safeFetch'
+import dynamic from 'next/dynamic'
+const TradingViewMiniChart = dynamic(() => import('@/components/TradingViewMiniChart').then(m => m.default), { ssr: false })
 
 export function PortfolioHoldings() {
   const router = useRouter()
@@ -133,8 +134,8 @@ export function PortfolioHoldings() {
                       ${u.toFixed(2)} ({up>=0?'+':''}{up.toFixed(2)}%)
                     </div>
                   </div>
-                  <div className="ml-4">
-                    <HoldingSparkline symbol={p.symbol} width={120} height={40} />
+                  <div className="ml-4 w-[120px] h-[40px]">
+                    <TradingViewMiniChart symbol={p.symbol} exchange="NASDAQ" width="120px" height="40px" />
                   </div>
                 </div>
               </div>

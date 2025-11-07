@@ -4,87 +4,51 @@ import { useEffect, useRef, memo } from 'react'
 
 interface TradingViewMiniChartProps {
   symbol: string
-  chartOnly?: boolean
-  dateRange?: string
-  noTimeScale?: boolean
-  colorTheme?: 'light' | 'dark'
-  isTransparent?: boolean
+  exchange?: string
   width?: string
   height?: string
 }
 
-function TradingViewMiniChart({
-  symbol,
-  chartOnly = false,
-  dateRange = '12M',
-  noTimeScale = false,
-  colorTheme = 'dark',
-  isTransparent = false,
-  width = '100%',
-  height = '100%',
-}: TradingViewMiniChartProps) {
+function TradingViewMiniChart({ symbol, exchange = 'NASDAQ', width = '100%', height = '100%' }: TradingViewMiniChartProps) {
   const container = useRef<HTMLDivElement>(null)
+  const scriptLoaded = useRef(false)
 
   useEffect(() => {
-    if (!container.current) return
-
-    // Suppress harmless TradingView iframe console errors in dev overlay
-    const originalConsoleError = console.error
-    console.error = (...args: any[]) => {
-      try {
-        const msg = args.map(String).join(' ')
-        if (msg.includes('contentWindow') || msg.includes('iframe') || msg.includes('TradingView')) {
-          return
-        }
-      } catch {}
-      originalConsoleError.apply(console, args as any)
-    }
-
-    // Clear previous content
-    container.current.innerHTML = ''
+    if (!container.current || scriptLoaded.current) return
 
     const script = document.createElement('script')
-    script.src =
-      'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
     script.type = 'text/javascript'
     script.async = true
     script.innerHTML = JSON.stringify({
-      symbol: `${symbol}`,
-      chartOnly,
-      dateRange,
-      noTimeScale,
-      colorTheme,
-      isTransparent,
-      width,
-      height,
+      symbol: `${exchange}:${symbol}`,
+      chartOnly: false,
+      dateRange: '12M',
+      noTimeScale: false,
+      colorTheme: 'dark',
+      isTransparent: false,
+      locale: 'en',
+      width: width,
       autosize: true,
+      height: height
     })
 
     container.current.appendChild(script)
+    scriptLoaded.current = true
 
     return () => {
-      // Restore console after unmount
-      console.error = originalConsoleError
-      try { if (container.current) container.current.innerHTML = '' } catch {}
+      if (container.current && script.parentNode) {
+        script.parentNode.removeChild(script)
+        scriptLoaded.current = false
+      }
     }
-  }, [symbol, chartOnly, dateRange, noTimeScale, colorTheme, isTransparent, width, height])
+  }, [symbol, exchange, width, height])
 
   return (
-    <div className="tradingview-widget-container" ref={container}>
+    <div className="tradingview-widget-container" ref={container} style={{ width, height, minHeight: '40px' }}>
       <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright">
-        <a
-          href={`https://www.tradingview.com/symbols/${symbol}/`}
-          rel="noopener nofollow"
-          target="_blank"
-        >
-          <span className="text-blue-500">{symbol} price</span>
-        </a>
-        <span> by TradingView</span>
-      </div>
     </div>
   )
 }
 
 export default memo(TradingViewMiniChart)
-

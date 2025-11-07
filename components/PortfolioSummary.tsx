@@ -3,6 +3,7 @@
 import useSWR from 'swr'
 import { useEffect, useState, useMemo } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
+import { MarketSessionBadge } from './MarketSessionBadge'
 
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
