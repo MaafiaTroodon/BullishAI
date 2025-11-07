@@ -265,12 +265,11 @@ export async function GET(req: NextRequest) {
       symbolPrices[sym] = await getHistoricalPrices(sym, range, startTime, now, baseUrl)
     }))
     
-    // Fetch current positions and quotes for latest point accuracy
-    const currentPositions = listPositions(userId)
+    // Use currentPositions already fetched above (line 116)
+    // Build current position map from actual positions
     const currentQuotes: Record<string, number> = {}
     const currentPositionMap: Record<string, { shares: number; avgCost: number }> = {}
     
-    // Build current position map from actual positions
     currentPositions.forEach((pos: any) => {
       const sym = pos.symbol.toUpperCase()
       currentPositionMap[sym] = {
