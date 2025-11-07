@@ -72,16 +72,52 @@ export default function HistoryPage() {
     syncWalletTransactions()
   }, [activeTab, mutateWallet])
   
+  // Sync trade transactions from localStorage when trades tab is active
+  useEffect(() => {
+    async function syncTradeTransactions() {
+      if (activeTab !== 'trades') return
+      
+      try {
+        const tradesTxRaw = localStorage.getItem('bullish_demo_transactions')
+        if (tradesTxRaw) {
+          try {
+            const tradesTx = JSON.parse(tradesTxRaw)
+            if (Array.isArray(tradesTx) && tradesTx.length > 0) {
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+              const syncRes = await fetch(`${baseUrl}/api/portfolio`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ syncTransactions: tradesTx })
+              })
+              if (syncRes.ok) {
+                // Refetch trade transactions after sync
+                mutateTrades()
+              }
+            }
+          } catch (err) {
+            console.error('Error syncing trade transactions:', err)
+          }
+        }
+      } catch (err) {
+        console.error('Error reading trade transactions from localStorage:', err)
+      }
+    }
+    
+    syncTradeTransactions()
+  }, [activeTab, mutateTrades])
+
   // Also sync on initial mount regardless of tab
   useEffect(() => {
     async function initialSync() {
       try {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+        
+        // Sync wallet transactions
         const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
         if (walletTxRaw) {
           try {
             const walletTx = JSON.parse(walletTxRaw)
             if (Array.isArray(walletTx) && walletTx.length > 0) {
-              const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
               await fetch(`${baseUrl}/api/portfolio`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -92,8 +128,25 @@ export default function HistoryPage() {
             console.error('Error in initial wallet sync:', err)
           }
         }
+        
+        // Sync trade transactions
+        const tradesTxRaw = localStorage.getItem('bullish_demo_transactions')
+        if (tradesTxRaw) {
+          try {
+            const tradesTx = JSON.parse(tradesTxRaw)
+            if (Array.isArray(tradesTx) && tradesTx.length > 0) {
+              await fetch(`${baseUrl}/api/portfolio`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ syncTransactions: tradesTx })
+              })
+            }
+          } catch (err) {
+            console.error('Error in initial trade sync:', err)
+          }
+        }
       } catch (err) {
-        console.error('Error reading wallet transactions on mount:', err)
+        console.error('Error reading transactions on mount:', err)
       }
     }
     
