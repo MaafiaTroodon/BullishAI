@@ -76,25 +76,7 @@ export async function GET(req: NextRequest) {
     const host = req.headers.get('host') || 'localhost:3000'
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
     
-    // Get ONLY trade transactions (fills) - wallet deposits/withdrawals are ignored for portfolio chart
-    const transactions = listTransactions(userId).filter(t => t.action === 'buy' || t.action === 'sell')
-    
-    // If no fills, return empty series (wallet deposits don't create portfolio activity)
-    if (transactions.length === 0) {
-      return NextResponse.json({
-        range,
-        granularity: gran,
-        currency: 'USD',
-        series: [],
-        meta: {
-          symbols: [],
-          hasFx: false,
-          lastQuoteTs: new Date().toISOString()
-        }
-      })
-    }
-    
-    // Determine time range
+    // Determine time range FIRST
     const now = Date.now()
     const rangeMs: Record<string, number> = {
       '1h': 60 * 60 * 1000,
@@ -110,12 +92,41 @@ export async function GET(req: NextRequest) {
     
     const rangeBack = rangeMs[range] || 30 * 24 * 60 * 60 * 1000
     let startTime = now - rangeBack
+    
+    // Get ALL trade transactions first
+    const allTransactions = listTransactions(userId).filter(t => t.action === 'buy' || t.action === 'sell')
+    
+    // Filter transactions by selected range (CRITICAL: only process trades in visible range)
+    let transactions = allTransactions
     if (range === 'ALL') {
-      // Use only fill timestamps (wallet deposits don't affect portfolio chart start time)
-      const fillTimestamps = transactions.map(t => t.timestamp).filter(t => t > 0)
+      // For ALL, use all transactions but find earliest timestamp
+      const fillTimestamps = allTransactions.map(t => t.timestamp).filter(t => t > 0)
       if (fillTimestamps.length > 0) {
         startTime = Math.min(...fillTimestamps)
       }
+    } else {
+      // Filter transactions to only those within the selected range
+      transactions = allTransactions.filter(t => {
+        const txTime = t.timestamp || 0
+        return txTime >= startTime && txTime <= now
+      })
+    }
+    
+    // If no fills in this range, return empty series (wallet deposits don't create portfolio activity)
+    if (transactions.length === 0) {
+      return NextResponse.json({
+        range,
+        granularity: gran,
+        currency: 'USD',
+        series: [],
+        meta: {
+          symbols: [],
+          hasFx: false,
+          lastQuoteTs: new Date().toISOString(),
+          startIndex: 0,
+          startPortfolioAbs: 0
+        }
+      })
     }
     
     // Determine granularity
