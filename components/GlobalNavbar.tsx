@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Bell, ChevronDown, Settings, LogOut, TrendingUp } from 'lucide-react'
+import { Search, Bell, ChevronDown, Settings, LogOut, TrendingUp, Calendar, Newspaper } from 'lucide-react'
 import { DevStatus } from './DevStatus'
 import useSWR from 'swr'
 
@@ -124,14 +124,40 @@ export function GlobalNavbar() {
                       </span>
                     </Link>
                   </li>
-                  <li>
-                    <Link href="/news" className="pill">
+                  <li className="relative group">
+                    <button
+                      className="pill"
+                      aria-expanded={false}
+                      aria-haspopup="true"
+                      onMouseEnter={() => {}}
+                      onMouseLeave={() => {}}
+                    >
                       <span className="hover-circle" aria-hidden="true" />
                       <span className="label-stack">
-                        <span className="pill-label">News</span>
-                        <span className="pill-label-hover" aria-hidden="true">News</span>
+                        <span className="pill-label">Watch More</span>
+                        <span className="pill-label-hover" aria-hidden="true">Watch More</span>
                       </span>
-                    </Link>
+                    </button>
+                    <div className="absolute left-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-50">
+                      <Link
+                        href="/news"
+                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-t-lg transition"
+                        onMouseEnter={(e) => e.currentTarget.classList.add('bg-slate-700')}
+                        onMouseLeave={(e) => e.currentTarget.classList.remove('bg-slate-700')}
+                      >
+                        <Newspaper className="h-4 w-4" />
+                        <span>News</span>
+                      </Link>
+                      <Link
+                        href="/calendar"
+                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
+                        onMouseEnter={(e) => e.currentTarget.classList.add('bg-slate-700')}
+                        onMouseLeave={(e) => e.currentTarget.classList.remove('bg-slate-700')}
+                      >
+                        <Calendar className="h-4 w-4" />
+                        <span>Calendar</span>
+                      </Link>
+                    </div>
                   </li>
                   <li>
                     <Link href="/alerts" className="pill">
