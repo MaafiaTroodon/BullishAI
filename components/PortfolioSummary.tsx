@@ -142,8 +142,11 @@ export function PortfolioSummary() {
   return (
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="text-slate-400 text-sm mb-1">Total Portfolio Value</div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-slate-400 text-sm">Total Portfolio Value</div>
+            <MarketSessionBadge />
+          </div>
           <div className="text-white text-4xl font-bold">${metrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
         {metrics.totalReturn !== 0 && (

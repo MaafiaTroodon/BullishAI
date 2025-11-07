@@ -2,14 +2,42 @@
 
 import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r=>r.json())
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Line } from 'recharts'
+import { safeJsonFetcher } from '@/lib/safeFetch'
+import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 
 export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1m')
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio', fetcher, { refreshInterval: 15000 })
+  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio', safeJsonFetcher, { refreshInterval: 15000 })
   const [localItems, setLocalItems] = useState<any[]>([])
+  
+  // Map internal ranges to API ranges
+  const apiRangeMap: Record<string, string> = {
+    '1h': '1d',
+    '1d': '1d',
+    '3d': '3d',
+    '1week': '1week',
+    '3m': '3M',
+    '6m': '6M',
+    '1y': '1Y',
+    '1m': '1M',
+    'ALL': 'ALL'
+  }
+  
+  const apiRange = apiRangeMap[chartRange] || '1M'
+  const gran = chartRange === '1h' || chartRange === '1d' || chartRange === '3d' ? '5m' : '1d'
+  
+  // Get market session for refresh interval
+  const session = getMarketSession()
+  const refreshInterval = getRefreshInterval(session.session)
+  
+  // Fetch timeseries data
+  const { data: timeseriesData, error: timeseriesError, mutate: mutateTimeseries } = useSWR(
+    `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
+    safeJsonFetcher,
+    { refreshInterval }
+  )
+  
   useEffect(() => {
     try {
       const raw = localStorage.getItem('bullish_demo_pf_positions')
@@ -17,250 +45,103 @@ export function PortfolioChart() {
       function onUpd(){
         const r = localStorage.getItem('bullish_demo_pf_positions')
         if (r) setLocalItems(Object.values(JSON.parse(r)))
-        mutatePf() // Invalidate portfolio cache
+        mutatePf()
+        mutateTimeseries()
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
       return () => window.removeEventListener('portfolioUpdated', onUpd as any)
     } catch {}
-  }, [mutatePf])
+  }, [mutatePf, mutateTimeseries])
+  
+  // Sync transactions on mount
+  useEffect(() => {
+    async function syncData() {
+      try {
+        const txRaw = localStorage.getItem('bullish_demo_transactions')
+        const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
+        const positionsRaw = localStorage.getItem('bullish_demo_pf_positions')
+        
+        const syncData: any = {}
+        if (txRaw) {
+          try {
+            syncData.syncTransactions = JSON.parse(txRaw)
+          } catch {}
+        }
+        if (walletTxRaw) {
+          try {
+            syncData.syncWalletTransactions = JSON.parse(walletTxRaw)
+          } catch {}
+        }
+        if (positionsRaw) {
+          try {
+            syncData.syncPositions = Object.values(JSON.parse(positionsRaw))
+          } catch {}
+        }
+        
+        if (Object.keys(syncData).length > 0) {
+          const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+          await fetch(new URL('/api/portfolio', baseUrl).toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(syncData)
+          })
+          mutatePf()
+          mutateTimeseries()
+        }
+      } catch {}
+    }
+    syncData()
+  }, [mutatePf, mutateTimeseries])
+  
   const items: any[] = (pf?.items && pf.items.length>0) ? pf.items : localItems
 
-  const { data: charts, isLoading: isLoadingCharts, mutate: mutateCharts, error: chartsError } = useSWR(
-    () => items.length>0 ? `/api/_portfolio_chart_proxy?symbols=${items.map(p=>p.symbol).join(',')}&range=${chartRange}` : null,
-    fetcher,
-    { 
-      keepPreviousData: true,
-      revalidateOnFocus: false,
-      dedupingInterval: 5000,
-      refreshInterval: 30000,
-      onError: (err) => {
-        console.error('Chart fetch error:', err)
-      },
-      onSuccess: (data) => {
-        console.log('Chart data received:', Object.keys(data || {}), items.map(p => p.symbol))
-      }
-    }
-  )
-
-  // Invalidate chart cache when portfolio updates
-  useEffect(() => {
-    function onPortfolioUpdate() {
-      mutateCharts()
-    }
-    window.addEventListener('portfolioUpdated', onPortfolioUpdate as any)
-    return () => window.removeEventListener('portfolioUpdated', onPortfolioUpdate as any)
-  }, [mutateCharts])
-
-  // Expect charts: { [symbol]: [{t,c}] }
+  // Use timeseries data from API
   const points = useMemo(() => {
-    if (!items || items.length === 0) return []
-    
-    // Calculate current portfolio value for fallback
-    let currentPortfolioValue = 0
-    for (const pos of items) {
-      if (typeof pos.totalShares === 'number' && pos.totalShares > 0) {
-        // Try to get current price from enriched data, or use avgPrice
-        const price = pos.currentPrice || pos.avgPrice || 0
-        if (price > 0) {
-          currentPortfolioValue += pos.totalShares * price
-        }
-      }
-    }
-    
-    // If we don't have charts data, create a flat line chart with current value
-    if (!charts || typeof charts !== 'object' || Object.keys(charts).length === 0) {
-      if (currentPortfolioValue > 0) {
-        const now = Date.now()
-        const rangeMs: Record<string, number> = {
-          '1h': 60 * 60 * 1000,
-          '1d': 24 * 60 * 60 * 1000,
-          '3d': 3 * 24 * 60 * 60 * 1000,
-          '1week': 7 * 24 * 60 * 60 * 1000,
-          '3m': 90 * 24 * 60 * 60 * 1000,
-          '6m': 180 * 24 * 60 * 60 * 1000,
-          '1y': 365 * 24 * 60 * 60 * 1000,
-        }
-        const rangeBack = rangeMs[chartRange] || 30 * 24 * 60 * 60 * 1000
-        const startTime = now - rangeBack
-        
-        // Create multiple points for a smoother line (even if flat)
-        const pointCount = 50
-        const timeStep = rangeBack / pointCount
-        const fallbackPoints = []
-        for (let i = 0; i <= pointCount; i++) {
-          fallbackPoints.push({
-            t: startTime + (i * timeStep),
-            value: Number(currentPortfolioValue.toFixed(2))
-          })
-        }
-        return fallbackPoints
-      }
+    if (!timeseriesData?.series || !Array.isArray(timeseriesData.series)) {
       return []
     }
     
-    // Get all symbols that have chart data
-    const syms = items.map(p => p.symbol).filter((s:string) => {
-      const chartData = charts[s]
-      return Array.isArray(chartData) && chartData.length > 0
-    })
-    
-    if (syms.length === 0) return []
-    
-    // Collect all unique timestamps from all stocks
-    const allTimestamps = new Set<number>()
-    syms.forEach(sym => {
-      const data = charts[sym] || []
-      data.forEach((p:any) => {
-        if (p && typeof p.t === 'number') {
-          allTimestamps.add(p.t)
-        }
-      })
-    })
-    
-    if (allTimestamps.size === 0) return []
-    
-    // Sort timestamps
-    const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b)
-    
-    // Helper function to find price at a specific timestamp (with interpolation)
-    const getPriceAtTime = (symbol: string, timestamp: number): number | null => {
-      const arr = charts[symbol] || []
-      if (!Array.isArray(arr) || arr.length === 0) return null
-      
-      // Find exact match first
-      const exact = arr.find((p:any) => p && typeof p.t === 'number' && p.t === timestamp)
-      if (exact) {
-        const price = exact.c ?? exact.close
-        return typeof price === 'number' && price > 0 ? price : null
-      }
-      
-      // Find closest data points for interpolation
-      let before: any = null
-      let after: any = null
-      
-      for (const p of arr) {
-        if (!p || typeof p.t !== 'number') continue
-        const price = p.c ?? p.close
-        if (typeof price !== 'number' || price <= 0) continue
-        
-        if (p.t < timestamp && (!before || p.t > before.t)) {
-          before = { t: p.t, price }
-        } else if (p.t > timestamp && (!after || p.t < after.t)) {
-          after = { t: p.t, price }
-        }
-      }
-      
-      // Use before if available, else after, else null
-      if (before) return before.price
-      if (after) return after.price
-      return null
-    }
-    
-    // Calculate portfolio value for each timestamp
-    const portfolioPoints = sortedTimestamps.map(timestamp => {
-      let totalValue = 0
-      let hasData = false
-      
-      for (const pos of items) {
-        const price = getPriceAtTime(pos.symbol, timestamp)
-        if (price !== null && typeof pos.totalShares === 'number' && pos.totalShares > 0) {
-          totalValue += pos.totalShares * price
-          hasData = true
-        }
-      }
-      
-      return hasData ? { t: timestamp, value: Number(totalValue.toFixed(2)) } : null
-    }).filter((p): p is { t: number; value: number } => p !== null && p.value > 0)
-    
-    // Ensure we have at least some data points
-    if (portfolioPoints.length === 0) {
-      console.warn('No portfolio points calculated', { items, charts, syms })
-      return []
-    }
-    
-    // If we have very few points, create a chart from current portfolio value
-    if (portfolioPoints.length < 2) {
-      // Calculate current portfolio value
-      let currentTotal = 0
-      const now = Date.now()
-      
-      // Try to get current prices from charts or calculate from avgPrice
-      for (const pos of items) {
-        const arr = charts[pos.symbol] || []
-        let price: number | null = null
-        
-        if (Array.isArray(arr) && arr.length > 0) {
-          // Get the latest price from chart data
-          const latest = arr[arr.length - 1]
-          price = latest?.c ?? latest?.close ?? null
-        }
-        
-        // If no chart price, use avgPrice as fallback (will show flat line)
-        if (price === null || price <= 0) {
-          price = pos.avgPrice || 0
-        }
-        
-        if (typeof pos.totalShares === 'number' && pos.totalShares > 0 && price > 0) {
-          currentTotal += pos.totalShares * price
-        }
-      }
-      
-      if (currentTotal > 0) {
-        // Create a simple line chart showing current portfolio value
-        // Use the selected range to determine how far back to go
-        const rangeMs: Record<string, number> = {
-          '1h': 60 * 60 * 1000,
-          '1d': 24 * 60 * 60 * 1000,
-          '3d': 3 * 24 * 60 * 60 * 1000,
-          '1week': 7 * 24 * 60 * 60 * 1000,
-          '3m': 90 * 24 * 60 * 60 * 1000,
-          '6m': 180 * 24 * 60 * 60 * 1000,
-          '1y': 365 * 24 * 60 * 60 * 1000,
-        }
-        
-        const rangeBack = rangeMs[chartRange] || 30 * 24 * 60 * 60 * 1000 // Default 30 days
-        const startTime = now - rangeBack
-        
-        // Create multiple points for a smoother line (even if flat)
-        const pointCount = 50
-        const timeStep = rangeBack / pointCount
-        const fallbackPoints = []
-        for (let i = 0; i <= pointCount; i++) {
-          fallbackPoints.push({
-            t: startTime + (i * timeStep),
-            value: Number(currentTotal.toFixed(2))
-          })
-        }
-        return fallbackPoints
-      }
-    }
-    
-    // If we still have points, ensure they're sorted and have at least 2 points
-    if (portfolioPoints.length > 0) {
-      // Ensure chronological order
-      portfolioPoints.sort((a, b) => a.t - b.t)
-      
-      // If we only have 1 point, duplicate it to show a line
-      if (portfolioPoints.length === 1) {
-        const point = portfolioPoints[0]
-        const earlierPoint = { t: point.t - (24 * 60 * 60 * 1000), value: point.value }
-        return [earlierPoint, point]
-      }
-      
-      return portfolioPoints
-    }
-    
-    return []
-  }, [JSON.stringify(items), JSON.stringify(charts), chartRange])
+    return timeseriesData.series.map((p: any) => ({
+      t: p.t,
+      value: p.portfolioAbs || 0,
+      netDeposits: p.netDepositsAbs || 0,
+      deltaFromStart$: p.deltaFromStart$ || 0,
+      deltaFromStartPct: p.deltaFromStartPct || 0
+    }))
+  }, [timeseriesData])
+
+  // Calculate portfolio return to determine color
+  const portfolioReturn = useMemo(() => {
+    if (points.length === 0) return 0
+    const lastPoint = points[points.length - 1]
+    return lastPoint.deltaFromStartPct || 0
+  }, [points])
+
+  const isPositive = portfolioReturn >= 0
+  const strokeColor = isPositive ? '#10b981' : '#ef4444'
+  
+  // Calculate Y-axis domain
+  const yDomain = useMemo(() => {
+    if (points.length === 0) return [0, 100]
+    const values = points.map(p => p.value).filter(v => v > 0)
+    if (values.length === 0) return [0, 100]
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const range = max - min || max || 1
+    const padding = range * 0.06
+    return [Math.max(0, min - padding), max + padding]
+  }, [points])
 
   const ranges = [
     { label: '1H', value: '1h' },
     { label: '1D', value: '1d' },
     { label: '3D', value: '3d' },
     { label: '1W', value: '1week' },
+    { label: '1M', value: '1m' },
     { label: '3M', value: '3m' },
     { label: '6M', value: '6m' },
     { label: '1Y', value: '1y' },
+    { label: 'ALL', value: 'ALL' },
   ]
 
   const formatXAxis = (t: number) => {
@@ -295,32 +176,46 @@ export function PortfolioChart() {
         </div>
       </div>
       <div className="h-[500px]">
-        {items.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
-        ) : isLoadingCharts && !charts && points.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">Loading chart…</div>
-        ) : points.length === 0 && !isLoadingCharts ? (
+        {timeseriesError ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
-              <p className="mb-2">No chart data available</p>
-              <p className="text-sm text-slate-500">Chart data is loading or unavailable for your holdings.</p>
-              <p className="text-xs text-slate-600 mt-2">Holdings: {items.map(p => p.symbol).join(', ')}</p>
-              <p className="text-xs text-slate-600 mt-1">
-                Charts data: {charts ? Object.keys(charts).map(s => `${s}: ${Array.isArray(charts[s]) ? charts[s].length : 0}`).join(', ') : 'none'}
-              </p>
-              {chartsError && (
-                <p className="text-xs text-red-400 mt-1">Error: {chartsError.message}</p>
-              )}
+              <p className="mb-2 text-red-400">Couldn't load chart data</p>
+              <p className="text-sm text-slate-500 mb-4">{timeseriesError.message || 'API request failed'}</p>
+              <button
+                onClick={() => mutateTimeseries()}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              >
+                Retry
+              </button>
             </div>
           </div>
-        ) : points.length === 0 && isLoadingCharts ? (
-          <div className="h-full flex items-center justify-center text-slate-400">Loading chart data...</div>
-        ) : points.length > 0 ? (
+        ) : items.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
+        ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
+          <div className="h-full flex items-center justify-center text-slate-400">
+            <div className="text-center">
+              <p className="mb-2">No portfolio activity yet</p>
+              <p className="text-sm text-slate-500">Make a deposit or buy stocks to see your portfolio value chart.</p>
+            </div>
+          </div>
+        ) : points.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-slate-400">Processing chart data...</div>
+        ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart 
+            <AreaChart 
               data={points}
               margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
             >
+              <defs>
+                <linearGradient id="pfColor-up" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="pfColor-down" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <XAxis 
                 dataKey="t" 
                 type="number"
@@ -334,34 +229,97 @@ export function PortfolioChart() {
                 stroke="#94a3b8"
                 tickFormatter={(v) => `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 style={{ fontSize: '12px' }}
+                domain={yDomain}
               />
               <Tooltip 
-                formatter={(v: any) => [`$$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
-                labelFormatter={(l: any) => {
-                  const date = new Date(l)
-                  return date.toLocaleString('en-US', { 
+                content={({ active, payload, label }: any) => {
+                  if (!active || !payload || !payload.length) return null
+                  
+                  const data = payload[0]?.payload
+                  const timestamp = label || data?.t
+                  const date = new Date(timestamp)
+                  const etDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+                  const dayName = etDate.toLocaleDateString('en-US', { weekday: 'short' })
+                  const dateStr = etDate.toLocaleString('en-US', { 
                     month: 'short', 
                     day: 'numeric', 
-                    hour: 'numeric', 
+                    year: 'numeric',
+                    hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true 
-                  })
+                    hour12: true
+                  }) + ' ET'
+                  
+                  const portfolioValue = data?.value || 0
+                  const netDepositsToDate = data?.netDeposits || 0
+                  const deltaFromStart$ = data?.deltaFromStart$ || 0
+                  const deltaFromStartPct = data?.deltaFromStartPct || 0
+                  const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
+                  
+                  const rangeLabels: Record<string, string> = {
+                    '1h': '1 hour',
+                    '1d': '1 day',
+                    '3d': '3 days',
+                    '1week': '1 week',
+                    '1m': '1 month',
+                    '3m': '3 months',
+                    '6m': '6 months',
+                    '1y': '1 year',
+                    'ALL': 'all time'
+                  }
+                  const rangeLabel = rangeLabels[chartRange] || 'selected period'
+                  
+                  return (
+                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
+                      <div className="text-xs text-slate-400 mb-2">{dayName}, {dateStr}</div>
+                      <div className="space-y-1">
+                        <div className="text-sm text-white">
+                          <span className="text-slate-400">Portfolio value: </span>
+                          <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-slate-400">Change ({rangeLabel}): </span>
+                          {startPortfolioAbs > 0 && deltaFromStartPct !== 0 ? (
+                            <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {deltaFromStart$ >= 0 ? '+' : ''}${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({deltaFromStartPct >= 0 ? '+' : ''}{deltaFromStartPct.toFixed(2)}%)
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-slate-400">
+                              ${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-white">
+                          <span className="text-slate-400">Net deposits (to date): </span>
+                          <span className="font-semibold">${netDepositsToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
                 }}
-                contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0', borderRadius: '8px' }}
+                cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '5 5' }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#10b981" 
-                strokeWidth={2} 
+              <Area 
+                type="monotoneX" 
+                dataKey="value"
+                stroke={strokeColor}
+                strokeWidth={2}
+                fillOpacity={1}
+                fill={`url(#pfColor-${isPositive ? 'up' : 'down'})`}
                 dot={false}
+                isAnimationActive={typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches}
                 animationDuration={300}
-                isAnimationActive={true}
               />
-            </LineChart>
+              <Line
+                type="monotoneX"
+                dataKey="netDeposits"
+                stroke="#64748b"
+                strokeWidth={1.5}
+                strokeDasharray="5 5"
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
           </ResponsiveContainer>
-        ) : (
-          <div className="h-full flex items-center justify-center text-slate-400">Preparing chart...</div>
         )}
       </div>
     </div>

@@ -134,8 +134,8 @@ export function PortfolioHoldings() {
                       ${u.toFixed(2)} ({up>=0?'+':''}{up.toFixed(2)}%)
                     </div>
                   </div>
-                  <div className="ml-4 w-[120px] h-[40px]">
-                    <TradingViewMiniChart symbol={p.symbol} exchange="NASDAQ" width="120px" height="40px" />
+                  <div className="ml-4 w-[120px] h-[40px] flex-shrink-0">
+                    <TradingViewMiniChart symbol={p.symbol} width="120px" height="40px" />
                   </div>
                 </div>
               </div>
