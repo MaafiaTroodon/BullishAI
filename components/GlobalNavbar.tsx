@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Bell, ChevronDown, Settings, LogOut, TrendingUp, Calendar, Newspaper, History } from 'lucide-react'
+import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, Calendar, Newspaper, History, Wallet, TrendingUp as TrendingUpIcon } from 'lucide-react'
 import { DevStatus } from './DevStatus'
 import useSWR from 'swr'
 
@@ -169,15 +169,31 @@ export function GlobalNavbar() {
                         <Calendar className="h-4 w-4" />
                         <span>Calendar</span>
                       </Link>
-                      <Link
-                        href="/history"
-                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
-                        onMouseEnter={(e) => e.currentTarget.classList.add('bg-slate-700')}
-                        onMouseLeave={(e) => e.currentTarget.classList.remove('bg-slate-700')}
-                      >
-                        <History className="h-4 w-4" />
-                        <span>History</span>
-                      </Link>
+                      <div className="relative group/history">
+                        <div className="flex items-center justify-between px-4 py-3 text-slate-300 hover:bg-slate-700 transition cursor-pointer">
+                          <div className="flex items-center gap-3">
+                            <History className="h-4 w-4" />
+                            <span>History</span>
+                          </div>
+                          <ChevronRight className="h-4 w-4" />
+                        </div>
+                        <div className="absolute left-full top-0 ml-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover/history:opacity-100 group-hover/history:visible transition-all duration-200 ease-out z-50">
+                          <Link
+                            href="/history?tab=wallet"
+                            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-t-lg transition"
+                          >
+                            <Wallet className="h-4 w-4" />
+                            <span>Wallet History</span>
+                          </Link>
+                          <Link
+                            href="/history?tab=trades"
+                            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
+                          >
+                            <TrendingUpIcon className="h-4 w-4" />
+                            <span>Trades History</span>
+                          </Link>
+                        </div>
+                      </div>
                     </div>
                   </li>
                   <li>

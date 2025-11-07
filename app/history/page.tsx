@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { formatETTime } from '@/lib/marketSession'
@@ -9,8 +10,17 @@ import { Download } from 'lucide-react'
 type FilterType = 'all' | 'deposits' | 'withdrawals' | 'buys' | 'sells'
 
 export default function HistoryPage() {
-  const [activeTab, setActiveTab] = useState<'wallet' | 'trades'>('wallet')
+  const searchParams = useSearchParams()
+  const tabFromUrl = searchParams.get('tab') as 'wallet' | 'trades' | null
+  const [activeTab, setActiveTab] = useState<'wallet' | 'trades'>(tabFromUrl || 'wallet')
   const [filter, setFilter] = useState<FilterType>('all')
+  
+  // Update active tab when URL changes
+  useEffect(() => {
+    if (tabFromUrl === 'wallet' || tabFromUrl === 'trades') {
+      setActiveTab(tabFromUrl)
+    }
+  }, [tabFromUrl])
 
   // Fetch wallet transactions
   const { data: walletData, isLoading: isLoadingWallet, mutate: mutateWallet } = useSWR(
