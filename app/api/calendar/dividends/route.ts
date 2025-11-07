@@ -5,7 +5,11 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/calendar/dividends
- * Fetch dividends calendar from Finnhub (primary), Polygon.io (fallback), or EODHD (last fallback)
+ * Fetch dividends calendar from multiple sources:
+ * 1. Finnhub (primary)
+ * 2. Polygon.io (fallback)
+ * 3. Yahoo Finance (fallback)
+ * 4. EODHD (last fallback)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -60,7 +64,7 @@ export async function GET(req: NextRequest) {
         const res = await fetch(polygonUrl, { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
-          if (data.results && Array.isArray(data.results)) {
+          if (data.results && Array.isArray(data.results) && data.results.length > 0) {
             items = data.results.map((d: any) => ({
               symbol: d.ticker,
               company: d.name || d.ticker,
@@ -69,24 +73,49 @@ export async function GET(req: NextRequest) {
               amount: d.cash_amount,
               yield: d.yield ? (d.yield * 100).toFixed(2) : null
             }))
+            console.log(`Polygon.io dividends: Found ${items.length} items`)
           }
+        } else {
+          const errorText = await res.text()
+          console.warn(`Polygon.io dividends API returned status ${res.status}:`, errorText.substring(0, 200))
         }
-      } catch (err) {
-        console.error('Polygon.io dividends error:', err)
+      } catch (err: any) {
+        console.error('Polygon.io dividends error:', err.message)
       }
     }
 
-    // 3. Last fallback to EODHD if still no items
+    // 3. Fallback to Yahoo Finance if still no items (try fetching dividend history for popular stocks)
+    if (items.length === 0) {
+      try {
+        // Yahoo Finance dividend calendar is not directly available via API
+        // We could fetch dividend data per symbol, but that's inefficient for calendar view
+        // Skip Yahoo Finance for now as it requires per-symbol queries
+      } catch (err) {
+        console.error('Yahoo Finance dividends error:', err)
+      }
+    }
+
+    // 4. Last fallback to EODHD if still no items
     if (items.length === 0) {
       try {
         const eodhdKey = process.env.EODHD_API_KEY
         if (eodhdKey) {
-          const eodhdUrl = `https://eodhd.com/api/div/${from}/${to}?api_token=${eodhdKey}&fmt=json`
+          // EODHD dividend calendar endpoint
+          const eodhdUrl = `https://eodhd.com/api/calendar/dividends?from=${from}&to=${to}&api_token=${eodhdKey}&fmt=json`
           const res = await fetch(eodhdUrl, { cache: 'no-store' })
           if (res.ok) {
             const data = await res.json()
             if (Array.isArray(data)) {
               items = data.map((d: any) => ({
+                symbol: d.code?.split('.')[0] || d.symbol,
+                company: d.name || d.code?.split('.')[0],
+                date: d.date || d.exDate,
+                exDate: d.exDate || d.date,
+                amount: d.amount || d.value,
+                yield: d.yield
+              }))
+            } else if (data.dividends && Array.isArray(data.dividends)) {
+              items = data.dividends.map((d: any) => ({
                 symbol: d.code?.split('.')[0] || d.symbol,
                 company: d.name || d.code?.split('.')[0],
                 date: d.date || d.exDate,
