@@ -73,6 +73,11 @@ function TradingViewTickerTape() {
 
   return (
     <div className="tradingview-widget-container w-full" ref={container} style={{ height: '46px' }}>
+      <style jsx>{`
+        .tradingview-widget-container :global(.tradingview-widget-copyright) {
+          display: none !important;
+        }
+      `}</style>
       <div className="tradingview-widget-container__widget"></div>
       <div className="tradingview-widget-copyright" style={{ display: 'none' }}>
         <a 
