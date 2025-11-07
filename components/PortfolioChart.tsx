@@ -35,12 +35,26 @@ export function PortfolioChart() {
   const session = getMarketSession()
   const refreshInterval = getRefreshInterval(session.session)
   
-  // Fetch timeseries data
+  // Fetch timeseries data - key includes range and gran for proper caching
+  // Refresh more frequently during market hours for real-time updates
   const { data: timeseriesData, error: timeseriesError, mutate: mutateTimeseries } = useSWR(
     `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
     safeJsonFetcher,
-    { refreshInterval }
+    { 
+      refreshInterval: refreshInterval,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true
+    }
   )
+  
+  // Trigger refresh when portfolio updates (after trades)
+  useEffect(() => {
+    const handlePortfolioUpdate = () => {
+      mutateTimeseries()
+    }
+    window.addEventListener('portfolioUpdated', handlePortfolioUpdate)
+    return () => window.removeEventListener('portfolioUpdated', handlePortfolioUpdate)
+  }, [mutateTimeseries])
   
   useEffect(() => {
     try {
