@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
   let balance = getWalletBalance(userId)
   const walletTx = listWalletTransactions(userId)
   
-  // If balance is 0 and we have a cookie, try to restore from cookie
-  if (balance === 0) {
+  // If we don't have a balance in memory, try to restore from cookie
+  // This handles the case where the server restarts but cookies persist
+  if (balance === 0 && walletTx.length === 0) {
     try {
       const cookieBal = req.cookies.get('bullish_wallet')?.value
       if (cookieBal) {
