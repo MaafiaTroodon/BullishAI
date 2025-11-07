@@ -7,160 +7,127 @@ import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 
 export function PortfolioChart() {
-  const [chartRange, setChartRange] = useState('1m')
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio', safeJsonFetcher, { refreshInterval: 15000 })
+  const [chartRange, setChartRange] = useState<'1H' | '1D' | '3D' | '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL'>('1M')
+  const { data: pf } = useSWR('/api/portfolio', safeJsonFetcher, { refreshInterval: 15000 })
   const [localItems, setLocalItems] = useState<any[]>([])
-  
-  // Map internal ranges to API ranges
-  const apiRangeMap: Record<string, string> = {
-    '1h': '1d',
-    '1d': '1d',
-    '3d': '3d',
-    '1week': '1week',
-    '3m': '3M',
-    '6m': '6M',
-    '1y': '1Y',
-    '1m': '1M',
-    'ALL': 'ALL'
-  }
-  
-  const apiRange = apiRangeMap[chartRange] || '1M'
-  const gran = chartRange === '1h' || chartRange === '1d' || chartRange === '3d' ? '5m' : '1d'
   
   // Get market session for refresh interval
   const session = getMarketSession()
   const refreshInterval = getRefreshInterval(session.session)
   
-  // Fetch timeseries data
-  const { data: timeseriesData, error: timeseriesError, mutate: mutateTimeseries } = useSWR(
-    `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
+  // Fetch portfolio series data
+  const { data: seriesData, error: seriesError, mutate: mutateSeries } = useSWR(
+    `/api/portfolio/series?range=${chartRange}`,
     safeJsonFetcher,
-    { refreshInterval }
+    { refreshInterval, revalidateOnFocus: false }
   )
   
   useEffect(() => {
     try {
       const raw = localStorage.getItem('bullish_demo_pf_positions')
       if (raw) setLocalItems(Object.values(JSON.parse(raw)))
-      function onUpd(){
+      function onUpd() {
         const r = localStorage.getItem('bullish_demo_pf_positions')
         if (r) setLocalItems(Object.values(JSON.parse(r)))
-        mutatePf()
-        mutateTimeseries()
+        mutateSeries()
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
       return () => window.removeEventListener('portfolioUpdated', onUpd as any)
     } catch {}
-  }, [mutatePf, mutateTimeseries])
+  }, [mutateSeries])
   
-  // Sync transactions on mount
-  useEffect(() => {
-    async function syncData() {
-      try {
-        const txRaw = localStorage.getItem('bullish_demo_transactions')
-        const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
-        const positionsRaw = localStorage.getItem('bullish_demo_pf_positions')
-        
-        const syncData: any = {}
-        if (txRaw) {
-          try {
-            syncData.syncTransactions = JSON.parse(txRaw)
-          } catch {}
-        }
-        if (walletTxRaw) {
-          try {
-            syncData.syncWalletTransactions = JSON.parse(walletTxRaw)
-          } catch {}
-        }
-        if (positionsRaw) {
-          try {
-            syncData.syncPositions = Object.values(JSON.parse(positionsRaw))
-          } catch {}
-        }
-        
-        if (Object.keys(syncData).length > 0) {
-          const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
-          await fetch(new URL('/api/portfolio', baseUrl).toString(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(syncData)
-          })
-          mutatePf()
-          mutateTimeseries()
-        }
-      } catch {}
-    }
-    syncData()
-  }, [mutatePf, mutateTimeseries])
-  
-  const items: any[] = (pf?.items && pf.items.length>0) ? pf.items : localItems
+  const items: any[] = (pf?.items && pf.items.length > 0) ? pf.items : localItems
+  const hasPositions = items.some((p: any) => (p.totalShares || 0) > 0)
 
-  // Use timeseries data from API
+  // Transform series data for chart
   const points = useMemo(() => {
-    if (!timeseriesData?.series || !Array.isArray(timeseriesData.series)) {
+    if (!seriesData?.series || !Array.isArray(seriesData.series)) {
       return []
     }
     
-    return timeseriesData.series.map((p: any) => ({
+    return seriesData.series.map((p: any) => ({
       t: p.t,
-      value: p.portfolioAbs || 0,
-      netDeposits: p.netDepositsAbs || 0,
-      deltaFromStart$: p.deltaFromStart$ || 0,
-      deltaFromStartPct: p.deltaFromStartPct || 0
+      pv: p.pv || 0, // Portfolio Value
+      nd: p.nd || 0  // Net Deposits
     }))
-  }, [timeseriesData])
+  }, [seriesData])
 
-  // Calculate portfolio return to determine color
-  const portfolioReturn = useMemo(() => {
-    if (points.length === 0) return 0
-    const lastPoint = points[points.length - 1]
-    return lastPoint.deltaFromStartPct || 0
+  // Calculate change for selected period
+  const periodChange = useMemo(() => {
+    if (points.length === 0) return { $: 0, pct: 0 }
+    const first = points[0]
+    const last = points[points.length - 1]
+    const delta$ = last.pv - first.pv
+    const deltaPct = first.pv > 0 ? (delta$ / first.pv) * 100 : 0
+    return { $: delta$, pct: deltaPct }
   }, [points])
 
-  const isPositive = portfolioReturn >= 0
+  const isPositive = periodChange.$ >= 0
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   
-  // Calculate Y-axis domain - ensure never negative unless truly negative
+  // Calculate Y-axis domain - dynamic padding, no hardcoded $100
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
-    const values = points.map(p => p.value).filter(v => v > 0)
-    if (values.length === 0) return [0, 100]
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-    const range = max - min || max || 1
-    const padding = range * 0.06
-    // Never show negative Y-axis unless portfolio is truly negative
-    return [Math.max(0, min - padding), max + padding]
+    
+    const pvValues = points.map(p => p.pv).filter(v => v >= 0)
+    if (pvValues.length === 0) return [0, 100]
+    
+    const minY = Math.min(...pvValues)
+    const maxY = Math.max(...pvValues)
+    
+    // If flat line (all equal), pad ±2%
+    if (minY === maxY) {
+      const pad = Math.max(maxY * 0.02, 1)
+      return [Math.max(0, minY - pad), maxY + pad]
+    }
+    
+    // Apply padding: max((maxY-minY)*0.1, maxY*0.02)
+    const range = maxY - minY
+    const pad = Math.max(range * 0.1, maxY * 0.02)
+    
+    return [Math.max(0, minY - pad), maxY + pad]
   }, [points])
 
   const ranges = [
-    { label: '1H', value: '1h' },
-    { label: '1D', value: '1d' },
-    { label: '3D', value: '3d' },
-    { label: '1W', value: '1week' },
-    { label: '1M', value: '1m' },
-    { label: '3M', value: '3m' },
-    { label: '6M', value: '6m' },
-    { label: '1Y', value: '1y' },
-    { label: 'ALL', value: 'ALL' },
+    { label: '1H', value: '1H' as const },
+    { label: '1D', value: '1D' as const },
+    { label: '3D', value: '3D' as const },
+    { label: '1W', value: '1W' as const },
+    { label: '1M', value: '1M' as const },
+    { label: '3M', value: '3M' as const },
+    { label: '6M', value: '6M' as const },
+    { label: '1Y', value: '1Y' as const },
+    { label: 'ALL', value: 'ALL' as const },
   ]
 
   const formatXAxis = (t: number) => {
     const date = new Date(t)
-    if (chartRange === '1h' || chartRange === '1d') {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    } else if (chartRange === '3d' || chartRange === '1week') {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
+    if (chartRange === '1H' || chartRange === '1D') {
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })
+    } else if (chartRange === '3D' || chartRange === '1W') {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', timeZone: 'America/New_York' })
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
     }
+  }
+
+  const rangeLabels: Record<string, string> = {
+    '1H': '1 hour',
+    '1D': '1 day',
+    '3D': '3 days',
+    '1W': '1 week',
+    '1M': '1 month',
+    '3M': '3 months',
+    '6M': '6 months',
+    '1Y': '1 year',
+    'ALL': 'all time'
   }
 
   return (
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-white">Portfolio Value</h3>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {ranges.map((r) => (
             <button
               key={r.value}
@@ -177,30 +144,30 @@ export function PortfolioChart() {
         </div>
       </div>
       <div className="h-[500px]">
-        {timeseriesError ? (
+        {seriesError ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
               <p className="mb-2 text-red-400">Couldn't load chart data</p>
-              <p className="text-sm text-slate-500 mb-4">{timeseriesError.message || 'API request failed'}</p>
+              <p className="text-sm text-slate-500 mb-4">{seriesError.message || 'API request failed'}</p>
               <button
-                onClick={() => mutateTimeseries()}
+                onClick={() => mutateSeries()}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
               >
                 Retry
               </button>
             </div>
           </div>
-        ) : items.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
-        ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
+        ) : !hasPositions ? (
+          <div className="h-full flex items-center justify-center text-slate-400">
+            No positions yet. Buy stocks to see your portfolio value chart.
+          </div>
+        ) : !seriesData || points.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
-              <p className="mb-2">No portfolio activity yet</p>
-              <p className="text-sm text-slate-500">Make a deposit or buy stocks to see your portfolio value chart.</p>
+              <p className="mb-2">No price data for this range</p>
+              <p className="text-sm text-slate-500">Price data may be unavailable for some symbols.</p>
             </div>
           </div>
-        ) : points.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">Processing chart data...</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart 
@@ -240,34 +207,24 @@ export function PortfolioChart() {
                   const timestamp = label || data?.t
                   const date = new Date(timestamp)
                   const etDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-                  const dayName = etDate.toLocaleDateString('en-US', { weekday: 'short' })
+                  const dayName = etDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/New_York' })
                   const dateStr = etDate.toLocaleString('en-US', { 
                     month: 'short', 
                     day: 'numeric', 
                     year: 'numeric',
                     hour: 'numeric',
                     minute: '2-digit',
-                    hour12: true
+                    hour12: true,
+                    timeZone: 'America/New_York'
                   }) + ' ET'
                   
-                  const portfolioValue = data?.value || 0
-                  const netDepositsToDate = data?.netDeposits || 0
-                  const deltaFromStart$ = data?.deltaFromStart$ || 0
-                  const deltaFromStartPct = data?.deltaFromStartPct || 0
-                  const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
+                  const portfolioValue = data?.pv || 0
+                  const netDepositsToDate = data?.nd || 0
                   
-                  const rangeLabels: Record<string, string> = {
-                    '1h': '1 hour',
-                    '1d': '1 day',
-                    '3d': '3 days',
-                    '1week': '1 week',
-                    '1m': '1 month',
-                    '3m': '3 months',
-                    '6m': '6 months',
-                    '1y': '1 year',
-                    'ALL': 'all time'
-                  }
-                  const rangeLabel = rangeLabels[chartRange] || 'selected period'
+                  // Calculate change for selected period at this point
+                  const firstPv = points[0]?.pv || 0
+                  const change$ = portfolioValue - firstPv
+                  const changePct = firstPv > 0 ? (change$ / firstPv) * 100 : 0
                   
                   return (
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
@@ -278,15 +235,13 @@ export function PortfolioChart() {
                           <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm">
-                          <span className="text-slate-400">Change ({rangeLabel}): </span>
-                          {startPortfolioAbs > 0 && deltaFromStartPct !== 0 ? (
-                            <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {deltaFromStart$ >= 0 ? '+' : ''}${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({deltaFromStartPct >= 0 ? '+' : ''}{deltaFromStartPct.toFixed(2)}%)
+                          <span className="text-slate-400">Change ({rangeLabels[chartRange]}): </span>
+                          {firstPv > 0 ? (
+                            <span className={`font-semibold ${change$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {change$ >= 0 ? '+' : ''}${change$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%)
                             </span>
                           ) : (
-                            <span className="font-semibold text-slate-400">
-                              ${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
-                            </span>
+                            <span className="font-semibold text-slate-400">—</span>
                           )}
                         </div>
                         <div className="text-sm text-white">
@@ -300,8 +255,8 @@ export function PortfolioChart() {
                 cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '5 5' }}
               />
               <Area 
-                type="monotoneX" 
-                dataKey="value"
+                type="monotone" 
+                dataKey="pv"
                 stroke={strokeColor}
                 strokeWidth={2}
                 fillOpacity={1}
@@ -311,11 +266,12 @@ export function PortfolioChart() {
                 animationDuration={300}
               />
               <Line
-                type="monotoneX"
-                dataKey="netDeposits"
+                type="monotone"
+                dataKey="nd"
                 stroke="#64748b"
                 strokeWidth={1.5}
                 strokeDasharray="5 5"
+                strokeOpacity={0.6}
                 dot={false}
                 isAnimationActive={false}
               />
