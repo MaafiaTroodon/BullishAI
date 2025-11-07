@@ -9,10 +9,20 @@ export default function WalletPage() {
   const [busy, setBusy] = useState(false)
 
   async function refresh() {
-    const r = await fetch('/api/wallet', { cache: 'no-store' })
-    const j = await r.json()
-    setBalance(j.balance || 0)
-    try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
+    try {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      const r = await fetch(`${baseUrl}/api/wallet`, { cache: 'no-store' })
+      if (!r.ok) {
+        console.error('Wallet fetch failed:', r.status, r.statusText)
+        return
+      }
+      const j = await r.json()
+      setBalance(j.balance || 0)
+      try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
+    } catch (err) {
+      console.error('Error refreshing wallet:', err)
+      // Don't show error toast on initial load, only on user actions
+    }
   }
 
   useEffect(()=>{ 
@@ -31,11 +41,17 @@ export default function WalletPage() {
     }
     setBusy(true)
     try {
-      const r = await fetch('/api/wallet', { 
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      const r = await fetch(`${baseUrl}/api/wallet`, { 
         method: 'POST', 
         headers: { 'Content-Type':'application/json' }, 
         body: JSON.stringify({ action, amount: numAmount }) 
       })
+      if (!r.ok) {
+        const errorData = await r.json().catch(() => ({}))
+        showToast(errorData?.error || 'Transaction failed', 'error')
+        return
+      }
       const j = await r.json()
       if (!r.ok) {
         showToast(j?.error || 'Wallet error', 'error')
