@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listTransactions } from '@/lib/portfolio'
-import { listWalletTransactions } from '@/lib/portfolio'
+import { listTransactions, listWalletTransactions, listPositions } from '@/lib/portfolio'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -77,18 +76,100 @@ export async function GET(req: NextRequest) {
     const host = req.headers.get('host') || 'localhost:3000'
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
     
-    // Get all transactions
+    // Get all transactions and current positions
     let transactions = listTransactions(userId)
     let walletTx = listWalletTransactions(userId)
+    const positions = listPositions(userId)
     
-    // If no transactions in memory, try to load from localStorage (for client-side persistence)
-    if (transactions.length === 0 && typeof window === 'undefined') {
-      // Server-side: transactions should be in memory store
-      // But we can't access localStorage here, so rely on sync from client
+    // If no transactions but we have positions, generate chart data from current holdings
+    // This ensures the graph displays even if transactions aren't synced yet
+    if (transactions.length === 0 && walletTx.length === 0 && positions.length > 0) {
+      // Generate a simple chart from current holdings
+      const now = Date.now()
+      const rangeMs: Record<string, number> = {
+        '1h': 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000,
+        '3d': 3 * 24 * 60 * 60 * 1000,
+        '1week': 7 * 24 * 60 * 60 * 1000,
+        '1M': 30 * 24 * 60 * 60 * 1000,
+        '3M': 90 * 24 * 60 * 60 * 1000,
+        '6M': 180 * 24 * 60 * 60 * 1000,
+        '1Y': 365 * 24 * 60 * 60 * 1000,
+        'ALL': 365 * 24 * 60 * 60 * 1000 // Limit ALL to 1 year for performance
+      }
+      
+      const rangeBack = rangeMs[range] || 30 * 24 * 60 * 60 * 1000
+      const startTime = now - rangeBack
+      
+      // Get current quotes for all positions
+      const symbols = positions.map(p => p.symbol.toUpperCase())
+      const currentQuotes: Record<string, number> = {}
+      
+      await Promise.all(symbols.map(async (sym) => {
+        try {
+          const res = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(sym)}`, { cache: 'no-store' })
+          if (res.ok) {
+            const data = await res.json()
+            const price = data?.data?.price ?? data?.price ?? null
+            if (price) currentQuotes[sym] = price
+          }
+        } catch {}
+      }))
+      
+      // Calculate current portfolio value
+      let currentPortfolioValue = 0
+      let currentCostBasis = 0
+      positions.forEach((p: any) => {
+        const price = currentQuotes[p.symbol.toUpperCase()] || p.avgPrice || 0
+        currentPortfolioValue += price * p.totalShares
+        currentCostBasis += (p.totalCost || p.avgPrice * p.totalShares) || 0
+      })
+      
+      // Generate buckets
+      const interval = gran === '5m' ? 5 * 60 * 1000 : gran === '1m' ? 60 * 1000 : 24 * 60 * 60 * 1000
+      const buckets: number[] = []
+      for (let t = startTime; t <= now; t += interval) {
+        buckets.push(t)
+      }
+      if (buckets[buckets.length - 1] !== now) {
+        buckets.push(now)
+      }
+      
+      // Generate series with flat line at current value (since no historical transactions)
+      const series = buckets.map((bucket) => ({
+        t: bucket,
+        portfolio: currentPortfolioValue,
+        holdings: currentPortfolioValue,
+        cash: 0,
+        costBasis: currentCostBasis,
+        moneyInvested: currentCostBasis // Use cost basis as money invested
+      }))
+      
+      return NextResponse.json({
+        range,
+        granularity: gran,
+        currency: 'USD',
+        series: series.map((p: any) => ({
+          t: p.t,
+          portfolioAbs: p.portfolio,
+          holdingsAbs: p.holdings,
+          cashAbs: p.cash,
+          netDepositsAbs: p.moneyInvested,
+          deltaFromStart$: 0,
+          deltaFromStartPct: 0
+        })),
+        meta: {
+          symbols,
+          hasFx: false,
+          lastQuoteTs: new Date().toISOString(),
+          startIndex: 0,
+          startPortfolioAbs: currentPortfolioValue
+        }
+      })
     }
     
-    // If no transactions at all, return empty series
-    if (transactions.length === 0 && walletTx.length === 0) {
+    // If no transactions and no positions, return empty series
+    if (transactions.length === 0 && walletTx.length === 0 && positions.length === 0) {
       return NextResponse.json({
         range,
         granularity: gran,
