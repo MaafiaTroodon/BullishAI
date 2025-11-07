@@ -54,21 +54,32 @@ function TradingViewTopStories({
     script.innerHTML = JSON.stringify(config)
 
     container.current.appendChild(script)
+
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (container.current) {
+        const copyrightElements = container.current.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (container.current) {
+      observer.observe(container.current, { childList: true, subtree: true })
+    }
+
+    return () => {
+      observer.disconnect()
+    }
   }, [displayMode, feedMode, colorTheme, isTransparent, locale, symbol, width, height])
 
   return (
     <div className="tradingview-widget-container" ref={container}>
       <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright">
-        <a
-          href="https://www.tradingview.com/news/top-providers/tradingview/"
-          rel="noopener nofollow"
-          target="_blank"
-        >
-          <span className="text-blue-500">Top stories</span>
-        </a>
-        <span> by TradingView</span>
-      </div>
     </div>
   )
 }

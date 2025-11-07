@@ -80,9 +80,27 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
       widgetDiv.appendChild(script)
     }
 
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (currentContainer) {
+        const copyrightElements = currentContainer.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (currentContainer) {
+      observer.observe(currentContainer, { childList: true, subtree: true })
+    }
+
     return () => {
       isMounted = false
       clearTimeout(timeout)
+      observer.disconnect()
       // Restore console.error
       console.error = originalConsoleError
       // Use innerHTML for safer cleanup - avoids removeChild errors
@@ -119,17 +137,6 @@ export function TradingViewTechnicalAnalysis({ symbol, exchange = 'NASDAQ', widt
     <div className="w-full h-full flex flex-col">
       <div className="tradingview-widget-container flex-1 min-h-0 overflow-hidden" style={{minHeight: `${height}px`, width: '100%'}} ref={container}>
         {/* Widget will be inserted here by script */}
-      </div>
-      <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
-        <div className="text-slate-400 mb-1">Symbol: {symbol} ({normalizeTradingViewSymbol(symbol).tvSymbol})</div>
-        <a 
-          href={`https://www.tradingview.com/symbols/${normalizeTradingViewSymbol(symbol).tvSymbol.replace(':','-')}/technicals/`} 
-          rel="noopener nofollow" 
-          target="_blank"
-          className="text-blue-500 hover:text-blue-400"
-        >
-          View {symbol} technical analysis on TradingView →
-        </a>
       </div>
     </div>
   )

@@ -49,8 +49,26 @@ function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingVi
       }
     }, 150)
 
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (container.current) {
+        const copyrightElements = container.current.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (container.current) {
+      observer.observe(container.current, { childList: true, subtree: true })
+    }
+
     return () => {
       clearTimeout(timeoutId)
+      observer.disconnect()
       // Cleanup on unmount
       if (container.current) {
         const scripts = container.current.querySelectorAll('script')
@@ -62,17 +80,6 @@ function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingVi
   return (
     <div className="tradingview-widget-container" ref={container} style={{ width: `${width}px`, height: `${height}px`, minHeight: `${height}px` }}>
       <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright" style={{ fontSize: '10px', marginTop: '4px' }}>
-        <a 
-          href={`https://www.tradingview.com/symbols/${symbol.includes(':') ? symbol.replace(':', '-') : `NASDAQ-${symbol.toUpperCase()}`}/`} 
-          rel="noopener nofollow" 
-          target="_blank"
-          className="text-slate-500 hover:text-slate-400"
-        >
-          <span className="text-blue-400">{symbol}</span>
-        </a>
-        <span className="text-slate-500"> by TradingView</span>
-      </div>
     </div>
   )
 }

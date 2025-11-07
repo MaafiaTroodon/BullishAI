@@ -35,7 +35,25 @@ export function TradingViewHeatmap() {
     
     currentContainer.appendChild(script)
 
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (currentContainer) {
+        const copyrightElements = currentContainer.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (currentContainer) {
+      observer.observe(currentContainer, { childList: true, subtree: true })
+    }
+
     return () => {
+      observer.disconnect()
       currentContainer.innerHTML = ''
     }
   }, [])
@@ -44,17 +62,6 @@ export function TradingViewHeatmap() {
     <div className="w-full">
       <div className="tradingview-widget-container w-full" ref={container}>
         <div className="tradingview-widget-container__widget"></div>
-      </div>
-      <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2 text-center">
-        <a 
-          href="https://www.tradingview.com/heatmap/stock/" 
-          rel="noopener nofollow" 
-          target="_blank"
-          className="text-blue-500 hover:text-blue-400"
-        >
-          Stock Heatmap
-        </a>{' '}
-        <span> by TradingView</span>
       </div>
     </div>
   )

@@ -75,9 +75,27 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
       widgetDiv.appendChild(script)
     }
 
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (currentContainer) {
+        const copyrightElements = currentContainer.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (currentContainer) {
+      observer.observe(currentContainer, { childList: true, subtree: true })
+    }
+
     return () => {
       isMounted = false
       clearTimeout(timeout)
+      observer.disconnect()
       // Restore console.error
       console.error = originalConsoleError
       // Use innerHTML for safer cleanup - avoids removeChild errors
@@ -116,17 +134,6 @@ export function TradingViewFinancials({ symbol, exchange = 'NASDAQ' }: TradingVi
     <div className="w-full">
       <div className="tradingview-widget-container h-[550px] w-full overflow-hidden" ref={container}>
         {/* Widget will be inserted here by script */}
-      </div>
-      <div className="tradingview-widget-copyright text-xs text-slate-500 mt-2">
-        <div className="text-slate-400 mb-1">Symbol: {symbol} ({tvSymbol})</div>
-        <a 
-          href={`https://www.tradingview.com/symbols/${tvSymbol.replace(':','-')}/financials-overview/`} 
-          rel="noopener nofollow" 
-          target="_blank"
-          className="text-blue-500 hover:text-blue-400"
-        >
-          View {symbol} fundamentals on TradingView →
-        </a>
       </div>
     </div>
   )

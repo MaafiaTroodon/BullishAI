@@ -86,6 +86,27 @@ function TradingViewAdvancedChart({
     })
 
     container.current.appendChild(script)
+
+    // Hide copyright elements that TradingView injects
+    const hideCopyright = () => {
+      if (container.current) {
+        const copyrightElements = container.current.querySelectorAll('.tradingview-widget-copyright')
+        copyrightElements.forEach((el) => {
+          ;(el as HTMLElement).style.display = 'none'
+        })
+      }
+    }
+
+    // Hide copyright immediately and set up observer for dynamically added elements
+    hideCopyright()
+    const observer = new MutationObserver(hideCopyright)
+    if (container.current) {
+      observer.observe(container.current, { childList: true, subtree: true })
+    }
+
+    return () => {
+      observer.disconnect()
+    }
   }, [
     symbol,
     allowSymbolChange,
@@ -115,18 +136,8 @@ function TradingViewAdvancedChart({
     >
       <div
         className="tradingview-widget-container__widget"
-        style={{ height: 'calc(100% - 32px)', width: '100%' }}
+        style={{ height: '100%', width: '100%' }}
       ></div>
-      <div className="tradingview-widget-copyright">
-        <a
-          href={`https://www.tradingview.com/symbols/${symbol}/`}
-          rel="noopener nofollow"
-          target="_blank"
-        >
-          <span className="text-blue-500">{symbol} stock chart</span>
-        </a>
-        <span> by TradingView</span>
-      </div>
     </div>
   )
 }

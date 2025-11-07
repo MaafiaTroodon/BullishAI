@@ -193,3 +193,8 @@
   }
 }
 
+/* Hide all TradingView copyright notices */
+.tradingview-widget-copyright {
+  display: none !important;
+}
+
