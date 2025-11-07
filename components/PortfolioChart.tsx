@@ -118,7 +118,7 @@ export function PortfolioChart() {
     const mapped = timeseriesData.series.map((p: any) => ({
       t: p.t,
       value: p.portfolioAbs || 0,
-      netDeposits: p.netDepositsAbs || 0,
+      netInvested: p.netInvestedAbs || 0, // Changed from netDepositsAbs to netInvestedAbs
       deltaFromStart$: p.deltaFromStart$ || 0,
       deltaFromStartPct: p.deltaFromStartPct || 0
     }))
@@ -151,16 +151,18 @@ export function PortfolioChart() {
   const isPositive = portfolioReturn >= 0
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   
-  // Calculate Y-axis domain - ensure never negative unless truly negative
+  // Calculate Y-axis domain - include both portfolio value and net invested
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
-    const values = points.map(p => p.value).filter(v => v > 0)
-    if (values.length === 0) return [0, 100]
-    const min = Math.min(...values)
-    const max = Math.max(...values)
+    const portfolioValues = points.map(p => p.value).filter(v => v > 0)
+    const investedValues = points.map(p => p.netInvested || 0).filter(v => v > 0)
+    const allValues = [...portfolioValues, ...investedValues]
+    if (allValues.length === 0) return [0, 100]
+    const min = Math.min(...allValues)
+    const max = Math.max(...allValues)
     const range = max - min || max || 1
-    const padding = range * 0.06
-    // Never show negative Y-axis unless portfolio is truly negative
+    const padding = range * 0.02 // 2% padding
+    // Never show negative Y-axis unless values are truly negative
     return [Math.max(0, min - padding), max + padding]
   }, [points])
 
@@ -282,7 +284,7 @@ export function PortfolioChart() {
                   }) + ' ET'
                   
                   const portfolioValue = data?.value || 0
-                  const netDepositsToDate = data?.netDeposits || 0
+                  const netInvestedToDate = data?.netInvested || 0
                   const deltaFromStart$ = data?.deltaFromStart$ || 0
                   const deltaFromStartPct = data?.deltaFromStartPct || 0
                   const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
@@ -300,6 +302,12 @@ export function PortfolioChart() {
                   }
                   const rangeLabel = rangeLabels[chartRange] || 'selected period'
                   
+                  // Calculate change in invested money (from fills) for the selected period
+                  const firstPoint = points[0]
+                  const firstNetInvested = firstPoint?.netInvested || 0
+                  const investedChange$ = netInvestedToDate - firstNetInvested
+                  const investedChangePct = firstNetInvested > 0 ? (investedChange$ / firstNetInvested) * 100 : 0
+                  
                   return (
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
                       <div className="text-xs text-slate-400 mb-2">{dayName}, {dateStr}</div>
@@ -309,33 +317,32 @@ export function PortfolioChart() {
                           <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm">
+                          <span className="text-slate-400">Change ({rangeLabel}): </span>
+                          {startPortfolioAbs > 0 && deltaFromStartPct !== 0 ? (
+                            <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {deltaFromStart$ >= 0 ? '+' : ''}${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({deltaFromStartPct >= 0 ? '+' : ''}{deltaFromStartPct.toFixed(2)}%)
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-slate-400">
+                              ${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm">
                           <span className="text-slate-400">Change in invested money ({rangeLabel}): </span>
-                          {(() => {
-                            // Calculate change in invested money (net deposits) for the selected period
-                            const firstPoint = points[0]
-                            const firstNetDeposits = firstPoint?.netDeposits || 0
-                            const currentNetDeposits = netDepositsToDate
-                            const investedChange$ = currentNetDeposits - firstNetDeposits
-                            const investedChangePct = firstNetDeposits > 0 ? (investedChange$ / firstNetDeposits) * 100 : 0
-                            
-                            if (firstNetDeposits > 0 && investedChange$ !== 0) {
-                              return (
-                                <span className={`font-semibold ${investedChange$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {investedChange$ >= 0 ? '+' : ''}${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({investedChangePct >= 0 ? '+' : ''}{investedChangePct.toFixed(2)}%)
-                                </span>
-                              )
-                            } else {
-                              return (
-                                <span className="font-semibold text-slate-400">
-                                  ${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
-                                </span>
-                              )
-                            }
-                          })()}
+                          {firstNetInvested > 0 && investedChange$ !== 0 ? (
+                            <span className={`font-semibold ${investedChange$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {investedChange$ >= 0 ? '+' : ''}${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({investedChangePct >= 0 ? '+' : ''}{investedChangePct.toFixed(2)}%)
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-slate-400">
+                              ${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-white">
-                          <span className="text-slate-400">Net deposits (to date): </span>
-                          <span className="font-semibold">${netDepositsToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-slate-400">Net invested (to date): </span>
+                          <span className="font-semibold">${netInvestedToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
@@ -356,7 +363,7 @@ export function PortfolioChart() {
               />
               <Line
                 type="monotoneX"
-                dataKey="netDeposits"
+                dataKey="netInvested"
                 stroke="#64748b"
                 strokeWidth={1.5}
                 strokeDasharray="5 5"

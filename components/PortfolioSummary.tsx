@@ -106,19 +106,14 @@ export function PortfolioSummary() {
       }
     })
 
-    // Cost Basis = Net Deposits (from timeseries) - this is "Money invested"
-    if (timeseriesData?.series && Array.isArray(timeseriesData.series) && timeseriesData.series.length > 0) {
-      const latest = timeseriesData.series[timeseriesData.series.length - 1]
-      totalCost = latest.netDepositsAbs || 0
-    } else {
-      // Fallback: sum of position cost basis (if timeseries unavailable)
-      enrichedItems.forEach((p: any) => {
-        if (p.totalShares > 0) {
-          const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
-          totalCost += cost
-        }
-      })
-    }
+    // Cost Basis = sum of (avgPrice * totalShares) for all open positions
+    // This is the money invested that's still tied to open positions
+    enrichedItems.forEach((p: any) => {
+      if (p.totalShares > 0) {
+        const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
+        totalCost += cost
+      }
+    })
 
     // Total return = Portfolio Value - Cost Basis (Net Deposits)
     const totalReturn = totalValue - totalCost
