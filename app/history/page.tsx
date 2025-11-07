@@ -95,40 +95,41 @@ export default function HistoryPage() {
     return balances
   }, [data, activeTab])
 
-  // Export to CSV
+  // Export to CSV with proper UTC ISO timestamps
   const handleExportCSV = () => {
     const rows: string[] = []
     
     if (activeTab === 'wallet') {
-      rows.push('Date,Time,Type,Amount,Method,Running Balance')
+      rows.push('date_time_iso,type,amount,method,currency,running_wallet_balance_after')
       Object.entries(processedTransactions).forEach(([date, transactions]) => {
         transactions.forEach((t: any) => {
           const d = new Date(t.timestamp || 0)
           rows.push([
-            d.toLocaleDateString('en-US'),
-            d.toLocaleTimeString('en-US'),
-            t.action === 'deposit' ? 'Deposit' : 'Withdrawal',
-            `$${(t.amount || 0).toFixed(2)}`,
+            d.toISOString(), // UTC ISO timestamp
+            t.action === 'deposit' ? 'deposit' : 'withdrawal',
+            (t.amount || 0).toFixed(2),
             t.method || 'EFT',
-            `$${(runningBalances[t.timestamp || 0] || 0).toFixed(2)}`
+            'USD',
+            (t.runningBalance !== undefined ? t.runningBalance : runningBalances[t.timestamp || 0] || 0).toFixed(2)
           ].join(','))
         })
       })
     } else {
-      rows.push('Date,Time,Side,Symbol,Quantity,Price,Fees,Total')
+      rows.push('date_time_iso,type,symbol,side,qty,price,fees,currency,account,order_id')
       Object.entries(processedTransactions).forEach(([date, transactions]) => {
         transactions.forEach((t: any) => {
           const d = new Date(t.timestamp || 0)
-          const total = (t.quantity || 0) * (t.price || 0) + (t.fees || 0)
           rows.push([
-            d.toLocaleDateString('en-US'),
-            d.toLocaleTimeString('en-US'),
-            t.action === 'buy' ? 'Buy' : 'Sell',
+            d.toISOString(), // UTC ISO timestamp
+            t.action === 'buy' ? 'buy' : 'sell',
             t.symbol || '',
+            t.action === 'buy' ? 'buy' : 'sell',
             (t.quantity || 0).toFixed(4),
-            `$${(t.price || 0).toFixed(2)}`,
-            `$${(t.fees || 0).toFixed(2)}`,
-            `$${total.toFixed(2)}`
+            (t.price || 0).toFixed(2),
+            (t.fees || 0).toFixed(2),
+            'USD',
+            t.account || '',
+            t.order_id || ''
           ].join(','))
         })
       })
@@ -139,7 +140,8 @@ export default function HistoryPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${activeTab}-history-${new Date().toISOString().split('T')[0]}.csv`
+    const filterStr = filter === 'all' ? 'all' : filter
+    a.download = `history_${new Date().toISOString().split('T')[0]}_${filterStr}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
