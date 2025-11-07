@@ -380,13 +380,20 @@ export async function GET(req: NextRequest) {
       const deltaFromStart$ = startPortfolioAbs > 0 ? point.portfolio - startPortfolioAbs : 0
       const deltaFromStartPct = startPortfolioAbs > 0 ? (deltaFromStart$ / startPortfolioAbs) * 100 : 0
       
+      // Calculate overall return percentage: (portfolioValue - costBasis) / costBasis * 100
+      const overallReturn$ = point.portfolio - point.costBasis
+      const overallReturnPct = point.costBasis > 0 ? (overallReturn$ / point.costBasis) * 100 : 0
+      
       return {
         t: point.t,
         portfolioAbs: point.portfolio, // Absolute portfolio value
         holdingsAbs: point.holdings,
+        costBasisAbs: point.costBasis, // Cost basis for this point
         netInvestedAbs: point.netInvested, // Cumulative cash invested from fills only (NOT wallet deposits)
         deltaFromStart$: Number(deltaFromStart$.toFixed(2)),
-        deltaFromStartPct: Number(deltaFromStartPct.toFixed(4))
+        deltaFromStartPct: Number(deltaFromStartPct.toFixed(4)),
+        overallReturn$: Number(overallReturn$.toFixed(2)),
+        overallReturnPct: Number(overallReturnPct.toFixed(4))
       }
     })
     
