@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       }
       return {
         ...t,
-        method: t.method || 'EFT', // Default method
+        method: t.method || 'Manual', // Default method
         runningBalance: runningBalance // Balance AFTER this transaction
       }
     })
