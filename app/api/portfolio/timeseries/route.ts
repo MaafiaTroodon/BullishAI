@@ -129,11 +129,12 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Determine granularity
+    // Determine granularity based on range for optimal data density
     const granMs: Record<string, number> = {
-      '1m': 60 * 1000,
-      '5m': 5 * 60 * 1000,
-      '1d': 24 * 60 * 60 * 1000
+      '1m': 60 * 1000,           // 1 minute for 1H range
+      '5m': 5 * 60 * 1000,       // 5 minutes for 1D/3D ranges
+      '1h': 60 * 60 * 1000,      // 1 hour for 1W range
+      '1d': 24 * 60 * 60 * 1000  // 1 day for 1M+ ranges
     }
     const interval = granMs[gran] || 24 * 60 * 60 * 1000
     
@@ -193,9 +194,9 @@ export async function GET(req: NextRequest) {
       symbolPriceMaps[sym] = forwardFillPrices(symbolPrices[sym] || [], buckets)
     }
     
-    // Process ONLY trade transactions (fills) - ignore wallet deposits/withdrawals for portfolio chart
+    // Process ONLY trade transactions (fills) within the selected range
+    // Transactions are already filtered by range above
     const tradeEvents = transactions
-      .filter(t => t.action === 'buy' || t.action === 'sell')
       .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
     
     // Build portfolio value over time
