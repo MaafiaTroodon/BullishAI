@@ -12,21 +12,24 @@ export function PortfolioChart() {
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { refreshInterval: 1000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   
-  // Map internal ranges to API ranges
+  // Map internal ranges to API ranges (consistent mapping)
   const apiRangeMap: Record<string, string> = {
-    '1h': '1d',
+    '1h': '1h',
     '1d': '1d',
     '3d': '3d',
     '1week': '1week',
+    '1m': '1M',
     '3m': '3M',
     '6m': '6M',
     '1y': '1Y',
-    '1m': '1M',
     'ALL': 'ALL'
   }
   
   const apiRange = apiRangeMap[chartRange] || '1M'
-  const gran = chartRange === '1h' || chartRange === '1d' || chartRange === '3d' ? '5m' : '1d'
+  // Determine granularity based on range for better data density
+  const gran = chartRange === '1h' ? '1m' : 
+               chartRange === '1d' || chartRange === '3d' ? '5m' : 
+               chartRange === '1week' ? '1h' : '1d'
   
   // Get market session for refresh interval
   const session = getMarketSession()
