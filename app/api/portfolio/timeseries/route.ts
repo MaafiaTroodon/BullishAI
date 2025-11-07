@@ -112,19 +112,130 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // If no fills in this range, return empty series (wallet deposits don't create portfolio activity)
+    // Fetch current positions to check if we have open holdings
+    const currentPositions = listPositions(userId)
+    const hasOpenPositions = currentPositions.some((p: any) => (p.totalShares || 0) > 0)
+    
+    // If no transactions in range BUT we have open positions, generate series from current positions
     if (transactions.length === 0) {
+      if (!hasOpenPositions) {
+        // No transactions AND no open positions = truly empty
+        return NextResponse.json({
+          range,
+          granularity: gran,
+          currency: 'USD',
+          series: [],
+          meta: {
+            symbols: [],
+            hasFx: false,
+            lastQuoteTs: new Date().toISOString(),
+            startIndex: 0,
+            startPortfolioAbs: 0
+          }
+        })
+      }
+      
+      // We have open positions but no transactions in range - generate flat series from current positions
+      const currentPositionMap: Record<string, { shares: number; avgCost: number }> = {}
+      currentPositions.forEach((pos: any) => {
+        if ((pos.totalShares || 0) > 0) {
+          const sym = pos.symbol.toUpperCase()
+          currentPositionMap[sym] = {
+            shares: pos.totalShares || 0,
+            avgCost: pos.avgPrice || 0
+          }
+        }
+      })
+      
+      const symbols = Object.keys(currentPositionMap)
+      if (symbols.length === 0) {
+        return NextResponse.json({
+          range,
+          granularity: gran,
+          currency: 'USD',
+          series: [],
+          meta: {
+            symbols: [],
+            hasFx: false,
+            lastQuoteTs: new Date().toISOString(),
+            startIndex: 0,
+            startPortfolioAbs: 0
+          }
+        })
+      }
+      
+      // Fetch current quotes
+      const currentQuotes: Record<string, number> = {}
+      try {
+        const quoteRes = await fetch(`${baseUrl}/api/quotes?symbols=${symbols.join(',')}`, { cache: 'no-store' })
+        if (quoteRes.ok) {
+          const quoteData = await quoteRes.json()
+          if (quoteData.quotes && Array.isArray(quoteData.quotes)) {
+            quoteData.quotes.forEach((q: any) => {
+              if (q.symbol && q.price) {
+                currentQuotes[q.symbol.toUpperCase()] = q.price
+              }
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching current quotes:', err)
+      }
+      
+      // Calculate current portfolio value and cost basis
+      let portfolioValue = 0
+      let costBasis = 0
+      for (const [sym, holding] of Object.entries(currentPositionMap)) {
+        const price = currentQuotes[sym] || holding.avgCost || 0
+        const shares = holding.shares || 0
+        portfolioValue += shares * price
+        costBasis += holding.avgCost * shares
+      }
+      
+      // Create a simple series with start and end points
+      const granMs: Record<string, number> = {
+        '1m': 60 * 1000,
+        '5m': 5 * 60 * 1000,
+        '1h': 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000
+      }
+      const interval = granMs[gran] || 24 * 60 * 60 * 1000
+      
+      const buckets: number[] = []
+      for (let t = startTime; t <= now; t += interval) {
+        buckets.push(t)
+      }
+      buckets.push(now)
+      
+      // Generate flat series (same value for all buckets since no transactions)
+      const series = buckets.map(t => {
+        const overallReturn$ = portfolioValue - costBasis
+        const overallReturnPct = costBasis > 0 ? (overallReturn$ / costBasis) * 100 : 0
+        
+        return {
+          t,
+          portfolioAbs: Number(portfolioValue.toFixed(2)),
+          holdingsAbs: Number(portfolioValue.toFixed(2)),
+          costBasisAbs: Number(costBasis.toFixed(2)),
+          netInvestedAbs: Number(costBasis.toFixed(2)), // Use cost basis as net invested for current positions
+          deltaFromStart$: 0,
+          deltaFromStartPct: 0,
+          overallReturn$: Number(overallReturn$.toFixed(2)),
+          overallReturnPct: Number(overallReturnPct.toFixed(4))
+        }
+      })
+      
       return NextResponse.json({
         range,
         granularity: gran,
         currency: 'USD',
-        series: [],
+        series,
         meta: {
-          symbols: [],
+          symbols,
           hasFx: false,
           lastQuoteTs: new Date().toISOString(),
           startIndex: 0,
-          startPortfolioAbs: 0
+          startPortfolioAbs: portfolioValue
         }
       })
     }
