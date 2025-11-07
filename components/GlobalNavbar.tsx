@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Bell, ChevronDown, Settings, LogOut, TrendingUp, Calendar, Newspaper } from 'lucide-react'
+import { Search, Bell, ChevronDown, Settings, LogOut, TrendingUp, Calendar, Newspaper, History } from 'lucide-react'
 import { DevStatus } from './DevStatus'
 import useSWR from 'swr'
 
@@ -150,12 +150,21 @@ export function GlobalNavbar() {
                       </Link>
                       <Link
                         href="/calendar"
-                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
+                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 transition"
                         onMouseEnter={(e) => e.currentTarget.classList.add('bg-slate-700')}
                         onMouseLeave={(e) => e.currentTarget.classList.remove('bg-slate-700')}
                       >
                         <Calendar className="h-4 w-4" />
                         <span>Calendar</span>
+                      </Link>
+                      <Link
+                        href="/history"
+                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
+                        onMouseEnter={(e) => e.currentTarget.classList.add('bg-slate-700')}
+                        onMouseLeave={(e) => e.currentTarget.classList.remove('bg-slate-700')}
+                      >
+                        <History className="h-4 w-4" />
+                        <span>History</span>
                       </Link>
                     </div>
                   </li>
