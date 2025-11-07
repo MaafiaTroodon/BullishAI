@@ -79,7 +79,93 @@ export function PortfolioSummary() {
 
   const enrichedItems = enriched.length > 0 ? enriched : items
 
+'use client'
+
+import useSWR from 'swr'
+import { useEffect, useState, useMemo } from 'react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+import { MarketSessionBadge } from './MarketSessionBadge'
+import { safeJsonFetcher } from '@/lib/safeFetch'
+
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
+
+export function PortfolioSummary() {
+  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 15000 })
+  const [localItems, setLocalItems] = useState<any[]>([])
+  
+  // Fetch timeseries for Net Deposits (Cost Basis)
+  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 30000 })
+  
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('bullish_demo_pf_positions')
+      if (raw) {
+        const map = JSON.parse(raw)
+        setLocalItems(Object.values(map))
+      }
+      function onUpd() {
+        const r = localStorage.getItem('bullish_demo_pf_positions')
+        if (r) setLocalItems(Object.values(JSON.parse(r)))
+        mutate() // Invalidate SWR cache
+      }
+      window.addEventListener('portfolioUpdated', onUpd as any)
+      return () => window.removeEventListener('portfolioUpdated', onUpd as any)
+    } catch {}
+  }, [mutate])
+
+  // Enrich local items if API data is not available
+  const [enriched, setEnriched] = useState<any[]>([])
+  const items = (data?.items && data.items.length > 0) ? data.items : localItems
+
+  useEffect(() => {
+    let cancelled = false
+    async function enrich() {
+      if (!items || items.length === 0) { setEnriched([]); return }
+      // If items already have currentPrice from API, use them
+      if (items[0]?.currentPrice != null) { setEnriched(items); return }
+      try {
+        const out: any[] = []
+        await Promise.all(items.map(async (p: any) => {
+          try {
+            const r = await fetch(`/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { cache: 'no-store' })
+            const j = await r.json()
+            const price = j?.data?.price ?? j?.price ?? null
+            const totalValue = price ? price * p.totalShares : 0
+            const base = (p.totalCost || p.avgPrice * p.totalShares) || 0
+            const unreal = price ? (price - p.avgPrice) * p.totalShares : 0
+            const unrealPct = base > 0 ? (unreal / base) * 100 : 0
+            out.push({ 
+              ...p, 
+              currentPrice: price, 
+              totalValue, 
+              unrealizedPnl: unreal, 
+              unrealizedPnlPct: unrealPct,
+              totalCost: p.totalCost || p.avgPrice * p.totalShares 
+            })
+          } catch {
+            out.push({ 
+              ...p, 
+              currentPrice: null, 
+              totalValue: 0, 
+              unrealizedPnl: 0, 
+              unrealizedPnlPct: 0,
+              totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
+            })
+          }
+        }))
+        if (!cancelled) setEnriched(out)
+      } catch {
+        if (!cancelled) setEnriched(items)
+      }
+    }
+    enrich()
+    return () => { cancelled = true }
+  }, [JSON.stringify(items)])
+
+  const enrichedItems = enriched.length > 0 ? enriched : items
+
   // Calculate portfolio metrics
+  // Cost Basis = Net Deposits (from timeseries), not position cost basis
   const metrics = useMemo(() => {
     let totalValue = 0
     let totalCost = 0
@@ -89,13 +175,9 @@ export function PortfolioSummary() {
     enrichedItems.forEach((p: any) => {
       if (p.totalShares > 0) {
         holdingCount++
-        // Current value
+        // Current value (mark-to-market positions only)
         const value = p.totalValue || (p.currentPrice ? p.currentPrice * p.totalShares : 0)
         totalValue += value
-        
-        // Cost basis (money put in)
-        const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
-        totalCost += cost
         
         // Realized P/L
         if (p.realizedPnl) {
@@ -104,9 +186,22 @@ export function PortfolioSummary() {
       }
     })
 
-    // Total return = unrealized + realized
-    const unrealizedPnl = totalValue - totalCost
-    const totalReturn = unrealizedPnl + realizedPnl
+    // Cost Basis = Net Deposits (from timeseries) - this is "Money invested"
+    if (timeseriesData?.series && Array.isArray(timeseriesData.series) && timeseriesData.series.length > 0) {
+      const latest = timeseriesData.series[timeseriesData.series.length - 1]
+      totalCost = latest.netDepositsAbs || 0
+    } else {
+      // Fallback: sum of position cost basis (if timeseries unavailable)
+      enrichedItems.forEach((p: any) => {
+        if (p.totalShares > 0) {
+          const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
+          totalCost += cost
+        }
+      })
+    }
+
+    // Total return = Portfolio Value - Cost Basis (Net Deposits)
+    const totalReturn = totalValue - totalCost
     const totalReturnPercent = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
 
     return {
@@ -117,7 +212,7 @@ export function PortfolioSummary() {
       holdingCount,
       isPositive: totalReturn >= 0
     }
-  }, [JSON.stringify(enrichedItems)])
+  }, [JSON.stringify(enrichedItems), timeseriesData])
 
   if (isLoading && enrichedItems.length === 0) {
     return (

@@ -118,7 +118,7 @@ export function PortfolioHoldings() {
             const u = totalValue - base
             const up = base>0 ? (u/base)*100 : 0
             return (
-              <div key={p.symbol} className="bg-slate-700/30 rounded-lg p-4 hover-card" data-anim="fade-up" data-anim-distance="16">
+              <div key={p.symbol} className="bg-slate-700/30 rounded-lg p-5 hover-card" data-anim="fade-up" data-anim-distance="16">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6 flex-1">
                     <button
@@ -134,8 +134,8 @@ export function PortfolioHoldings() {
                       ${u.toFixed(2)} ({up>=0?'+':''}{up.toFixed(2)}%)
                     </div>
                   </div>
-                  <div className="ml-4 w-[120px] h-[40px] flex-shrink-0">
-                    <TradingViewMiniChart symbol={p.symbol} width="120px" height="40px" />
+                  <div className="ml-4 w-[120px] h-[50px] flex-shrink-0 flex items-center">
+                    <TradingViewMiniChart symbol={p.symbol} width="120px" height="50px" />
                   </div>
                 </div>
               </div>
