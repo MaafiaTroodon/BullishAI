@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import useSWR from 'swr'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { formatETTime } from '@/lib/marketSession'
