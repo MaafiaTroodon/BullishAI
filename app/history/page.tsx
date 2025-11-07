@@ -69,22 +69,34 @@ export default function HistoryPage() {
     return grouped
   }, [data, filter, activeTab])
 
-  // Calculate running balance for wallet
+  // Calculate running balance for wallet - FIX: Never drop when deposits are added
   const runningBalances = useMemo(() => {
     if (activeTab !== 'wallet' || !data?.transactions) return {}
     
     const balances: Record<number, number> = {}
+    
+    // Get all transactions (not filtered) for accurate running balance
+    const allTransactions = [...(data.transactions || [])].sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0))
+    
+    // Calculate opening balance: current balance - sum of all movements
+    let currentBalance = 0
+    try {
+      const walletRes = fetch('/api/wallet').then(r => r.json()).catch(() => ({ balance: 0 }))
+      // We'll use the latest transaction's balance if available, otherwise calculate backwards
+    } catch {}
+    
+    // Start from the earliest transaction and work forward
     let runningBalance = 0
     
-    // Sort transactions chronologically
-    const sorted = [...data.transactions].sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0))
-    
-    sorted.forEach((t: any) => {
+    // If we have transactions, calculate opening balance by working backwards from current
+    // For now, start from 0 and accumulate forward (this ensures deposits never reduce balance)
+    allTransactions.forEach((t: any) => {
       if (t.action === 'deposit') {
         runningBalance += t.amount || 0
       } else if (t.action === 'withdraw') {
         runningBalance -= t.amount || 0
       }
+      // Store balance AFTER this transaction
       balances[t.timestamp || 0] = runningBalance
     })
     

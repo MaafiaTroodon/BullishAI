@@ -66,33 +66,44 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
   useEffect(() => {
     if (!container.current || !isVisible || scriptLoaded.current) return
 
+    // Clean up any existing script first
+    const existingScript = container.current.querySelector('script')
+    if (existingScript) {
+      existingScript.remove()
+    }
+
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
     script.type = 'text/javascript'
     script.async = true
-    script.innerHTML = JSON.stringify({
+    
+    // Ensure valid settings - TradingView requires specific format
+    const widgetConfig = {
       symbol: `${detectedExchange}:${symbol.toUpperCase()}`,
       chartOnly: false,
       dateRange: '12M',
       noTimeScale: false,
-      colorTheme: 'dark',
+      colorTheme: 'dark' as const,
       isTransparent: false,
       locale: 'en',
-      width: width,
-      autosize: true,
-      height: height
-    })
+      autosize: true
+    }
+    
+    script.innerHTML = JSON.stringify(widgetConfig)
+    script.setAttribute('data-symbol', symbol.toUpperCase())
+    script.setAttribute('data-exchange', detectedExchange)
 
     container.current.appendChild(script)
     scriptLoaded.current = true
 
     return () => {
-      if (container.current && script.parentNode) {
-        script.parentNode.removeChild(script)
+      if (container.current) {
+        const scripts = container.current.querySelectorAll('script')
+        scripts.forEach(s => s.remove())
         scriptLoaded.current = false
       }
     }
-  }, [symbol, detectedExchange, width, height, isVisible])
+  }, [symbol, detectedExchange, isVisible])
 
   return (
     <div 
