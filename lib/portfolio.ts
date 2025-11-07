@@ -141,22 +141,40 @@ export function getWalletBalance(userId: string): number {
   return getPf(userId).walletBalance
 }
 
-export function depositToWallet(userId: string, amount: number): number {
+export function depositToWallet(userId: string, amount: number, method: string = 'Manual'): number {
   if (amount <= 0) throw new Error('invalid_amount')
   const pf = getPf(userId)
   const cap = 1_000_000
-  const newBalance = Math.min(cap, pf.walletBalance + amount)
+  const oldBalance = pf.walletBalance
+  const newBalance = Math.min(cap, oldBalance + amount)
   pf.walletBalance = newBalance
-  try { pf.walletTransactions!.push({ action: 'deposit', amount, timestamp: Date.now() }) } catch {}
+  try { 
+    if (!pf.walletTransactions) pf.walletTransactions = []
+    pf.walletTransactions.push({ 
+      action: 'deposit', 
+      amount, 
+      timestamp: Date.now(),
+      method: method || 'Manual'
+    }) 
+  } catch {}
   return pf.walletBalance
 }
 
-export function withdrawFromWallet(userId: string, amount: number): number {
+export function withdrawFromWallet(userId: string, amount: number, method: string = 'Manual'): number {
   if (amount <= 0) throw new Error('invalid_amount')
   const pf = getPf(userId)
   if (pf.walletBalance < amount) throw new Error('insufficient_funds')
+  const oldBalance = pf.walletBalance
   pf.walletBalance -= amount
-  try { pf.walletTransactions!.push({ action: 'withdraw', amount, timestamp: Date.now() }) } catch {}
+  try { 
+    if (!pf.walletTransactions) pf.walletTransactions = []
+    pf.walletTransactions.push({ 
+      action: 'withdraw', 
+      amount, 
+      timestamp: Date.now(),
+      method: method || 'Manual'
+    }) 
+  } catch {}
   return pf.walletBalance
 }
 
