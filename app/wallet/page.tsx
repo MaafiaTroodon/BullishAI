@@ -37,40 +37,78 @@ export default function WalletPage() {
 
   async function act(action: 'deposit'|'withdraw') {
     const numAmount = parseFloat(amount) || 0
+    
+    // Client-side validation
     if (numAmount <= 0) {
       showToast('Please enter a valid amount', 'error')
       return
     }
+    
+    // Validate decimal places (max 2)
+    const roundedAmount = Math.round(numAmount * 100) / 100
+    if (Math.abs(numAmount - roundedAmount) > 0.001) {
+      showToast('Amount cannot have more than 2 decimal places', 'error')
+      return
+    }
+    
+    // Validate cap for deposits
+    if (action === 'deposit' && (balance + roundedAmount) > 1_000_000) {
+      showToast(`Deposit would exceed wallet cap of $1,000,000. Current balance: $${balance.toFixed(2)}`, 'error')
+      return
+    }
+    
+    // Validate sufficient balance for withdrawals
+    if (action === 'withdraw' && roundedAmount > balance) {
+      showToast(`Insufficient balance. Current balance: $${balance.toFixed(2)}`, 'error')
+      return
+    }
+    
     setBusy(true)
     try {
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      // Generate idempotency key to prevent duplicate transactions
+      const idempotencyKey = `${action}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
       const r = await fetch(`${baseUrl}/api/wallet`, { 
         method: 'POST', 
         headers: { 'Content-Type':'application/json' }, 
-        body: JSON.stringify({ action, amount: numAmount }) 
+        body: JSON.stringify({ 
+          action, 
+          amount: roundedAmount,
+          idempotencyKey 
+        }) 
       })
+      
       if (!r.ok) {
         const errorData = await r.json().catch(() => ({}))
-        showToast(errorData?.error || 'Transaction failed', 'error')
+        const errorMessage = errorData?.message || errorData?.error || 'Transaction failed'
+        showToast(errorMessage, 'error')
+        // Keep amount in input on error
         return
       }
+      
       const j = await r.json()
-      // Update balance from response (maintains old balance + new amount)
-      setBalance(j.balance || 0)
+      
+      // Server is source of truth - update balance from response
+      const newBalance = j.balance || 0
+      setBalance(newBalance)
+      
       // Clear input after successful transaction
       setAmount('')
+      
+      // Show success toast with new balance
       showToast(
         action==='deposit' 
-          ? `Deposited $${numAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}` 
-          : `Withdrew $${numAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}`, 
+          ? `Deposited $${roundedAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}. New balance: $${newBalance.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}` 
+          : `Withdrew $${roundedAmount.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}. New balance: $${newBalance.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}`, 
         'success'
       )
-      // Trigger global wallet update event
+      
+      // Trigger global wallet update event for navbar and history page
       try { window.dispatchEvent(new CustomEvent('walletUpdated')) } catch {}
-      // Refresh to ensure consistency
-      await refresh()
     } catch (err: any) {
       showToast(err?.message || 'Transaction failed', 'error')
+      // Keep amount in input on error
     } finally {
       setBusy(false)
     }
@@ -143,9 +181,9 @@ export default function WalletPage() {
         {amount && parseFloat(amount) > 0 && (
           <div className="mt-4 text-sm text-slate-400">
             <span>
-              Preview: After deposit of ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}, 
+              Preview: After {parseFloat(amount) > 0 ? 'deposit' : 'withdrawal'} of ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}, 
               balance will be <span className="text-white font-semibold ml-1">
-                ${(balance + parseFloat(amount)).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}
+                ${Math.max(0, Math.min(1_000_000, balance + (parseFloat(amount) || 0))).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}
               </span>
             </span>
           </div>

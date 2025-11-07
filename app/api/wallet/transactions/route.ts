@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
       return {
         ...t,
         method: t.method || 'Manual', // Default method
-        runningBalance: runningBalance // Balance AFTER this transaction
+        runningBalance: t.resultingBalance !== undefined ? t.resultingBalance : runningBalance, // Use resultingBalance if available, otherwise calculate
+        resultingBalance: t.resultingBalance !== undefined ? t.resultingBalance : runningBalance // Ensure resultingBalance is always present
       }
     })
     

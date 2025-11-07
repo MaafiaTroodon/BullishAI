@@ -141,41 +141,96 @@ export function getWalletBalance(userId: string): number {
   return getPf(userId).walletBalance
 }
 
-export function depositToWallet(userId: string, amount: number, method: string = 'Manual'): number {
+export function depositToWallet(userId: string, amount: number, method: string = 'Manual', idempotencyKey?: string): { balance: number; transaction: any } {
   if (amount <= 0) throw new Error('invalid_amount')
+  if (amount > 1_000_000) throw new Error('amount_exceeds_cap')
+  
+  // Validate decimal places (max 2)
+  const roundedAmount = Math.round(amount * 100) / 100
+  if (Math.abs(amount - roundedAmount) > 0.001) {
+    throw new Error('amount_too_many_decimals')
+  }
+  
   const pf = getPf(userId)
   const cap = 1_000_000
   const oldBalance = pf.walletBalance
-  const newBalance = Math.min(cap, oldBalance + amount)
+  const newBalance = Math.min(cap, oldBalance + roundedAmount)
+  
+  // Check if transaction already exists (idempotency)
+  if (idempotencyKey && pf.walletTransactions) {
+    const exists = pf.walletTransactions.some((tx: any) => tx.idempotencyKey === idempotencyKey)
+    if (exists) {
+      // Return existing transaction result
+      const existingTx = pf.walletTransactions.find((tx: any) => tx.idempotencyKey === idempotencyKey)
+      return { balance: existingTx?.resultingBalance || pf.walletBalance, transaction: existingTx }
+    }
+  }
+  
+  // Atomically update balance and create transaction
   pf.walletBalance = newBalance
+  
+  const timestamp = Date.now()
+  const transaction = {
+    id: `${userId}-${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+    action: 'deposit' as const,
+    amount: roundedAmount,
+    timestamp,
+    method: method || 'Manual',
+    resultingBalance: newBalance,
+    idempotencyKey: idempotencyKey || undefined
+  }
+  
   try { 
     if (!pf.walletTransactions) pf.walletTransactions = []
-    pf.walletTransactions.push({ 
-      action: 'deposit', 
-      amount, 
-      timestamp: Date.now(),
-      method: method || 'Manual'
-    }) 
+    pf.walletTransactions.push(transaction)
   } catch {}
-  return pf.walletBalance
+  
+  return { balance: pf.walletBalance, transaction }
 }
 
-export function withdrawFromWallet(userId: string, amount: number, method: string = 'Manual'): number {
+export function withdrawFromWallet(userId: string, amount: number, method: string = 'Manual', idempotencyKey?: string): { balance: number; transaction: any } {
   if (amount <= 0) throw new Error('invalid_amount')
+  
+  // Validate decimal places (max 2)
+  const roundedAmount = Math.round(amount * 100) / 100
+  if (Math.abs(amount - roundedAmount) > 0.001) {
+    throw new Error('amount_too_many_decimals')
+  }
+  
   const pf = getPf(userId)
-  if (pf.walletBalance < amount) throw new Error('insufficient_funds')
+  if (pf.walletBalance < roundedAmount) throw new Error('insufficient_funds')
+  
+  // Check if transaction already exists (idempotency)
+  if (idempotencyKey && pf.walletTransactions) {
+    const exists = pf.walletTransactions.some((tx: any) => tx.idempotencyKey === idempotencyKey)
+    if (exists) {
+      // Return existing transaction result
+      const existingTx = pf.walletTransactions.find((tx: any) => tx.idempotencyKey === idempotencyKey)
+      return { balance: existingTx?.resultingBalance || pf.walletBalance, transaction: existingTx }
+    }
+  }
+  
+  // Atomically update balance and create transaction
   const oldBalance = pf.walletBalance
-  pf.walletBalance -= amount
+  pf.walletBalance -= roundedAmount
+  
+  const timestamp = Date.now()
+  const transaction = {
+    id: `${userId}-${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+    action: 'withdraw' as const,
+    amount: roundedAmount,
+    timestamp,
+    method: method || 'Manual',
+    resultingBalance: pf.walletBalance,
+    idempotencyKey: idempotencyKey || undefined
+  }
+  
   try { 
     if (!pf.walletTransactions) pf.walletTransactions = []
-    pf.walletTransactions.push({ 
-      action: 'withdraw', 
-      amount, 
-      timestamp: Date.now(),
-      method: method || 'Manual'
-    }) 
+    pf.walletTransactions.push(transaction)
   } catch {}
-  return pf.walletBalance
+  
+  return { balance: pf.walletBalance, transaction }
 }
 
 export function listWalletTransactions(userId: string) {

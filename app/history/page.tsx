@@ -305,9 +305,9 @@ export default function HistoryPage() {
                                 : `$${((t.quantity || 0) * (t.price || 0) + (t.fees || 0)).toFixed(2)}`
                               }
                             </div>
-                            {activeTab === 'wallet' && (t.runningBalance !== undefined ? t.runningBalance : runningBalances[t.timestamp || 0] !== undefined) && (
+                            {activeTab === 'wallet' && (
                               <div className="text-xs text-slate-500 mt-1">
-                                Balance: ${(t.runningBalance !== undefined ? t.runningBalance : runningBalances[t.timestamp || 0]).toFixed(2)}
+                                Balance after: ${(t.resultingBalance !== undefined ? t.resultingBalance : (t.runningBalance !== undefined ? t.runningBalance : runningBalances[t.timestamp || 0] || 0)).toFixed(2)}
                               </div>
                             )}
                             {activeTab === 'trades' && t.fees > 0 && (

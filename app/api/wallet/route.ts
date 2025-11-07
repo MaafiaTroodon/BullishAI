@@ -60,29 +60,42 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
     
-    if (typeof amount !== 'number' || amount <= 0) return NextResponse.json({ error: 'invalid_amount' }, { status: 400 })
+    // Validate amount
+    if (typeof amount !== 'number' || amount <= 0) {
+      return NextResponse.json({ error: 'invalid_amount', message: 'Amount must be a positive number' }, { status: 400 })
+    }
     
-    const method = body.method || 'Manual' // 'Manual' or 'QuickAdd'
+    // Validate decimal places (max 2)
+    const roundedAmount = Math.round(amount * 100) / 100
+    if (Math.abs(amount - roundedAmount) > 0.001) {
+      return NextResponse.json({ error: 'amount_too_many_decimals', message: 'Amount cannot have more than 2 decimal places' }, { status: 400 })
+    }
+    
+    // Validate cap
+    const currentBalance = getWalletBalance(userId)
+    if (action === 'deposit' && (currentBalance + roundedAmount) > 1_000_000) {
+      return NextResponse.json({ error: 'amount_exceeds_cap', message: `Deposit would exceed wallet cap of $1,000,000. Current balance: $${currentBalance.toFixed(2)}` }, { status: 400 })
+    }
+    
+    const method = body.method || 'Manual'
+    const idempotencyKey = body.idempotencyKey // Optional idempotency key
     
     if (action === 'deposit') {
-      const balance = depositToWallet(userId, amount, method)
-      const res = NextResponse.json({ balance })
-      try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
-      // Trigger wallet update event
-      try { 
-        // Dispatch event for real-time updates
-        res.headers.set('X-Wallet-Updated', 'true')
-      } catch {}
+      const result = depositToWallet(userId, roundedAmount, method, idempotencyKey)
+      const res = NextResponse.json({ 
+        balance: result.balance, 
+        transaction: result.transaction 
+      })
+      try { res.cookies.set('bullish_wallet', String(result.balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
       return res
     }
     if (action === 'withdraw') {
-      const balance = withdrawFromWallet(userId, amount, method)
-      const res = NextResponse.json({ balance })
-      try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
-      // Trigger wallet update event
-      try { 
-        res.headers.set('X-Wallet-Updated', 'true')
-      } catch {}
+      const result = withdrawFromWallet(userId, roundedAmount, method, idempotencyKey)
+      const res = NextResponse.json({ 
+        balance: result.balance, 
+        transaction: result.transaction 
+      })
+      try { res.cookies.set('bullish_wallet', String(result.balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
       return res
     }
     return NextResponse.json({ error: 'invalid_action' }, { status: 400 })
