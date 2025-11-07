@@ -7,6 +7,7 @@ export default function WalletPage() {
   const [balance, setBalance] = useState<number>(0)
   const [amount, setAmount] = useState<string>('')
   const [busy, setBusy] = useState(false)
+  const [previewAction, setPreviewAction] = useState<'deposit'|'withdraw'>('deposit')
 
   async function refresh() {
     try {
@@ -146,14 +147,14 @@ export default function WalletPage() {
           />
           <button 
             disabled={busy || !amount || parseFloat(amount) <= 0} 
-            onClick={()=>act('deposit')} 
+            onClick={()=>{ setPreviewAction('deposit'); act('deposit') }} 
             className="px-6 py-2 rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition"
           >
             Deposit
           </button>
           <button 
             disabled={busy || !amount || parseFloat(amount) <= 0} 
-            onClick={()=>act('withdraw')} 
+            onClick={()=>{ setPreviewAction('withdraw'); act('withdraw') }} 
             className="px-6 py-2 rounded bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700 transition"
           >
             Withdraw
@@ -181,9 +182,12 @@ export default function WalletPage() {
         {amount && parseFloat(amount) > 0 && (
           <div className="mt-4 text-sm text-slate-400">
             <span>
-              Preview: After deposit of ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}, 
+              Preview: After {previewAction === 'deposit' ? 'deposit' : 'withdrawal'} of ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}, 
               balance will be <span className="text-white font-semibold ml-1">
-                ${Math.max(0, Math.min(1_000_000, balance + parseFloat(amount))).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}
+                ${previewAction === 'deposit' 
+                  ? Math.max(0, Math.min(1_000_000, balance + parseFloat(amount))).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})
+                  : Math.max(0, balance - parseFloat(amount)).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})
+                }
               </span>
             </span>
           </div>
