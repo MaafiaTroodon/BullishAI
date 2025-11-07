@@ -193,8 +193,6 @@ export function PortfolioChart() {
               </button>
             </div>
           </div>
-        ) : items.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-slate-400">No positions yet. Buy stocks to see your portfolio value chart.</div>
         ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
