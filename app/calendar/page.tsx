@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { formatETTime } from '@/lib/marketSession'
@@ -8,8 +9,17 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 
 export default function CalendarPage() {
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'dividends' | 'earnings'>('earnings')
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('week')
+
+  // Read tab from URL query parameter
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'dividends' || tab === 'earnings') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
 
   // Fetch earnings data
   const { data: earningsData, isLoading: isLoadingEarnings, error: earningsError } = useSWR(

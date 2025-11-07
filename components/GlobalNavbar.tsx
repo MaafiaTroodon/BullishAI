@@ -160,15 +160,31 @@ export function GlobalNavbar() {
                         <Newspaper className="h-4 w-4" />
                         <span>News</span>
                       </Link>
-                      <Link
-                        href="/calendar"
-                        className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 transition"
-                        onMouseEnter={(e) => e.currentTarget.classList.add('bg-slate-700')}
-                        onMouseLeave={(e) => e.currentTarget.classList.remove('bg-slate-700')}
-                      >
-                        <Calendar className="h-4 w-4" />
-                        <span>Calendar</span>
-                      </Link>
+                      <div className="relative group/calendar">
+                        <div className="flex items-center justify-between px-4 py-3 text-slate-300 hover:bg-slate-700 transition cursor-pointer">
+                          <div className="flex items-center gap-3">
+                            <Calendar className="h-4 w-4" />
+                            <span>Calendar</span>
+                          </div>
+                          <ChevronRight className="h-4 w-4" />
+                        </div>
+                        <div className="absolute left-full top-0 ml-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover/calendar:opacity-100 group-hover/calendar:visible transition-all duration-200 ease-out z-50">
+                          <Link
+                            href="/calendar?tab=earnings"
+                            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-t-lg transition"
+                          >
+                            <TrendingUp className="h-4 w-4" />
+                            <span>Earnings</span>
+                          </Link>
+                          <Link
+                            href="/calendar?tab=dividends"
+                            className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 rounded-b-lg transition"
+                          >
+                            <Wallet className="h-4 w-4" />
+                            <span>Dividends</span>
+                          </Link>
+                        </div>
+                      </div>
                       <div className="relative group/history">
                         <div className="flex items-center justify-between px-4 py-3 text-slate-300 hover:bg-slate-700 transition cursor-pointer">
                           <div className="flex items-center gap-3">
