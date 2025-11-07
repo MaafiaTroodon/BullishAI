@@ -78,10 +78,11 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
     script.async = true
     
     // Ensure valid settings - TradingView requires specific format
+    // Use 1D range to show daily performance (reflects actual stock movement)
     const widgetConfig = {
       symbol: `${detectedExchange}:${symbol.toUpperCase()}`,
       chartOnly: false,
-      dateRange: '12M',
+      dateRange: '1D', // Changed from 12M to 1D to show daily performance
       noTimeScale: false,
       colorTheme: 'dark' as const,
       isTransparent: false,
