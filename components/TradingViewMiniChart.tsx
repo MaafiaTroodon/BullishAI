@@ -38,9 +38,18 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
   const container = useRef<HTMLDivElement>(null)
   const scriptLoaded = useRef(false)
   const [isVisible, setIsVisible] = useState(false)
+  const [currentSymbol, setCurrentSymbol] = useState(symbol)
 
   // Detect exchange if not provided
   const detectedExchange = exchange || EXCHANGE_MAP[symbol.toUpperCase()] || 'NASDAQ'
+
+  // Update current symbol when prop changes
+  useEffect(() => {
+    if (symbol !== currentSymbol) {
+      setCurrentSymbol(symbol)
+      scriptLoaded.current = false
+    }
+  }, [symbol, currentSymbol])
 
   // Lazy load with IntersectionObserver
   useEffect(() => {
@@ -77,7 +86,7 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
 
     // Small delay to ensure cleanup is complete
     const timeoutId = setTimeout(() => {
-      if (!container.current) return
+      if (!container.current || !currentSymbol) return
 
       const script = document.createElement('script')
       script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
@@ -87,7 +96,7 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
       // Ensure valid settings - TradingView requires specific format
       // Use 1D range to show daily performance (reflects actual stock movement)
       const widgetConfig = {
-        symbol: `${detectedExchange}:${symbol.toUpperCase()}`,
+        symbol: `${detectedExchange}:${currentSymbol.toUpperCase()}`,
         chartOnly: false,
         dateRange: '1D', // Changed from 12M to 1D to show daily performance
         noTimeScale: false,
@@ -98,12 +107,12 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
       }
       
       script.innerHTML = JSON.stringify(widgetConfig)
-      script.setAttribute('data-symbol', symbol.toUpperCase())
+      script.setAttribute('data-symbol', currentSymbol.toUpperCase())
       script.setAttribute('data-exchange', detectedExchange)
 
       container.current.appendChild(script)
       scriptLoaded.current = true
-    }, 100)
+    }, 150)
 
     return () => {
       clearTimeout(timeoutId)
@@ -113,7 +122,7 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
         scriptLoaded.current = false
       }
     }
-  }, [symbol, detectedExchange, isVisible])
+  }, [currentSymbol, detectedExchange, isVisible])
 
   return (
     <div 

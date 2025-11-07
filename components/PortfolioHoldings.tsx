@@ -4,8 +4,6 @@ import useSWR from 'swr'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
-import dynamic from 'next/dynamic'
-const TradingViewMiniChart = dynamic(() => import('@/components/TradingViewMiniChart').then(m => m.default), { ssr: false })
 
 export function PortfolioHoldings() {
   const router = useRouter()
@@ -134,8 +132,10 @@ export function PortfolioHoldings() {
                       ${u.toFixed(2)} ({up>=0?'+':''}{up.toFixed(2)}%)
                     </div>
                   </div>
-                  <div className="ml-4 w-[120px] h-[50px] flex-shrink-0 flex items-center">
-                    <TradingViewMiniChart symbol={p.symbol} width="120px" height="50px" />
+                  <div className="ml-4 flex-shrink-0">
+                    <div className="bg-slate-600/50 rounded-lg px-4 py-2 border border-slate-600">
+                      <div className="text-white font-bold text-lg text-center">{p.symbol}</div>
+                    </div>
                   </div>
                 </div>
               </div>
