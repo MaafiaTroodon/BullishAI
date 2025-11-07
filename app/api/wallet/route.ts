@@ -61,16 +61,28 @@ export async function POST(req: NextRequest) {
     } catch {}
     
     if (typeof amount !== 'number' || amount <= 0) return NextResponse.json({ error: 'invalid_amount' }, { status: 400 })
+    
+    const method = body.method || 'Manual' // 'Manual' or 'QuickAdd'
+    
     if (action === 'deposit') {
-      const balance = depositToWallet(userId, amount)
+      const balance = depositToWallet(userId, amount, method)
       const res = NextResponse.json({ balance })
       try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+      // Trigger wallet update event
+      try { 
+        // Dispatch event for real-time updates
+        res.headers.set('X-Wallet-Updated', 'true')
+      } catch {}
       return res
     }
     if (action === 'withdraw') {
-      const balance = withdrawFromWallet(userId, amount)
+      const balance = withdrawFromWallet(userId, amount, method)
       const res = NextResponse.json({ balance })
       try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+      // Trigger wallet update event
+      try { 
+        res.headers.set('X-Wallet-Updated', 'true')
+      } catch {}
       return res
     }
     return NextResponse.json({ error: 'invalid_action' }, { status: 400 })
