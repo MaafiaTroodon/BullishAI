@@ -2,19 +2,18 @@
 
 import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Line } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 
 export function PortfolioChart() {
-  const [chartRange, setChartRange] = useState('1m')
+  const [chartRange, setChartRange] = useState('1d') // Default to 1D
   // Update every second for real-time portfolio value
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { refreshInterval: 1000 })
   const [localItems, setLocalItems] = useState<any[]>([])
   
-  // Map internal ranges to API ranges (consistent mapping)
+  // Map internal ranges to API ranges (consistent mapping) - REMOVED 1H
   const apiRangeMap: Record<string, string> = {
-    '1h': '1h',
     '1d': '1d',
     '3d': '3d',
     '1week': '1week',
@@ -25,10 +24,9 @@ export function PortfolioChart() {
     'ALL': 'ALL'
   }
   
-  const apiRange = apiRangeMap[chartRange] || '1M'
+  const apiRange = apiRangeMap[chartRange] || '1d'
   // Determine granularity based on range for better data density
-  const gran = chartRange === '1h' ? '1m' : 
-               chartRange === '1d' || chartRange === '3d' ? '5m' : 
+  const gran = chartRange === '1d' || chartRange === '3d' ? '5m' : 
                chartRange === '1week' ? '1h' : '1d'
   
   // Get market session for refresh interval
@@ -143,23 +141,20 @@ export function PortfolioChart() {
   const isPositive = portfolioReturn >= 0
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   
-  // Calculate Y-axis domain - include both portfolio value and net invested
+  // Calculate Y-axis domain - only portfolio values (no net invested)
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
     const portfolioValues = points.map(p => p.value).filter(v => v > 0)
-    const investedValues = points.map(p => p.netInvested || 0).filter(v => v > 0)
-    const allValues = [...portfolioValues, ...investedValues]
-    if (allValues.length === 0) return [0, 100]
-    const min = Math.min(...allValues)
-    const max = Math.max(...allValues)
+    if (portfolioValues.length === 0) return [0, 100]
+    const min = Math.min(...portfolioValues)
+    const max = Math.max(...portfolioValues)
     const range = max - min || max || 1
-    const padding = range * 0.02 // 2% padding
+    const padding = range * 0.1 // 10% padding for better visibility
     // Never show negative Y-axis unless values are truly negative
     return [Math.max(0, min - padding), max + padding]
   }, [points])
 
   const ranges = [
-    { label: '1H', value: '1h' },
     { label: '1D', value: '1d' },
     { label: '3D', value: '3d' },
     { label: '1W', value: '1week' },
@@ -172,7 +167,7 @@ export function PortfolioChart() {
 
   const formatXAxis = (t: number) => {
     const date = new Date(t)
-    if (chartRange === '1h' || chartRange === '1d') {
+    if (chartRange === '1d') {
       return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     } else if (chartRange === '3d' || chartRange === '1week') {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
@@ -218,8 +213,8 @@ export function PortfolioChart() {
         ) : !timeseriesData || (timeseriesData.series && timeseriesData.series.length === 0) ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             <div className="text-center">
-              <p className="mb-2">No portfolio activity yet</p>
-              <p className="text-sm text-slate-500">Make a deposit or buy stocks to see your portfolio value chart.</p>
+              <p className="mb-2">No open positions</p>
+              <p className="text-sm text-slate-500">Buy stocks to see your portfolio value chart.</p>
             </div>
           </div>
         ) : points.length === 0 ? (
@@ -275,31 +270,12 @@ export function PortfolioChart() {
                   
                   const portfolioValue = data?.value || 0
                   const costBasis = data?.costBasis || 0
-                  const netInvestedToDate = data?.netInvested || 0
-                  const deltaFromStart$ = data?.deltaFromStart$ || 0
-                  const deltaFromStartPct = data?.deltaFromStartPct || 0
-                  const overallReturn$ = data?.overallReturn$ || 0
-                  const overallReturnPct = data?.overallReturnPct || 0
-                  const startPortfolioAbs = timeseriesData?.meta?.startPortfolioAbs || 0
+                  const totalReturn$ = data?.overallReturn$ || 0
+                  const totalReturnPct = data?.overallReturnPct || 0
                   
-                  const rangeLabels: Record<string, string> = {
-                    '1h': '1 hour',
-                    '1d': '1 day',
-                    '3d': '3 days',
-                    '1week': '1 week',
-                    '1m': '1 month',
-                    '3m': '3 months',
-                    '6m': '6 months',
-                    '1y': '1 year',
-                    'ALL': 'all time'
-                  }
-                  const rangeLabel = rangeLabels[chartRange] || 'selected period'
-                  
-                  // Calculate change in invested money (from fills) for the selected period
-                  const firstPoint = points[0]
-                  const firstNetInvested = firstPoint?.netInvested || 0
-                  const investedChange$ = netInvestedToDate - firstNetInvested
-                  const investedChangePct = firstNetInvested > 0 ? (investedChange$ / firstNetInvested) * 100 : 0
+                  // Calculate holdings count from current positions (open holdings only)
+                  const currentPositions = pf?.items || localItems || []
+                  const holdingsCount = currentPositions.filter((p: any) => (p.totalShares || 0) > 0).length
                   
                   return (
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 shadow-xl">
@@ -310,37 +286,13 @@ export function PortfolioChart() {
                           <span className="font-semibold">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm">
-                          <span className="text-slate-400">Overall return: </span>
+                          <span className="text-slate-400">Total return: </span>
                           {costBasis > 0 ? (
-                            <span className={`font-semibold ${overallReturn$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {overallReturn$ >= 0 ? '+' : ''}${overallReturn$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({overallReturnPct >= 0 ? '+' : ''}{overallReturnPct.toFixed(2)}%)
+                            <span className={`font-semibold ${totalReturn$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {totalReturn$ >= 0 ? '+' : ''}${totalReturn$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalReturnPct >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)
                             </span>
                           ) : (
                             <span className="font-semibold text-slate-400">—</span>
-                          )}
-                        </div>
-                        <div className="text-sm">
-                          <span className="text-slate-400">Change ({rangeLabel}): </span>
-                          {startPortfolioAbs > 0 && deltaFromStartPct !== 0 ? (
-                            <span className={`font-semibold ${deltaFromStart$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {deltaFromStart$ >= 0 ? '+' : ''}${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({deltaFromStartPct >= 0 ? '+' : ''}{deltaFromStartPct.toFixed(2)}%)
-                            </span>
-                          ) : (
-                            <span className="font-semibold text-slate-400">
-                              ${deltaFromStart$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm">
-                          <span className="text-slate-400">Change in invested money ({rangeLabel}): </span>
-                          {firstNetInvested > 0 && investedChange$ !== 0 ? (
-                            <span className={`font-semibold ${investedChange$ >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {investedChange$ >= 0 ? '+' : ''}${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({investedChangePct >= 0 ? '+' : ''}{investedChangePct.toFixed(2)}%)
-                            </span>
-                          ) : (
-                            <span className="font-semibold text-slate-400">
-                              ${investedChange$.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (—)
-                            </span>
                           )}
                         </div>
                         <div className="text-sm text-white">
@@ -348,8 +300,8 @@ export function PortfolioChart() {
                           <span className="font-semibold">${costBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="text-sm text-white">
-                          <span className="text-slate-400">Net invested (to date): </span>
-                          <span className="font-semibold">${netInvestedToDate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-slate-400">Holdings: </span>
+                          <span className="font-semibold">{holdingsCount}</span>
                         </div>
                       </div>
                     </div>
@@ -367,15 +319,6 @@ export function PortfolioChart() {
                 dot={false}
                 isAnimationActive={typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches}
                 animationDuration={300}
-              />
-              <Line
-                type="monotoneX"
-                dataKey="netInvested"
-                stroke="#64748b"
-                strokeWidth={1.5}
-                strokeDasharray="5 5"
-                dot={false}
-                isAnimationActive={false}
               />
             </AreaChart>
           </ResponsiveContainer>
