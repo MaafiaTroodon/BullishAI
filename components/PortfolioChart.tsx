@@ -122,17 +122,22 @@ export function PortfolioChart() {
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
       value: p.portfolioAbs || 0,
+      costBasis: p.costBasisAbs || 0,
       netInvested: p.netInvestedAbs || 0,
       deltaFromStart$: p.deltaFromStart$ || 0,
-      deltaFromStartPct: p.deltaFromStartPct || 0
+      deltaFromStartPct: p.deltaFromStartPct || 0,
+      overallReturn$: p.overallReturn$ || 0,
+      overallReturnPct: p.overallReturnPct || 0
     }))
   }, [timeseriesData])
 
-  // Calculate portfolio return to determine color
+  // Calculate portfolio return from cost basis to determine color (matches PortfolioSummary)
+  // Use overall return percentage: (portfolioValue - costBasis) / costBasis * 100
   const portfolioReturn = useMemo(() => {
     if (points.length === 0) return 0
     const lastPoint = points[points.length - 1]
-    return lastPoint.deltaFromStartPct || 0
+    // Use overall return percentage from cost basis, not range-based delta
+    return lastPoint.overallReturnPct || 0
   }, [points])
 
   const isPositive = portfolioReturn >= 0
