@@ -77,18 +77,11 @@ export async function GET(req: NextRequest) {
     const host = req.headers.get('host') || 'localhost:3000'
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
     
-    // Get all transactions
-    let transactions = listTransactions(userId)
-    let walletTx = listWalletTransactions(userId)
+    // Get ONLY trade transactions (fills) - wallet deposits/withdrawals are ignored for portfolio chart
+    const transactions = listTransactions(userId).filter(t => t.action === 'buy' || t.action === 'sell')
     
-    // If no transactions in memory, try to load from localStorage (for client-side persistence)
-    if (transactions.length === 0 && typeof window === 'undefined') {
-      // Server-side: transactions should be in memory store
-      // But we can't access localStorage here, so rely on sync from client
-    }
-    
-    // If no transactions at all, return empty series
-    if (transactions.length === 0 && walletTx.length === 0) {
+    // If no fills, return empty series (wallet deposits don't create portfolio activity)
+    if (transactions.length === 0) {
       return NextResponse.json({
         range,
         granularity: gran,
@@ -119,12 +112,10 @@ export async function GET(req: NextRequest) {
     const rangeBack = rangeMs[range] || 30 * 24 * 60 * 60 * 1000
     let startTime = now - rangeBack
     if (range === 'ALL') {
-      const allTimestamps = [
-        ...transactions.map(t => t.timestamp),
-        ...walletTx.map(w => w.timestamp || 0)
-      ].filter(t => t > 0)
-      if (allTimestamps.length > 0) {
-        startTime = Math.min(...allTimestamps)
+      // Use only fill timestamps (wallet deposits don't affect portfolio chart start time)
+      const fillTimestamps = transactions.map(t => t.timestamp).filter(t => t > 0)
+      if (fillTimestamps.length > 0) {
+        startTime = Math.min(...fillTimestamps)
       }
     }
     
