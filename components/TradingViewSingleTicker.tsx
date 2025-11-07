@@ -1,32 +1,12 @@
 'use client'
 
 import { useEffect, useRef, memo } from 'react'
+import { normalizeTradingViewSymbol } from '@/lib/tradingview'
 
 interface TradingViewSingleTickerProps {
   symbol: string
   width?: number
   height?: number
-}
-
-// Map common symbols to their exchanges for TradingView
-const EXCHANGE_MAP: Record<string, string> = {
-  'AAPL': 'NASDAQ',
-  'MSFT': 'NASDAQ',
-  'GOOGL': 'NASDAQ',
-  'GOOG': 'NASDAQ',
-  'AMZN': 'NASDAQ',
-  'NVDA': 'NASDAQ',
-  'META': 'NASDAQ',
-  'TSLA': 'NASDAQ',
-  'AMD': 'NASDAQ',
-  'MU': 'NASDAQ',
-  'QQQ': 'NASDAQ',
-  'SPY': 'NYSE',
-  'AXP': 'NYSE',
-  'CAT': 'NYSE',
-  'CLS': 'NYSE',
-  'SPAI': 'NYSE',
-  'NOK': 'NYSE',
 }
 
 function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingViewSingleTickerProps) {
@@ -45,10 +25,8 @@ function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingVi
       widgetContainer.innerHTML = ''
     }
 
-    // Determine exchange
-    const upperSymbol = symbol.toUpperCase()
-    const exchange = EXCHANGE_MAP[upperSymbol] || 'NASDAQ' // Default to NASDAQ
-    const tradingViewSymbol = symbol.includes(':') ? symbol : `${exchange}:${upperSymbol}`
+    // Normalize symbol using existing utility
+    const { tvSymbol } = normalizeTradingViewSymbol(symbol)
 
     // Create new script
     const script = document.createElement('script')
@@ -56,7 +34,7 @@ function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingVi
     script.type = 'text/javascript'
     script.async = true
     script.innerHTML = JSON.stringify({
-      symbol: tradingViewSymbol,
+      symbol: tvSymbol,
       colorTheme: 'dark',
       isTransparent: false,
       locale: 'en',
