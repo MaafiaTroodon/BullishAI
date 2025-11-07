@@ -159,6 +159,10 @@ export function DemoTradeBox({ symbol, price }: Props) {
           localStorage.setItem(txKey, JSON.stringify(transactions))
           
           window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
+          // Trigger wallet update event since trades affect wallet balance
+          try {
+            window.dispatchEvent(new CustomEvent('walletUpdated'))
+          } catch {}
           showToast(
             `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`,
             'success'
