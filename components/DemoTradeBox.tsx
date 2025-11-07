@@ -275,15 +275,23 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         const txKey = 'bullish_demo_transactions'
                         const txRaw = localStorage.getItem(txKey)
                         const transactions = txRaw ? JSON.parse(txRaw) : []
-                        transactions.push({
+                        const transaction = j.transaction || {
                           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                           symbol: symbolKey,
                           action: 'sell',
                           price: currentPrice,
                           quantity: pos.totalShares,
                           timestamp: Date.now(),
-                        })
-                        localStorage.setItem(txKey, JSON.stringify(transactions))
+                        }
+                        // Check if transaction already exists (avoid duplicates)
+                        const exists = transactions.some((t: any) => 
+                          t.id === transaction.id || 
+                          (t.timestamp === transaction.timestamp && t.symbol === transaction.symbol && t.action === transaction.action)
+                        )
+                        if (!exists) {
+                          transactions.push(transaction)
+                          localStorage.setItem(txKey, JSON.stringify(transactions))
+                        }
                         
                         window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
                         showToast(`Sold all ${pos.totalShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`, 'success')

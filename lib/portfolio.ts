@@ -91,7 +91,7 @@ export function mergePositions(userId: string, positions: Position[]): void {
   }
 }
 
-export function upsertTrade(userId: string, input: TradeInput): Position {
+export function upsertTrade(userId: string, input: TradeInput): { position: Position; transaction: Transaction } {
   const pf = getPf(userId)
   const s = input.symbol.toUpperCase()
   const existing = pf.positions[s] || { symbol: s, totalShares: 0, avgPrice: 0, marketValue: 0, totalCost: 0, realizedPnl: 0 }
@@ -137,7 +137,7 @@ export function upsertTrade(userId: string, input: TradeInput): Position {
     pf.walletBalance = currentBalance + proceeds
   }
 
-  return pf.positions[s]
+  return { position: pf.positions[s], transaction }
 }
 
 // Wallet helpers

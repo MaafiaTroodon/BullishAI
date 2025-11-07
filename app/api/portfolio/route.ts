@@ -147,9 +147,13 @@ export async function POST(req: NextRequest) {
       
       const input = TradeInputSchema.parse(body)
       try {
-        const pos = upsertTrade(userId, input)
+        const result = upsertTrade(userId, input)
         const updatedBal = getWalletBalance(userId)
-        const res = NextResponse.json({ item: pos, wallet: { balance: updatedBal, cap: 1_000_000 } })
+        const res = NextResponse.json({ 
+          item: result.position, 
+          transaction: result.transaction,
+          wallet: { balance: updatedBal, cap: 1_000_000 } 
+        })
         // Persist wallet balance to cookie after trade
         try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
         // Trigger wallet update event
