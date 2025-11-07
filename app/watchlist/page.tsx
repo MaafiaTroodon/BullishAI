@@ -323,7 +323,7 @@ export default function WatchlistPage() {
                 <span className="font-bold text-white">{selectedSymbol}</span>
               </div>
               <div className="h-[340px] overflow-hidden">
-                <TradingViewMiniChart symbol={selectedSymbol} />
+                <TradingViewMiniChart key={selectedSymbol} symbol={selectedSymbol} />
               </div>
             </div>
           </div>
