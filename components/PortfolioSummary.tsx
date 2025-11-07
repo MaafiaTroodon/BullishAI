@@ -5,15 +5,20 @@ import { useEffect, useState, useMemo } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { MarketSessionBadge } from './MarketSessionBadge'
 import { safeJsonFetcher } from '@/lib/safeFetch'
+import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export function PortfolioSummary() {
+  // Get market session for dynamic refresh interval
+  const session = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
+  const refreshInterval = getRefreshInterval(session.session)
+  
   // Update frequently for real-time portfolio value based on market session
-  // During market hours: refresh every 5 seconds for live price updates
-  // When closed: refresh every 30 seconds
+  // During market hours: refresh every 15 seconds for live price updates
+  // When closed: refresh every 60 seconds
   const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { 
-    refreshInterval: typeof window !== 'undefined' && new Date().getHours() >= 9 && new Date().getHours() < 16 ? 5000 : 30000,
+    refreshInterval: refreshInterval,
     revalidateOnFocus: true,
     revalidateOnReconnect: true
   })

@@ -8,11 +8,16 @@ import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 
 export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1d') // Default to 1D
+  
+  // Get market session for dynamic refresh interval
+  const session = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
+  const portfolioRefreshInterval = getRefreshInterval(session.session)
+  
   // Update frequently for real-time portfolio value based on market session
-  // During market hours: refresh every 5 seconds for live price updates
-  // When closed: refresh every 30 seconds
+  // During market hours: refresh every 15 seconds for live price updates
+  // When closed: refresh every 60 seconds
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { 
-    refreshInterval: typeof window !== 'undefined' && new Date().getHours() >= 9 && new Date().getHours() < 16 ? 5000 : 30000,
+    refreshInterval: portfolioRefreshInterval,
     revalidateOnFocus: true,
     revalidateOnReconnect: true
   })
@@ -35,9 +40,8 @@ export function PortfolioChart() {
   const gran = chartRange === '1d' || chartRange === '3d' ? '5m' : 
                chartRange === '1week' ? '1h' : '1d'
   
-  // Get market session for refresh interval
-  const session = getMarketSession()
-  const refreshInterval = getRefreshInterval(session.session)
+  // Get refresh interval for timeseries (same as portfolio)
+  const timeseriesRefreshInterval = getRefreshInterval(session.session)
   
   // Fetch timeseries data - key includes range and gran for proper caching
   // Refresh more frequently during market hours for real-time updates
@@ -45,7 +49,7 @@ export function PortfolioChart() {
     `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
     safeJsonFetcher,
     { 
-      refreshInterval: refreshInterval,
+      refreshInterval: timeseriesRefreshInterval,
       revalidateOnFocus: true,
       revalidateOnReconnect: true
     }
