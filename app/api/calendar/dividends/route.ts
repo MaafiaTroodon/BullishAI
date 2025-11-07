@@ -45,10 +45,19 @@ export async function GET(req: NextRequest) {
               yield: d.yield
             }))
           }
+        } else {
+          console.warn('Finnhub dividends API returned non-OK status:', res.status)
         }
+      } else {
+        console.warn('FINNHUB_API_KEY not set')
       }
     } catch (err) {
       console.error('Finnhub dividends error:', err)
+    }
+
+    // If no items from Finnhub, try alternative approach or return empty with helpful message
+    if (items.length === 0) {
+      console.log('No dividends data from Finnhub, returning empty array')
     }
 
     return NextResponse.json({
