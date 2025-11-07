@@ -74,7 +74,7 @@ function TradingViewTickerTape() {
   return (
     <div className="tradingview-widget-container w-full" ref={container} style={{ height: '46px' }}>
       <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright" style={{ fontSize: '10px', marginTop: '4px', textAlign: 'center' }}>
+      <div className="tradingview-widget-copyright" style={{ display: 'none' }}>
         <a 
           href="https://www.tradingview.com/markets/" 
           rel="noopener nofollow" 
