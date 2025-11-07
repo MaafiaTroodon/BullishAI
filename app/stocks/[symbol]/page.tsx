@@ -11,6 +11,7 @@ import { StockAIChat } from '@/components/StockAIChat'
 import { DemoTradeBox } from '@/components/DemoTradeBox'
 import { PositionSummary } from '@/components/PositionSummary'
 import { StockChart } from '@/components/charts/StockChart'
+import { MarketSessionBadge } from '@/components/MarketSessionBadge'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 import { showToast } from '@/components/Toast'
@@ -145,6 +146,9 @@ export default function StockPage() {
               )}
             </div>
             <div className="text-right">
+              <div className="flex items-center justify-end gap-3 mb-2">
+                <MarketSessionBadge />
+              </div>
               <div className="text-5xl font-bold text-white">${quote.price?.toFixed(2)}</div>
               {quote.source && (
                 <div className="text-sm text-slate-400 mt-2">
