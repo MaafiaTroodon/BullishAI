@@ -75,21 +75,13 @@ export default function HistoryPage() {
     
     const balances: Record<number, number> = {}
     
-    // Get all transactions (not filtered) for accurate running balance
+    // Get all transactions (not filtered) for accurate running balance calculation
     const allTransactions = [...(data.transactions || [])].sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0))
     
-    // Calculate opening balance: current balance - sum of all movements
-    let currentBalance = 0
-    try {
-      const walletRes = fetch('/api/wallet').then(r => r.json()).catch(() => ({ balance: 0 }))
-      // We'll use the latest transaction's balance if available, otherwise calculate backwards
-    } catch {}
-    
-    // Start from the earliest transaction and work forward
+    // Calculate running balance forward from the start
+    // This ensures deposits always increase balance, never decrease it
     let runningBalance = 0
     
-    // If we have transactions, calculate opening balance by working backwards from current
-    // For now, start from 0 and accumulate forward (this ensures deposits never reduce balance)
     allTransactions.forEach((t: any) => {
       if (t.action === 'deposit') {
         runningBalance += t.amount || 0
@@ -284,9 +276,9 @@ export default function HistoryPage() {
                                 : `$${((t.quantity || 0) * (t.price || 0) + (t.fees || 0)).toFixed(2)}`
                               }
                             </div>
-                            {activeTab === 'wallet' && runningBalances[t.timestamp || 0] !== undefined && (
+                            {activeTab === 'wallet' && (t.runningBalance !== undefined ? t.runningBalance : runningBalances[t.timestamp || 0] !== undefined) && (
                               <div className="text-xs text-slate-500 mt-1">
-                                Balance: ${runningBalances[t.timestamp || 0].toFixed(2)}
+                                Balance: ${(t.runningBalance !== undefined ? t.runningBalance : runningBalances[t.timestamp || 0]).toFixed(2)}
                               </div>
                             )}
                             {activeTab === 'trades' && t.fees > 0 && (
