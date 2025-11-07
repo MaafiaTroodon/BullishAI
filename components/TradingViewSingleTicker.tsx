@@ -31,13 +31,9 @@ const EXCHANGE_MAP: Record<string, string> = {
 
 function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingViewSingleTickerProps) {
   const container = useRef<HTMLDivElement>(null)
-  const currentSymbol = useRef<string>(symbol)
 
   useEffect(() => {
     if (!container.current) return
-    
-    // Update current symbol
-    currentSymbol.ref = symbol
 
     // Clean up any existing scripts
     const existingScripts = container.current.querySelectorAll('script')
@@ -70,7 +66,7 @@ function TradingViewSingleTicker({ symbol, width = 300, height = 80 }: TradingVi
 
     // Small delay to ensure cleanup completes
     const timeoutId = setTimeout(() => {
-      if (container.current && currentSymbol.ref === symbol) {
+      if (container.current) {
         container.current.appendChild(script)
       }
     }, 150)
