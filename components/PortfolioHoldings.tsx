@@ -4,6 +4,7 @@ import useSWR from 'swr'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
+import TradingViewSingleTicker from './TradingViewSingleTicker'
 
 export function PortfolioHoldings() {
   const router = useRouter()
@@ -133,9 +134,7 @@ export function PortfolioHoldings() {
                     </div>
                   </div>
                   <div className="ml-4 flex-shrink-0">
-                    <div className="bg-slate-600/50 rounded-lg px-4 py-2 border border-slate-600">
-                      <div className="text-white font-bold text-lg text-center">{p.symbol}</div>
-                    </div>
+                    <TradingViewSingleTicker symbol={p.symbol} width={300} height={80} />
                   </div>
                 </div>
               </div>
