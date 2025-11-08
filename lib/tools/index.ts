@@ -1,8 +1,8 @@
 // Comprehensive tool implementations for AI Market Analyst
-import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
 import { summarizeNews } from '@/lib/gemini'
 import { resolveTicker } from '@/lib/ticker-mapper'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 
 export interface ToolResult {
   data: any
@@ -28,22 +28,23 @@ export async function getQuote(symbol: string, fields?: string[]): Promise<ToolR
   try {
     // Resolve ticker from symbol, handling company names
     const resolvedSymbol = resolveTicker(symbol)
-    const quote = await getComprehensiveQuote(resolvedSymbol)
+    const quote = await getQuoteWithFallback(resolvedSymbol)
     return {
       data: {
         symbol: quote.symbol,
         price: quote.price,
         change: quote.change,
-        changePercent: quote.changePercent,
+        changePercent: quote.changePct,
         volume: quote.volume,
         marketCap: quote.marketCap,
-        peRatio: quote.peRatio,
-        week52High: quote.week52High,
-        week52Low: quote.week52Low,
+        currency: quote.currency || 'USD',
         open: quote.open,
         high: quote.high,
         low: quote.low,
-        prevClose: quote.prevClose,
+        prevClose: quote.previousClose,
+        fetchedAt: quote.fetchedAt,
+        source: quote.source,
+        stale: quote.stale || false,
       },
       timestamp: formatET(new Date()),
     }

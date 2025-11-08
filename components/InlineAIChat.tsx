@@ -98,7 +98,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   }, [])
 
   const handleSend = async (customMessage?: string) => {
-    const messageToSend = customMessage || inputValue
+    const messageToSend = typeof customMessage === 'string' ? customMessage : inputValue
     if (!messageToSend.trim() || !isLoggedIn) return
 
     const userMessage: Message = {
@@ -343,7 +343,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
                 className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               />
               <button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={!inputValue.trim() || !isLoggedIn || isTyping}
                 className="px-6 py-3 rounded-lg font-semibold transition bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >

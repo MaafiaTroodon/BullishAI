@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/calendar/dividends
  * Fetch dividends calendar from multiple sources:
  * 1. Finnhub (primary)
- * 2. Polygon.io (fallback)
+ * 2. Massive.com (formerly Polygon.io) (fallback)
  * 3. Yahoo Finance (fallback)
  * 4. EODHD (last fallback)
  */
@@ -46,8 +46,14 @@ export async function GET(req: NextRequest) {
               company: d.name,
               date: d.date,
               exDate: d.exDate,
+              recordDate: d.recordDate || d.record_date,
+              payDate: d.payDate || d.pay_date,
+              declarationDate: d.declaredDate || d.declarationDate || d.declaration_date,
               amount: d.amount,
-              yield: d.yield
+              yield: d.yield,
+              currency: d.currency,
+              frequency: d.frequency,
+              type: d.dividendType || d.dividend_type
             }))
           }
         }
@@ -56,11 +62,13 @@ export async function GET(req: NextRequest) {
       console.error('Finnhub dividends error:', err)
     }
 
-    // 2. Fallback to Polygon.io if no items from Finnhub
+    // 2. Fallback to Massive.com (formerly Polygon.io) if no items from Finnhub
     if (items.length === 0) {
       try {
         const polygonKey = process.env.POLYGON_API_KEY || 'EITKB2FpN6B8MKdYBnzo_m0ve3HMDFB1'
-        const polygonUrl = `https://api.polygon.io/v3/reference/dividends?ex_dividend_date.gte=${from}&ex_dividend_date.lte=${to}&order=ex_dividend_date&sort=asc&limit=1000&apiKey=${polygonKey}`
+        // Use Massive.com API (Polygon.io migrated to Massive.com)
+        // order=asc (direction), sort=ex_dividend_date (field to sort by)
+        const polygonUrl = `https://api.massive.com/v3/reference/dividends?ex_dividend_date.gte=${from}&ex_dividend_date.lte=${to}&order=asc&sort=ex_dividend_date&limit=1000&apiKey=${polygonKey}`
         const res = await fetch(polygonUrl, { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
@@ -70,17 +78,23 @@ export async function GET(req: NextRequest) {
               company: d.name || d.ticker,
               date: d.ex_dividend_date || d.pay_date || d.record_date,
               exDate: d.ex_dividend_date,
+              recordDate: d.record_date,
+              payDate: d.pay_date,
+              declarationDate: d.declaration_date,
               amount: d.cash_amount,
-              yield: d.yield ? (d.yield * 100).toFixed(2) : null
+              yield: typeof d.yield === 'number' ? Number((d.yield * 100).toFixed(2)) : null,
+              currency: d.currency,
+              frequency: d.frequency,
+              type: d.dividend_type
             }))
-            console.log(`Polygon.io dividends: Found ${items.length} items`)
+            console.log(`Massive.com dividends: Found ${items.length} items`)
           }
         } else {
           const errorText = await res.text()
-          console.warn(`Polygon.io dividends API returned status ${res.status}:`, errorText.substring(0, 200))
+          console.warn(`Massive.com dividends API returned status ${res.status}:`, errorText.substring(0, 200))
         }
       } catch (err: any) {
-        console.error('Polygon.io dividends error:', err.message)
+        console.error('Massive.com dividends error:', err.message)
       }
     }
 
@@ -111,8 +125,14 @@ export async function GET(req: NextRequest) {
                 company: d.name || d.code?.split('.')[0],
                 date: d.date || d.exDate,
                 exDate: d.exDate || d.date,
+                recordDate: d.recordDate || d.record_date,
+                payDate: d.payDate || d.pay_date,
+                declarationDate: d.declaredDate || d.declarationDate || d.declaration_date,
                 amount: d.amount || d.value,
-                yield: d.yield
+                yield: d.yield,
+                currency: d.currency,
+                frequency: d.frequency,
+                type: d.type || d.dividendType || d.dividend_type
               }))
             } else if (data.dividends && Array.isArray(data.dividends)) {
               items = data.dividends.map((d: any) => ({
@@ -120,8 +140,14 @@ export async function GET(req: NextRequest) {
                 company: d.name || d.code?.split('.')[0],
                 date: d.date || d.exDate,
                 exDate: d.exDate || d.date,
+                recordDate: d.recordDate || d.record_date,
+                payDate: d.payDate || d.pay_date,
+                declarationDate: d.declaredDate || d.declarationDate || d.declaration_date,
                 amount: d.amount || d.value,
-                yield: d.yield
+                yield: d.yield,
+                currency: d.currency,
+                frequency: d.frequency,
+                type: d.type || d.dividendType || d.dividend_type
               }))
             }
           }

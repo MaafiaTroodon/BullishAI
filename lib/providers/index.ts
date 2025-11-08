@@ -1,24 +1,25 @@
-import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
 import { summarizeNews } from '@/lib/gemini'
 
 export async function getQuote(symbol: string) {
   try {
-    const res = await getComprehensiveQuote(symbol.toUpperCase())
+    const res = await getQuoteWithFallback(symbol.toUpperCase())
     return {
       symbol: res?.symbol || symbol.toUpperCase(),
-      price: res?.price ?? res?.data?.price ?? null,
-      change: res?.change ?? res?.data?.change ?? null,
-      changePct: res?.changePercent ?? res?.data?.dp ?? null,
-      open: res?.open ?? res?.data?.open ?? null,
-      high: res?.high ?? res?.data?.high ?? null,
-      low: res?.low ?? res?.data?.low ?? null,
-      prevClose: res?.prevClose ?? res?.data?.prevClose ?? null,
-      volume: res?.volume ?? res?.data?.volume ?? null,
-      marketCap: res?.marketCap,
-      peRatio: res?.peRatio,
-      week52High: res?.week52High,
-      week52Low: res?.week52Low,
+      price: res?.price ?? null,
+      change: res?.change ?? null,
+      changePct: res?.changePct ?? null,
+      open: res?.open ?? null,
+      high: res?.high ?? null,
+      low: res?.low ?? null,
+      prevClose: res?.previousClose ?? null,
+      volume: res?.volume ?? null,
+      marketCap: res?.marketCap ?? null,
+      currency: res?.currency ?? 'USD',
+      fetchedAt: res?.fetchedAt ?? Date.now(),
+      stale: !!res?.stale,
+      source: res?.source,
     }
   } catch {
     return { error: 'quote_unavailable', symbol: symbol.toUpperCase() }

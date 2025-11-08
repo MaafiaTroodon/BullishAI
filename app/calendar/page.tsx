@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -12,6 +12,7 @@ export default function CalendarPage() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'dividends' | 'earnings'>('earnings')
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('week')
+  const [dividendSearch, setDividendSearch] = useState('')
 
   // Read tab from URL query parameter
   useEffect(() => {
@@ -20,6 +21,22 @@ export default function CalendarPage() {
       setActiveTab(tab)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    // Clear search box when switching tabs or date range
+    setDividendSearch('')
+  }, [activeTab, dateRange])
+
+  const formatDateOnly = (value?: string) => {
+    if (!value) return '—'
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return value
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(d)
+  }
 
   // Fetch earnings data
   const { data: earningsData, isLoading: isLoadingEarnings, error: earningsError } = useSWR(
@@ -38,6 +55,21 @@ export default function CalendarPage() {
   const isLoading = activeTab === 'earnings' ? isLoadingEarnings : isLoadingDividends
   const error = activeTab === 'earnings' ? earningsError : dividendsError
   const data = activeTab === 'earnings' ? earningsData : dividendsData
+  const rawItems = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data])
+  const filteredItems = useMemo(() => {
+    if (activeTab !== 'dividends') {
+      return rawItems
+    }
+    const query = dividendSearch.trim().toLowerCase()
+    if (!query) {
+      return rawItems
+    }
+    return rawItems.filter((item: any) => {
+      const symbol = (item.symbol || '').toString().toLowerCase()
+      const company = (item.company || item.name || '').toString().toLowerCase()
+      return symbol.includes(query) || company.includes(query)
+    })
+  }, [activeTab, rawItems, dividendSearch])
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -92,6 +124,18 @@ export default function CalendarPage() {
           ))}
         </div>
 
+        {activeTab === 'dividends' && (
+          <div className="mb-6">
+            <input
+              type="text"
+              value={dividendSearch}
+              onChange={(e) => setDividendSearch(e.target.value)}
+              placeholder="Search dividends by symbol or company"
+              className="w-full md:w-80 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+        )}
+
         {/* Content */}
         {error ? (
           <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -111,62 +155,145 @@ export default function CalendarPage() {
               <div className="h-4 bg-slate-700 rounded w-1/2"></div>
             </div>
           </div>
-        ) : !data || (Array.isArray(data.items) && data.items.length === 0) ? (
+        ) : !data || filteredItems.length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
-            <p className="text-slate-400">No {activeTab} data available for the selected period.</p>
+            {activeTab === 'dividends' && dividendSearch.trim() ? (
+              <p className="text-slate-400">
+                No dividends match "{dividendSearch.trim()}" for the selected period.
+              </p>
+            ) : (
+              <p className="text-slate-400">No {activeTab} data available for the selected period.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {(data.items || []).map((item: any, idx: number) => (
-              <Link
-                key={`${item.symbol}-${idx}`}
-                href={`/stocks/${item.symbol}`}
-                className="block bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-blue-500 transition"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="font-bold text-white text-lg">{item.symbol}</span>
-                      <span className="text-slate-400 text-sm">{item.company || item.name}</span>
+            {filteredItems.map((item: any, idx: number) => {
+              const symbol = (item.symbol || '').toString().toUpperCase()
+              const company = item.company || item.name || symbol
+
+              if (activeTab === 'earnings') {
+                const dateLabel = formatDateOnly(item.date)
+                const timeLabel = formatETTime(new Date(item.date))
+                return (
+                  <Link
+                    key={`${symbol}-${idx}`}
+                    href={`/stocks/${symbol}`}
+                    className="block bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-blue-500 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="font-bold text-white text-lg">{symbol}</span>
+                          <span className="text-slate-400 text-sm">{company}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <span className="text-slate-400">
+                            Date:{' '}
+                            <span className="text-white">{dateLabel}</span>
+                            <span className="text-slate-500"> · </span>
+                            <span className="text-white">{timeLabel}</span>
+                          </span>
+                          {typeof item.estimate === 'number' && (
+                            <span className="text-slate-400">
+                              Est: <span className="text-white">${item.estimate}</span>
+                            </span>
+                          )}
+                          {typeof item.actual === 'number' && (
+                            <span
+                              className={`${item.actual >= (item.estimate || 0) ? 'text-green-400' : 'text-red-400'}`}
+                            >
+                              Actual: ${item.actual}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-slate-400" />
                     </div>
-                    {activeTab === 'earnings' ? (
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-400">
-                          Date: <span className="text-white">{formatETTime(new Date(item.date))}</span>
+                  </Link>
+                )
+              }
+
+              const amountValue = Number(item.amount ?? item.cash_amount)
+              const hasAmount = Number.isFinite(amountValue)
+              const amountLabel = hasAmount
+                ? amountValue.toFixed(amountValue >= 1 ? 2 : 6)
+                : item.amount || item.cash_amount
+              const yieldValue = Number(item.yield)
+              const hasYield = Number.isFinite(yieldValue)
+              const yieldLabel = hasYield ? `${yieldValue.toFixed(2)}` : item.yield
+              const currency = item.currency || 'USD'
+              const exDate = formatDateOnly(item.exDate || item.date)
+              const recordDate = formatDateOnly(item.recordDate)
+              const payDate = formatDateOnly(item.payDate)
+              const declarationDate = formatDateOnly(item.declarationDate)
+              const type = (item.type || '').toString().toUpperCase() || null
+              const freqNumber = Number(item.frequency)
+              const frequencyLabel = Number.isFinite(freqNumber)
+                ? {
+                    0: 'One-time',
+                    1: 'Annual',
+                    2: 'Semiannual',
+                    4: 'Quarterly',
+                    12: 'Monthly',
+                    24: 'Bi-monthly',
+                    52: 'Weekly'
+                  }[freqNumber] || `${freqNumber}× / yr`
+                : null
+
+              return (
+                <Link
+                  key={`${symbol}-${idx}`}
+                  href={`/stocks/${symbol}`}
+                  className="block bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-blue-500 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="font-bold text-white text-lg">{symbol}</span>
+                        <span className="text-slate-400 text-sm">{company}</span>
+                      </div>
+                      <div className="grid gap-2 text-sm text-slate-300 md:grid-cols-3">
+                        <span>
+                          <span className="text-slate-500">Ex-Date:</span>{' '}
+                          <span className="text-white">{exDate}</span>
                         </span>
-                        {item.estimate && (
-                          <span className="text-slate-400">
-                            Est: <span className="text-white">${item.estimate}</span>
+                        <span>
+                          <span className="text-slate-500">Record:</span>{' '}
+                          <span className="text-white">{recordDate}</span>
+                        </span>
+                        <span>
+                          <span className="text-slate-500">Pay:</span>{' '}
+                          <span className="text-white">{payDate}</span>
+                        </span>
+                      </div>
+                      <div className="mt-2 grid gap-2 text-sm text-slate-300 md:grid-cols-3">
+                        <span>
+                          <span className="text-slate-500">Declared:</span>{' '}
+                          <span className="text-white">{declarationDate}</span>
+                        </span>
+                        <span>
+                          <span className="text-slate-500">Amount:</span>{' '}
+                          <span className="text-white">
+                            {hasAmount ? `$${amountLabel} ${currency}` : '—'}
                           </span>
-                        )}
-                        {item.actual && (
-                          <span className={`${item.actual >= (item.estimate || 0) ? 'text-green-400' : 'text-red-400'}`}>
-                            Actual: ${item.actual}
-                          </span>
+                        </span>
+                        <span>
+                          <span className="text-slate-500">Yield:</span>{' '}
+                          <span className="text-white">{hasYield ? `${yieldLabel}%` : '—'}</span>
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400 uppercase tracking-wide">
+                        {type && <span className="px-2 py-1 bg-slate-700/50 rounded-md">{type}</span>}
+                        {frequencyLabel && (
+                          <span className="px-2 py-1 bg-slate-700/50 rounded-md">{frequencyLabel}</span>
                         )}
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-400">
-                          Ex-Date: <span className="text-white">{formatETTime(new Date(item.exDate || item.date))}</span>
-                        </span>
-                        {item.amount && (
-                          <span className="text-slate-400">
-                            Amount: <span className="text-white">${item.amount}</span>
-                          </span>
-                        )}
-                        {item.yield && (
-                          <span className="text-slate-400">
-                            Yield: <span className="text-white">{item.yield}%</span>
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
-                  <ChevronRight className="h-5 w-5 text-slate-400" />
-                </div>
-              </Link>
-            ))}
+                </Link>
+              )
+            })}
           </div>
         )}
       </main>

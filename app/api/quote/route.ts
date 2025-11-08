@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -32,27 +32,28 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const data = await getComprehensiveQuote(validation.data.symbol)
+      const quote = await getQuoteWithFallback(validation.data.symbol)
       return NextResponse.json({
         symbol: validation.data.symbol,
-        price: data.price,
-        change: data.change,
-        changePercent: data.changePct,
-        high: data.high,
-        low: data.low,
-        open: data.open,
-        previousClose: data.previousClose,
-        volume: data.volume,
-        marketCap: data.marketCap,
-        peRatio: data.peRatio,
-        week52High: data.week52High,
-        week52Low: data.week52Low,
-        source: data.source,
+        price: quote.price,
+        change: quote.change,
+        changePercent: quote.changePct,
+        high: quote.high,
+        low: quote.low,
+        open: quote.open,
+        previousClose: quote.previousClose,
+        volume: quote.volume,
+        marketCap: quote.marketCap,
+        currency: quote.currency || 'USD',
+        source: quote.source,
+        fetchedAt: quote.fetchedAt,
+        stale: !!quote.stale,
       })
     } catch (error: any) {
-      console.error('Quote fetch failed:', error.message)
+      console.error('Quote fetch failed:', error?.message || error)
+
       return NextResponse.json(
-        { error: 'Failed to fetch quote', symbol: validation.data.symbol },
+        { error: 'quote_unavailable', message: error?.message || 'Failed to fetch quote', symbol: validation.data.symbol },
         { status: 502 }
       )
     }

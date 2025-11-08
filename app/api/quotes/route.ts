@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 import { resolveMarketCapUSD, formatMarketCapShort, formatMarketCapFull } from '@/lib/finance/marketCap'
 
 export const runtime = 'nodejs'
@@ -24,30 +24,34 @@ export async function GET(request: NextRequest) {
     const quotes = await Promise.allSettled(
       symbols.map(async (symbol) => {
         try {
-          const data = await getComprehensiveQuote(symbol)
+          const quote = await getQuoteWithFallback(symbol)
           
           // Resolve market cap with proper formatting
-          const marketCapResult = await resolveMarketCapUSD(symbol, data.price)
+          const marketCapResult = await resolveMarketCapUSD(symbol, quote.price)
           const marketCap = marketCapResult.raw
           
           return {
             symbol,
             data: {
-              price: data.price,
-              change: data.change,
-              dp: data.changePct,
-              high: data.high,
-              low: data.low,
-              open: data.open,
-              previousClose: data.previousClose,
-              volume: data.volume,
+              price: quote.price,
+              change: quote.change,
+              dp: quote.changePct,
+              high: quote.high,
+              low: quote.low,
+              open: quote.open,
+              previousClose: quote.previousClose,
+              volume: quote.volume,
               marketCap,
               marketCapShort: marketCap ? formatMarketCapShort(marketCap) : null,
               marketCapFull: marketCap ? formatMarketCapFull(marketCap) : null,
               marketCapSource: marketCapResult.source,
-              peRatio: data.peRatio,
-              week52High: data.week52High,
-              week52Low: data.week52Low,
+              currency: quote.currency || 'USD',
+              source: quote.source,
+              fetchedAt: quote.fetchedAt,
+              stale: !!quote.stale,
+              peRatio: null,
+              week52High: null,
+              week52Low: null,
             },
           }
         } catch (error) {

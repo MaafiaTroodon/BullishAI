@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getComprehensiveQuote } from '@/lib/comprehensive-quote'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 import { getCandles } from '@/lib/market-data'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
 import { resolveMarketCapUSD, formatMarketCapShort, formatMarketCapFull } from '@/lib/finance/marketCap'
@@ -23,7 +23,7 @@ export async function GET(
     // Fetch quote with market cap
     let quote
     try {
-      quote = await getComprehensiveQuote(symbol)
+      quote = await getQuoteWithFallback(symbol)
     } catch (error: any) {
       console.error(`Failed to fetch quote for ${symbol}:`, error.message)
       return NextResponse.json(
@@ -101,9 +101,9 @@ export async function GET(
         marketCapShort: marketCapShort,
         marketCapFull: marketCapFull,
         marketCapSource: marketCapResult.source,
-        peRatio: quote.peRatio,
-        week52High: quote.week52High,
-        week52Low: quote.week52Low,
+        currency: quote.currency || 'USD',
+        fetchedAt: quote.fetchedAt,
+        stale: !!quote.stale,
         source: quote.source,
       },
       candles: candlesResult.data,
