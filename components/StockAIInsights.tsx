@@ -101,7 +101,7 @@ export function StockAIInsights({ symbol, quote, candles, news, changePctOverRan
       }
 
       // 7. Buying/Selling Recommendations
-      if (changePctOverRange !== null && quote.week52High && quote.week52Low) {
+      if (changePctOverRange !== null && changePctOverRange !== undefined && quote.week52High && quote.week52Low) {
         const rangeFromLow = ((quote.price - quote.week52Low) / (quote.week52High - quote.week52Low)) * 100
         
         if (rangeFromLow > 85 && changePctOverRange > 3) {

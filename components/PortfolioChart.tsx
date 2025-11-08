@@ -154,7 +154,7 @@ export function PortfolioChart() {
   // Calculate Y-axis domain - only portfolio values (no net invested)
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
-    const portfolioValues = points.map(p => p.value).filter(v => v > 0)
+    const portfolioValues = points.map((p: { value: number }) => p.value).filter((v: number) => v > 0)
     if (portfolioValues.length === 0) return [0, 100]
     const min = Math.min(...portfolioValues)
     const max = Math.max(...portfolioValues)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -8,7 +8,7 @@ import { formatETTime } from '@/lib/marketSession'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 
-export default function CalendarPage() {
+function CalendarPageContent() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'dividends' | 'earnings'>('earnings')
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('week')
@@ -298,6 +298,18 @@ export default function CalendarPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <CalendarPageContent />
+    </Suspense>
   )
 }
 

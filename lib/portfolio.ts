@@ -40,7 +40,15 @@ type Portfolio = {
   positions: Record<string, Position>
   transactions: Transaction[] // Store all buy/sell transactions with timestamps
   walletBalance: number
-  walletTransactions?: Array<{ action: 'deposit'|'withdraw'; amount: number; timestamp: number }>
+  walletTransactions?: Array<{ 
+    id?: string
+    action: 'deposit'|'withdraw'
+    amount: number
+    timestamp: number
+    method?: string
+    resultingBalance?: number
+    idempotencyKey?: string
+  }>
 }
 
 const store: Record<string, Portfolio> = {}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -9,7 +9,7 @@ import { Download } from 'lucide-react'
 
 type FilterType = 'all' | 'deposits' | 'withdrawals' | 'buys' | 'sells'
 
-export default function HistoryPage() {
+function HistoryPageContent() {
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab') as 'wallet' | 'trades' | null
   const [activeTab, setActiveTab] = useState<'wallet' | 'trades'>(tabFromUrl || 'wallet')
@@ -459,6 +459,18 @@ export default function HistoryPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <HistoryPageContent />
+    </Suspense>
   )
 }
 

@@ -118,8 +118,8 @@ export function PortfolioChartSandbox() {
   // Calculate Y-axis domain
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
-    const values = points.map(p => p.value).filter(v => v > 0)
-    const netDepositValues = points.map(p => p.netDeposits).filter(v => v > 0)
+    const values = points.map((p: { value: number }) => p.value).filter((v: number) => v > 0)
+    const netDepositValues = points.map((p: { netDeposits: number }) => p.netDeposits).filter((v: number) => v > 0)
     const allValues = [...values, ...netDepositValues]
     if (allValues.length === 0) return [0, 100]
     const min = Math.min(...allValues)
