@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       transactions: transactions.map(t => ({
         ...t,
-        fees: t.fees || 0 // Ensure fees field exists
+        fees: t.fees ?? 0 // Ensure fees field exists, default to 0
       }))
     })
   } catch (error: any) {

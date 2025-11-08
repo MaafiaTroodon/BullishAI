@@ -27,6 +27,7 @@ export const TransactionSchema = z.object({
   price: z.number(),
   quantity: z.number(),
   timestamp: z.number(), // Unix timestamp in milliseconds
+  fees: z.number().optional(), // Optional transaction fees
   note: z.string().optional(),
 })
 
