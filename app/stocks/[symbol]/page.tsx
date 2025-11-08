@@ -280,6 +280,7 @@ export default function StockPage() {
                 </div>
                 {(chartData?.data?.length>0 || stableChart?.data?.length>0) && (
                   <StockChart 
+                    symbol={symbol}
                     data={(chartData?.data?.length>0? chartData.data : (stableChart?.data||[]))} 
                     range={chartRange} 
                     source={chartData.source}
