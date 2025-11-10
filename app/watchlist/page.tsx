@@ -215,7 +215,7 @@ export default function WatchlistPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedWatchlistItems.map((symbol) => {
+                    {sortedWatchlistItems.map((symbol, idx) => {
                       const quote = quotes.find((q: any) => q.symbol === symbol)
                       const isLoading = isLoadingQuotes
                       const isSelected = selectedSymbol === symbol
