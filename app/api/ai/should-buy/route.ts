@@ -63,6 +63,17 @@ Use ONLY numbers from context. Never guess prices or financial metrics.`
     let analysis
     try {
       analysis = JSON.parse(response.answer)
+      // Ensure entryConsiderations and exitStrategy are strings
+      if (typeof analysis.entryConsiderations !== 'string') {
+        analysis.entryConsiderations = typeof analysis.entryConsiderations === 'object' 
+          ? JSON.stringify(analysis.entryConsiderations) 
+          : String(analysis.entryConsiderations || 'N/A')
+      }
+      if (typeof analysis.exitStrategy !== 'string') {
+        analysis.exitStrategy = typeof analysis.exitStrategy === 'object' 
+          ? JSON.stringify(analysis.exitStrategy) 
+          : String(analysis.exitStrategy || 'N/A')
+      }
     } catch {
       analysis = {
         thesis: 'Analysis unavailable. Please consult with a financial advisor.',
