@@ -26,7 +26,8 @@ export default function RootLayout({
         {children}
         <AnimationRoot />
         <ToastContainer />
-        <Footer />
+        {/* Footer only on non-landing pages */}
+        {typeof window !== 'undefined' && window.location.pathname !== '/' && <Footer />}
       </body>
     </html>
   );
