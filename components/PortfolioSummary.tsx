@@ -96,9 +96,22 @@ export function PortfolioSummary() {
   // Always prioritize API data (even if empty) over localStorage
   // This ensures new users see empty state, not data from localStorage
   // But if API returns empty array and we have localItems, use localItems as fallback
-  const items = data?.items !== undefined 
-    ? (data.items.length > 0 ? data.items : (localItems.length > 0 ? localItems : data.items))
-    : localItems
+  const items = (() => {
+    if (data?.items !== undefined) {
+      // If API has items, use them
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        return data.items
+      }
+      // If API returned empty array but we have localItems, use localItems
+      if (Array.isArray(localItems) && localItems.length > 0) {
+        return localItems
+      }
+      // Otherwise use API's empty array
+      return data.items || []
+    }
+    // If no API data, use localItems
+    return Array.isArray(localItems) ? localItems : []
+  })()
 
   useEffect(() => {
     let cancelled = false
@@ -145,7 +158,7 @@ export function PortfolioSummary() {
     return () => { cancelled = true }
   }, [JSON.stringify(items)])
 
-  const enrichedItems = enriched.length > 0 ? enriched : items
+  const enrichedItems = (Array.isArray(enriched) && enriched.length > 0) ? enriched : (Array.isArray(items) ? items : [])
 
   // Calculate portfolio metrics
   // Cost Basis = Net Deposits (from timeseries), not position cost basis
@@ -205,7 +218,9 @@ export function PortfolioSummary() {
   }
 
   // Check if we have any positions (from API or localStorage)
-  const hasPositions = enrichedItems.length > 0 || (data?.items && data.items.length > 0) || localItems.length > 0
+  const hasPositions = (Array.isArray(enrichedItems) && enrichedItems.length > 0) || 
+                       (data?.items && Array.isArray(data.items) && data.items.length > 0) || 
+                       (Array.isArray(localItems) && localItems.length > 0)
   
   if (metrics.holdingCount === 0 && !hasPositions) {
     return (
