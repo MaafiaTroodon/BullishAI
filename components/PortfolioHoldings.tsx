@@ -10,14 +10,19 @@ import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 export function PortfolioHoldings() {
   const router = useRouter()
   const userId = useUserId()
+  const { data: session } = authClient.useSession()
   const storageKey = getUserStorageKey('bullish_pf_positions', userId)
-  const { data, isLoading, error, mutate } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { 
-    refreshInterval: 2000,
-    // Don't show error retry to prevent flicker
-    shouldRetryOnError: false,
-    // Prevent showing loading state during revalidation (SWR will use cached data)
-    revalidateIfStale: true,
-  })
+  const { data, isLoading, error, mutate } = useSWR(
+    session?.user ? '/api/portfolio?enrich=1' : null,
+    safeJsonFetcher,
+    { 
+      refreshInterval: session?.user ? 2000 : 0,
+      // Don't show error retry to prevent flicker
+      shouldRetryOnError: false,
+      // Prevent showing loading state during revalidation (SWR will use cached data)
+      revalidateIfStale: true,
+    }
+  )
   const [localItems, setLocalItems] = useState<any[]>([])
   
   useEffect(() => {

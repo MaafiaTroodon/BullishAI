@@ -26,6 +26,7 @@ const fetcher = async (url: string) => {
 export function DemoTradeBox({ symbol, price }: Props) {
   const router = useRouter()
   const userId = useUserId()
+  const { data: session } = authClient.useSession()
   const positionsStorageKey = getUserStorageKey('bullish_pf_positions', userId)
   const transactionsStorageKey = getUserStorageKey('bullish_transactions', userId)
   
@@ -36,13 +37,18 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [isSubmitting, setSubmitting] = useState(false)
   
   // Fetch portfolio data with SWR for real-time updates
-  const { data: portfolioData, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { 
-    refreshInterval: 2000,
-    // Don't show error retry to prevent flicker
-    shouldRetryOnError: false,
-    // Prevent showing loading state during revalidation (SWR will use cached data)
-    revalidateIfStale: true,
-  })
+  // Only fetch when user is logged in
+  const { data: portfolioData, mutate } = useSWR(
+    session?.user ? '/api/portfolio?enrich=1' : null,
+    fetcher,
+    { 
+      refreshInterval: session?.user ? 2000 : 0,
+      // Don't show error retry to prevent flicker
+      shouldRetryOnError: false,
+      // Prevent showing loading state during revalidation (SWR will use cached data)
+      revalidateIfStale: true,
+    }
+  )
   const [localItems, setLocalItems] = useState<any[]>([])
   
   useEffect(() => {

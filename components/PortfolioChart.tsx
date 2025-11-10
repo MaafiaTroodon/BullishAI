@@ -7,6 +7,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
+import { authClient } from '@/lib/auth-client'
 
 export function PortfolioChart() {
   const userId = useUserId()
@@ -18,25 +19,31 @@ export function PortfolioChart() {
   const [chartRange, setChartRange] = useState('1d') // Default to 1D
   
   // Get market session for dynamic refresh interval
-  const session = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
-  const portfolioRefreshInterval = getRefreshInterval(session.session)
+  const marketSession = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
+  const portfolioRefreshInterval = getRefreshInterval(marketSession.session)
+  const { data: session } = authClient.useSession()
   
   // Update frequently for real-time portfolio value based on market session
   // During market hours: refresh every 15 seconds for live price updates
   // When closed: refresh every 60 seconds
-  const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { 
-    refreshInterval: portfolioRefreshInterval,
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true,
-    // Dedupe requests to prevent duplicate fetches during navigation
-    dedupingInterval: 2000,
-    // Revalidate on mount to ensure fresh data on route changes
-    revalidateOnMount: true,
-    // Don't show error retry to prevent flicker
-    shouldRetryOnError: false,
-    // Prevent showing loading state during revalidation (SWR will use cached data)
-    revalidateIfStale: true,
-  })
+  // Only fetch when user is logged in
+  const { data: pf, mutate: mutatePf } = useSWR(
+    session?.user ? '/api/portfolio?enrich=1' : null,
+    safeJsonFetcher,
+    { 
+      refreshInterval: session?.user ? portfolioRefreshInterval : 0,
+      revalidateOnFocus: !!session?.user,
+      revalidateOnReconnect: !!session?.user,
+      // Dedupe requests to prevent duplicate fetches during navigation
+      dedupingInterval: 2000,
+      // Revalidate on mount to ensure fresh data on route changes
+      revalidateOnMount: true,
+      // Don't show error retry to prevent flicker
+      shouldRetryOnError: false,
+      // Prevent showing loading state during revalidation (SWR will use cached data)
+      revalidateIfStale: true,
+    }
+  )
   
   // Revalidate portfolio data on route change to ensure consistency
   // Use a ref to track last pathname to avoid unnecessary revalidations
