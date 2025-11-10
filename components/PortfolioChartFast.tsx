@@ -291,24 +291,35 @@ export function PortfolioChartFast() {
           return
         }
 
-        // Check for addLineSeries - it might be on the chart object directly
-        let addLineSeries = chart.addLineSeries
+        // Check for addLineSeries method - try different ways to access it
+        let addLineSeriesMethod = chart.addLineSeries
         
-        // If not found, check if it's a getter or on prototype
-        if (!addLineSeries) {
-          // Try to find it in the prototype chain
+        // If not found directly, check prototype
+        if (!addLineSeriesMethod || typeof addLineSeriesMethod !== 'function') {
           const proto = Object.getPrototypeOf(chart)
-          if (proto && proto.addLineSeries) {
-            addLineSeries = proto.addLineSeries
+          if (proto) {
+            addLineSeriesMethod = proto.addLineSeries || Object.getOwnPropertyDescriptor(proto, 'addLineSeries')?.value
           }
         }
 
-        // Verify addLineSeries exists
-        if (typeof addLineSeries !== 'function') {
-          console.error('Chart object does not have addLineSeries method. Available methods:', Object.keys(chart))
-          console.error('Chart prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(chart)))
-          // Try to inspect the chart more deeply
-          console.error('Full chart object:', chart)
+        // If still not found, check all properties (might be a getter)
+        if (!addLineSeriesMethod || typeof addLineSeriesMethod !== 'function') {
+          const allProps = Object.getOwnPropertyNames(chart)
+          const protoProps = Object.getOwnPropertyNames(Object.getPrototypeOf(chart))
+          console.error('Chart object structure:', {
+            ownProps: allProps,
+            protoProps: protoProps,
+            chartType: typeof chart,
+            chartConstructor: chart.constructor?.name
+          })
+          
+          // Try accessing via bracket notation in case it's a symbol or special property
+          for (const prop of [...allProps, ...protoProps]) {
+            if (prop.toLowerCase().includes('line') || prop.toLowerCase().includes('series')) {
+              console.log('Found potential method:', prop, typeof chart[prop])
+            }
+          }
+          
           if (chart && typeof chart.remove === 'function') {
             chart.remove()
           }
@@ -316,7 +327,7 @@ export function PortfolioChartFast() {
         }
 
         // Use the addLineSeries function we found
-        const series = addLineSeries.call(chart, {
+        const series = addLineSeriesMethod.call(chart, {
           color: '#10b981', // emerald-500
           lineWidth: 2,
           priceFormat: {
