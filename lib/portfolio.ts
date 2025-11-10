@@ -66,7 +66,7 @@ async function loadPortfolioFromDB(userId: string): Promise<void> {
 
   const loadPromise = (async () => {
     try {
-      const { loadPortfolioFromDB: loadFromDB } = await import('@/lib/portfolio-db')
+      const { loadPortfolioFromDB: loadFromDB } = await import('@/lib/db-sql')
       const dbData = await loadFromDB(userId)
       
       // Convert positions array to object format
@@ -190,12 +190,9 @@ export async function mergePositions(userId: string, positions: Position[]): Pro
   }
   
   // Save all positions to database (non-blocking, graceful failure)
-  import('@/lib/portfolio-db').then(({ syncPositionsToDB }) => 
+  import('@/lib/db-sql').then(({ syncPositionsToDB }) => 
     syncPositionsToDB(userId, positions).catch(err => {
-      // Only log if it's not a "Database client not available" error (expected during hot reload)
-      if (!err?.message?.includes('Database client not available')) {
-        console.error('Error syncing positions to DB:', err)
-      }
+      console.error('Error syncing positions to DB:', err)
     })
   ).catch(() => {
     // Silently handle import errors
@@ -253,26 +250,19 @@ export async function upsertTrade(userId: string, input: TradeInput): Promise<{ 
 
   // Save to database (non-blocking, graceful failure)
   Promise.all([
-    import('@/lib/portfolio-db').then(({ savePositionToDB }) => 
+    import('@/lib/db-sql').then(({ savePositionToDB }) => 
       savePositionToDB(userId, pf.positions[s]).catch(err => {
-        // Only log if it's not a "Database client not available" error (expected during hot reload)
-        if (!err?.message?.includes('Database client not available')) {
-          console.error('Error saving position to DB:', err)
-        }
+        console.error('Error saving position to DB:', err)
       })
     ),
-    import('@/lib/portfolio-db').then(({ saveTradeToDB }) => 
+    import('@/lib/db-sql').then(({ saveTradeToDB }) => 
       saveTradeToDB(userId, transaction).catch(err => {
-        if (!err?.message?.includes('Database client not available')) {
-          console.error('Error saving trade to DB:', err)
-        }
+        console.error('Error saving trade to DB:', err)
       })
     ),
-    import('@/lib/portfolio-db').then(({ updateWalletBalanceInDB }) => 
+    import('@/lib/db-sql').then(({ updateWalletBalanceInDB }) => 
       updateWalletBalanceInDB(userId, pf.walletBalance).catch(err => {
-        if (!err?.message?.includes('Database client not available')) {
-          console.error('Error updating wallet balance in DB:', err)
-        }
+        console.error('Error updating wallet balance in DB:', err)
       })
     ),
   ]).catch(() => {
@@ -335,12 +325,9 @@ export async function depositToWallet(userId: string, amount: number, method: st
   } catch {}
   
   // Save to database (non-blocking, graceful failure)
-  import('@/lib/portfolio-db').then(({ saveWalletTransactionToDB }) => 
+  import('@/lib/db-sql').then(({ saveWalletTransactionToDB }) => 
     saveWalletTransactionToDB(userId, transaction).catch(err => {
-      // Only log if it's not a "Database client not available" error (expected during hot reload)
-      if (!err?.message?.includes('Database client not available')) {
-        console.error('Error saving wallet transaction to DB:', err)
-      }
+      console.error('Error saving wallet transaction to DB:', err)
     })
   ).catch(() => {
     // Silently handle import errors
@@ -396,12 +383,9 @@ export async function withdrawFromWallet(userId: string, amount: number, method:
   } catch {}
   
   // Save to database (non-blocking, graceful failure)
-  import('@/lib/portfolio-db').then(({ saveWalletTransactionToDB }) => 
+  import('@/lib/db-sql').then(({ saveWalletTransactionToDB }) => 
     saveWalletTransactionToDB(userId, transaction).catch(err => {
-      // Only log if it's not a "Database client not available" error (expected during hot reload)
-      if (!err?.message?.includes('Database client not available')) {
-        console.error('Error saving wallet transaction to DB:', err)
-      }
+      console.error('Error saving wallet transaction to DB:', err)
     })
   ).catch(() => {
     // Silently handle import errors
