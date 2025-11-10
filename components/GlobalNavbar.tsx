@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, Calendar, Newspaper, History, Wallet } from 'lucide-react'
 import { DevStatus } from './DevStatus'
-import useSWR from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { authClient } from '@/lib/auth-client'
 
 export function GlobalNavbar() {
@@ -17,6 +17,7 @@ export function GlobalNavbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const { data: session, isLoading: sessionLoading } = authClient.useSession()
+  const { mutate: globalMutate } = useSWRConfig()
   
   // Store last known balance to prevent $0 flicker during navigation/revalidation
   const lastBalanceRef = useRef<number | null>(null)
@@ -30,9 +31,9 @@ export function GlobalNavbar() {
       return res.json()
     },
     {
-      refreshInterval: 10000,
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
+      refreshInterval: session?.user ? 10000 : 0, // Stop refreshing when logged out
+      revalidateOnFocus: !!session?.user,
+      revalidateOnReconnect: !!session?.user,
       // Dedupe requests within 2 seconds to prevent duplicate fetches
       dedupingInterval: 2000,
       // Revalidate on mount and when pathname changes (route navigation)
@@ -44,12 +45,25 @@ export function GlobalNavbar() {
     }
   )
   
-  // Update last known balance when wallet data changes
+  // Clear cached data and refs when user logs out
   useEffect(() => {
-    if (wallet?.balance !== undefined && wallet.balance !== null) {
+    if (!session?.user) {
+      // User logged out - clear all cached data
+      lastBalanceRef.current = null
+      // Clear SWR cache for wallet and portfolio
+      globalMutate('/api/wallet', undefined, { revalidate: false })
+      globalMutate('/api/portfolio', undefined, { revalidate: false })
+      globalMutate('/api/portfolio?enrich=1', undefined, { revalidate: false })
+      globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })
+    }
+  }, [session?.user, globalMutate])
+  
+  // Update last known balance when wallet data changes (only when logged in)
+  useEffect(() => {
+    if (session?.user && wallet?.balance !== undefined && wallet.balance !== null) {
       lastBalanceRef.current = wallet.balance
     }
-  }, [wallet?.balance])
+  }, [wallet?.balance, session?.user])
   
   // Revalidate wallet on route change to ensure fresh data
   // Use a ref to track last pathname to avoid unnecessary revalidations
@@ -72,11 +86,13 @@ export function GlobalNavbar() {
     return () => window.removeEventListener('walletUpdated', onWalletUpd as any)
   }, [mutateWallet])
   
-  // Get the display balance - use last known value to prevent $0 flicker
-  // Only show $0 if we've never fetched a balance (new user)
-  const displayBalance = wallet?.balance !== undefined && wallet.balance !== null
-    ? wallet.balance
-    : (lastBalanceRef.current !== null ? lastBalanceRef.current : 0)
+  // Get the display balance - only show when logged in
+  // When logged out, always show 0 or nothing
+  const displayBalance = session?.user 
+    ? (wallet?.balance !== undefined && wallet.balance !== null
+        ? wallet.balance
+        : (lastBalanceRef.current !== null ? lastBalanceRef.current : 0))
+    : 0
 
   // Handle search
   const handleSearchChange = async (value: string) => {
@@ -327,6 +343,11 @@ export function GlobalNavbar() {
                       <button 
                         onClick={async () => {
                           setUserMenuOpen(false)
+                          // Clear cached data before logout
+                          lastBalanceRef.current = null
+                          globalMutate('/api/wallet', undefined, { revalidate: false })
+                          globalMutate('/api/portfolio', undefined, { revalidate: false })
+                          globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })
                           await authClient.signOut()
                           router.push('/')
                         }}
