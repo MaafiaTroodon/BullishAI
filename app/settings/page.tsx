@@ -66,7 +66,9 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
+        <Reveal variant="slide-left">
+          <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
+        </Reveal>
         
         <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 mb-6">
           <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
