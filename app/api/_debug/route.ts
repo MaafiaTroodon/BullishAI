@@ -5,7 +5,12 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+// Handle both GET and OPTIONS for CORS
 export async function GET(request: NextRequest) {
+  // Only allow in development
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 404 })
+  }
   const env = {
     databaseUrl: !!process.env.DATABASE_URL,
     finnhub: !!process.env.FINNHUB_API_KEY,
