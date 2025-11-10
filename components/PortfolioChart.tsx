@@ -32,10 +32,10 @@ export function PortfolioChart() {
     dedupingInterval: 2000,
     // Revalidate on mount to ensure fresh data on route changes
     revalidateOnMount: true,
-    // Keep previous data during revalidation to prevent $0 flicker
-    keepPreviousData: true,
     // Don't show error retry to prevent flicker
     shouldRetryOnError: false,
+    // Prevent showing loading state during revalidation (SWR will use cached data)
+    revalidateIfStale: true,
   })
   
   // Revalidate portfolio data on route change to ensure consistency
