@@ -199,7 +199,8 @@ export function PortfolioChart() {
   ]
 
   // Check if there are actual open positions (not just timeseries data)
-  const currentPositions = pf?.items || localItems || []
+  // Always prioritize API data (even if empty) over localStorage
+  const currentPositions = pf?.items !== undefined ? pf.items : (localItems || [])
   const hasOpenPositions = currentPositions.some((p: any) => (p.totalShares || 0) > 0)
 
   const formatXAxis = (t: number) => {
@@ -318,7 +319,8 @@ export function PortfolioChart() {
                   const totalReturnPct = data?.overallReturnPct || 0
                   
                   // Calculate holdings count from current positions (open holdings only)
-                  const currentPositions = pf?.items || localItems || []
+                  // Always prioritize API data (even if empty) over localStorage
+                  const currentPositions = pf?.items !== undefined ? pf.items : (localItems || [])
                   const holdingsCount = currentPositions.filter((p: any) => (p.totalShares || 0) > 0).length
                   
                   return (

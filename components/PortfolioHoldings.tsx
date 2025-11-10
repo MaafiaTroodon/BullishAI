@@ -65,7 +65,9 @@ export function PortfolioHoldings() {
     }
   }, [mutate, storageKey])
   const [enriched, setEnriched] = useState<any[]>([])
-  const items = (data?.items && data.items.length>0) ? data.items : localItems
+  // Always prioritize API data (even if empty) over localStorage
+  // This ensures new users see empty state, not data from localStorage
+  const items = data?.items !== undefined ? data.items : localItems
   
   // Filter out zero-share positions immediately
   const filteredItems = items.filter((p:any) => (p.totalShares || 0) > 0)

@@ -54,16 +54,39 @@ type Portfolio = {
 const store: Record<string, Portfolio> = {}
 
 function getPf(userId: string): Portfolio {
-  if (!store[userId]) store[userId] = { positions: {}, transactions: [], walletBalance: 0, walletTransactions: [] }
+  // Always initialize empty portfolio for new users
+  // This ensures new users start with $0 and no holdings
+  if (!store[userId]) {
+    store[userId] = { 
+      positions: {}, 
+      transactions: [], 
+      walletBalance: 0, 
+      walletTransactions: [] 
+    }
+  }
   return store[userId]
 }
 
 // Initialize wallet from persisted balance (called from API routes)
+// Only initializes if user has no existing transactions (new user)
 export function initializeWalletFromBalance(userId: string, balance: number): void {
   const pf = getPf(userId)
-  if (balance > 0 && (pf.walletBalance === 0 || !pf.walletTransactions || pf.walletTransactions.length === 0)) {
-    // Only initialize if we don't have transactions (fresh start)
+  // Only initialize if:
+  // 1. Balance is provided and > 0
+  // 2. Current wallet balance is 0 (new user)
+  // 3. No wallet transactions exist (truly new user)
+  // 4. No portfolio transactions exist (no trades yet)
+  if (balance > 0 && 
+      pf.walletBalance === 0 && 
+      (!pf.walletTransactions || pf.walletTransactions.length === 0) &&
+      (!pf.transactions || pf.transactions.length === 0)) {
     pf.walletBalance = balance
+  }
+  // For new users, always ensure balance is 0 if no transactions exist
+  if ((!pf.walletTransactions || pf.walletTransactions.length === 0) &&
+      (!pf.transactions || pf.transactions.length === 0) &&
+      Object.keys(pf.positions).length === 0) {
+    pf.walletBalance = 0
   }
 }
 

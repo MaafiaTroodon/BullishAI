@@ -19,9 +19,15 @@ export async function GET(req: NextRequest) {
   // User-specific cookie name to prevent cross-user data sharing
   const cookieName = `bullish_wallet_${userId}`
   
-  // If we don't have a balance in memory, try to restore from user-specific cookie
-  // This handles the case where the server restarts but cookies persist
-  if (balance === 0 && walletTx.length === 0) {
+  // Check if this is a new user (no wallet transactions, no portfolio activity)
+  const { listTransactions, listPositions } = await import('@/lib/portfolio')
+  const transactions = listTransactions(userId)
+  const positions = listPositions(userId)
+  const isNewUser = walletTx.length === 0 && transactions.length === 0 && positions.length === 0
+  
+  // For new users, always start with $0 (don't restore from cookie)
+  // Only restore from cookie if user has existing activity
+  if (!isNewUser && balance === 0 && walletTx.length === 0) {
     try {
       const cookieBal = req.cookies.get(cookieName)?.value
       if (cookieBal) {
@@ -32,6 +38,9 @@ export async function GET(req: NextRequest) {
         }
       }
     } catch {}
+  } else if (isNewUser) {
+    // New user: ensure balance is 0
+    balance = 0
   }
   
   // Ensure balance is never negative

@@ -72,7 +72,9 @@ export function DemoTradeBox({ symbol, price }: Props) {
     return () => window.removeEventListener('portfolioUpdated', onUpd as any)
   }, [mutate, positionsStorageKey])
   
-  const positions = portfolioData?.items || localItems
+  // Always prioritize API data (even if empty) over localStorage
+  // This ensures new users see empty state, not data from localStorage
+  const positions = portfolioData?.items !== undefined ? portfolioData.items : localItems
   // Filter out zero-share positions and find the matching symbol (case-insensitive)
   const pos = useMemo(()=> {
     const filtered = positions.filter((p:any) => (p.totalShares || 0) > 0)
