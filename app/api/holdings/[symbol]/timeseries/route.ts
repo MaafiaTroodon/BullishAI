@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listTransactions } from '@/lib/portfolio'
+import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-function getUserId() { return 'demo-user' }
 
 async function getHistoricalPrices(symbol: string, range: string, startTime: number, endTime: number, baseUrl: string): Promise<Array<{t: number, c: number}>> {
   try {

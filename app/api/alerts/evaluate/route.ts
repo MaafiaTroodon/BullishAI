@@ -12,7 +12,10 @@ async function getQuote(symbol: string) {
 }
 
 export async function POST() {
-  const userId = getUserId()
+  const userId = await getUserId()
+  if (!userId) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
   const alerts = listAlerts(userId).filter(a => a.active)
   const results: any[] = []
   for (const a of alerts) {
