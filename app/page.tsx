@@ -336,7 +336,7 @@ export default function Home() {
             </p>
           </div>
           </TiltCard>
-        </div>
+        </StaggerGrid>
       </section>
 
       {/* CTA Section */}
@@ -366,8 +366,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <Footer />
     </div>
   )
 }

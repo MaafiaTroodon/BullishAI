@@ -141,14 +141,15 @@ export function PortfolioHoldings() {
         <div className="text-slate-400">No positions yet. <button onClick={() => router.push('/stocks/AAPL')} className="text-blue-400 hover:text-blue-300 underline">Buy stocks</button> to get started.</div>
       ) : (
         <div className="space-y-3">
-          {enriched.map((p:any)=>{
+          {enriched.map((p:any, idx: number)=>{
             const price = p.currentPrice || 0
             const totalValue = price * p.totalShares
             const base = p.avgPrice * p.totalShares
             const u = totalValue - base
             const up = base>0 ? (u/base)*100 : 0
             return (
-              <div key={p.symbol} className="bg-slate-700/30 rounded-lg p-5 hover-card" data-anim="fade-up" data-anim-distance="16">
+              <Reveal key={p.symbol} variant="fade" delay={idx * 0.05}>
+              <div className="bg-slate-700/30 rounded-lg p-5 hover-card">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6 flex-1">
                     <button
@@ -169,6 +170,7 @@ export function PortfolioHoldings() {
                   </div>
                 </div>
               </div>
+              </Reveal>
             )
           })}
         </div>

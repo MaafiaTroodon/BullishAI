@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
 import { showToast } from '@/components/Toast'
 import { Mail, User, Save, LogOut } from 'lucide-react'
+import { Reveal } from '@/components/anim/Reveal'
+import { StaggerGrid } from '@/components/anim/StaggerGrid'
 
 export default function Settings() {
   const router = useRouter()
-  const { data: session, isLoading } = authClient.useSession()
+  const { data: session, isPending: isLoading } = authClient.useSession()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -70,7 +72,9 @@ export default function Settings() {
           <h1 className="text-3xl font-bold text-white mb-8">Settings</h1>
         </Reveal>
         
-        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 mb-6">
+        <StaggerGrid staggerDelay={0.05} variant="fade" className="space-y-6">
+        <Reveal variant="rise">
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 mb-6">
           <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
             <User className="h-5 w-5" />
             Account
@@ -128,20 +132,24 @@ export default function Settings() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </Reveal>
 
-        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-          <h2 className="text-xl font-semibold text-white mb-4">Session</h2>
-          <p className="text-slate-400 text-sm mb-4">
-            You are currently signed in. Click "Sign Out" above to end your session.
-          </p>
-          <button
-            onClick={handleSignOut}
-            className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition text-sm font-medium"
-          >
-            Delete Session
-          </button>
-        </div>
+        <Reveal variant="rise" delay={0.1}>
+          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+            <h2 className="text-xl font-semibold text-white mb-4">Session</h2>
+            <p className="text-slate-400 text-sm mb-4">
+              You are currently signed in. Click "Sign Out" above to end your session.
+            </p>
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition text-sm font-medium"
+            >
+              Delete Session
+            </button>
+          </div>
+        </Reveal>
+        </StaggerGrid>
       </div>
     </div>
   )

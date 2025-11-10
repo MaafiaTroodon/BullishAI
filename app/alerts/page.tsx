@@ -103,6 +103,7 @@ export default function AlertsPage() {
             </div>
             <button onClick={() => setOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">+ Create Alert</button>
           </div>
+          </div>
         </Reveal>
 
         {isLoading || items.length === 0 ? (

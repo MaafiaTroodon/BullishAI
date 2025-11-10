@@ -6,11 +6,11 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ReactNode } from 'react'
+import { ReactNode, Children } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
 interface StaggerGridProps {
-  children: ReactNode[]
+  children: ReactNode
   staggerDelay?: number
   variant?: 'fade' | 'rise' | 'scale'
   className?: string
@@ -23,6 +23,9 @@ export function StaggerGrid({
   className = '',
 }: StaggerGridProps) {
   const prefersReducedMotion = usePrefersReducedMotion()
+
+  // Convert React children to array
+  const childrenArray = Children.toArray(children)
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -62,7 +65,7 @@ export function StaggerGrid({
       animate="visible"
       className={className}
     >
-      {children.map((child, index) => (
+      {childrenArray.map((child, index) => (
         <motion.div key={index} variants={itemVariants}>
           {child}
         </motion.div>

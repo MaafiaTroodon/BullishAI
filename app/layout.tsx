@@ -4,7 +4,7 @@ import "./globals.css";
 import { GlobalNavbar } from "@/components/GlobalNavbar";
 import { AnimationRoot } from "@/components/anim/AnimationRoot";
 import { ToastContainer } from "@/components/Toast";
-import { Footer } from "@/components/Footer";
+import { FooterWrapper } from "@/components/FooterWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,8 +26,7 @@ export default function RootLayout({
         {children}
         <AnimationRoot />
         <ToastContainer />
-        {/* Footer only on non-landing pages */}
-        {typeof window !== 'undefined' && window.location.pathname !== '/' && <Footer />}
+        <FooterWrapper />
       </body>
     </html>
   );
