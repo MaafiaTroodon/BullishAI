@@ -6,6 +6,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import { usePathname } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -15,8 +16,13 @@ import { authClient } from '@/lib/auth-client'
 import { useFastPricePolling } from '@/hooks/useFastPricePolling'
 import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from '@/lib/portfolio-mark-to-market-fast'
 
-// Import lightweight-charts - it's client-side only due to 'use client'
-import { createChart, ColorType } from 'lightweight-charts'
+// Dynamic import for lightweight-charts to ensure it only loads client-side
+let chartsModule: any = null
+const getChartsModule = async () => {
+  if (chartsModule) return chartsModule
+  chartsModule = await import('lightweight-charts')
+  return chartsModule
+}
 
 export function PortfolioChartFast() {
   const userId = useUserId()
@@ -184,9 +190,18 @@ export function PortfolioChartFast() {
       }
 
       try {
-        // Verify createChart is available (should be since we're client-side)
+        // Load the charts module
+        const module = await getChartsModule()
+        if (!module) {
+          console.error('Failed to load lightweight-charts module')
+          return
+        }
+
+        const { createChart, ColorType } = module
+
+        // Verify createChart is available
         if (typeof createChart !== 'function') {
-          console.error('createChart is not a function. Check if lightweight-charts is installed.')
+          console.error('createChart is not a function. Module keys:', Object.keys(module))
           return
         }
 
