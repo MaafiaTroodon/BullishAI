@@ -221,11 +221,13 @@ export function PortfolioChartFast() {
         // Try to get createChart and ColorType from module
         let createChart = module.createChart
         let ColorType = module.ColorType
+        let LineSeriesApi = module.LineSeriesApi || module.LineSeries
 
         // If not found, try default export
         if (!createChart && module.default) {
           createChart = module.default.createChart
           ColorType = module.default.ColorType
+          LineSeriesApi = module.default.LineSeriesApi || module.default.LineSeries
         }
 
         // Verify createChart is available
@@ -305,9 +307,10 @@ export function PortfolioChartFast() {
           } 
           // If that doesn't work, use addSeries (v5 API)
           else if (typeof chart.addSeries === 'function') {
-            // In v5, addSeries might need a series type parameter
-            // Try with 'Line' type or just pass the options
+            // In lightweight-charts v5, addSeries takes the series type as first param
+            // Try different approaches based on the API
             try {
+              // Approach 1: addSeries('Line', options)
               series = chart.addSeries('Line', {
                 color: '#10b981',
                 lineWidth: 2,
@@ -317,10 +320,11 @@ export function PortfolioChartFast() {
                   minMove: 0.01,
                 },
               })
-            } catch (e1) {
-              // If that fails, try without type parameter
+            } catch (e1: any) {
+              // Approach 2: addSeries({ type: 'Line', ...options })
               try {
                 series = chart.addSeries({
+                  type: 'Line',
                   color: '#10b981',
                   lineWidth: 2,
                   priceFormat: {
@@ -329,9 +333,26 @@ export function PortfolioChartFast() {
                     minMove: 0.01,
                   },
                 })
-              } catch (e2) {
-                console.error('Both addSeries attempts failed:', e1, e2)
-                throw e2
+              } catch (e2: any) {
+                // Approach 3: Just pass options (might infer type)
+                try {
+                  series = chart.addSeries({
+                    color: '#10b981',
+                    lineWidth: 2,
+                    priceFormat: {
+                      type: 'price',
+                      precision: 2,
+                      minMove: 0.01,
+                    },
+                  })
+                } catch (e3: any) {
+                  console.error('All addSeries attempts failed:', {
+                    e1: e1?.message,
+                    e2: e2?.message,
+                    e3: e3?.message
+                  })
+                  throw e3
+                }
               }
             }
           } else {
