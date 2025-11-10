@@ -6,7 +6,6 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { createChart, ColorType, IChartApi, ISeriesApi, LineData } from 'lightweight-charts'
 import useSWR from 'swr'
 import { usePathname } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -15,6 +14,19 @@ import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 import { authClient } from '@/lib/auth-client'
 import { useFastPricePolling } from '@/hooks/useFastPricePolling'
 import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from '@/lib/portfolio-mark-to-market-fast'
+
+// Dynamic import for lightweight-charts to avoid SSR issues
+let lightweightCharts: any = null
+const loadLightweightCharts = async () => {
+  if (lightweightCharts) return lightweightCharts
+  try {
+    lightweightCharts = await import('lightweight-charts')
+    return lightweightCharts
+  } catch (error) {
+    console.error('Failed to load lightweight-charts:', error)
+    return null
+  }
+}
 
 export function PortfolioChartFast() {
   const userId = useUserId()
@@ -150,7 +162,7 @@ export function PortfolioChartFast() {
     let retryCount = 0
     const maxRetries = 20
     
-    function initializeChart() {
+    async function initializeChart() {
       if (!mounted || !chartContainerRef.current || chartRef.current) return
       
       const container = chartContainerRef.current
@@ -182,6 +194,15 @@ export function PortfolioChartFast() {
       }
 
       try {
+        // Load lightweight-charts dynamically
+        const chartsLib = await loadLightweightCharts()
+        if (!chartsLib || !chartsLib.createChart) {
+          console.error('Failed to load lightweight-charts library')
+          return
+        }
+
+        const { createChart, ColorType } = chartsLib
+
         // Verify createChart is available
         if (typeof createChart !== 'function') {
           console.error('createChart is not a function. Lightweight Charts may not be loaded.')
