@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     const idempotencyKey = body.idempotencyKey // Optional idempotency key
     
     if (action === 'deposit') {
-      const result = depositToWallet(userId, roundedAmount, method, idempotencyKey)
+      const result = await depositToWallet(userId, roundedAmount, method, idempotencyKey)
       const res = NextResponse.json({ 
         balance: result.balance, 
         transaction: result.transaction 
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       return res
     }
     if (action === 'withdraw') {
-      const result = withdrawFromWallet(userId, roundedAmount, method, idempotencyKey)
+      const result = await withdrawFromWallet(userId, roundedAmount, method, idempotencyKey)
       const res = NextResponse.json({ 
         balance: result.balance, 
         transaction: result.transaction 
