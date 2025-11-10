@@ -84,6 +84,7 @@ export async function searchKnowledgeBase(
     })
 
     // Ticker matches
+    const queryUpper = query.toUpperCase()
     entry.tickers.forEach(ticker => {
       if (queryUpper.includes(ticker.toUpperCase())) {
         score += 6
