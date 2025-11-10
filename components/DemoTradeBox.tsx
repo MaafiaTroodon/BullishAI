@@ -190,9 +190,27 @@ export function DemoTradeBox({ symbol, price }: Props) {
         }
         
         // Invalidate all SWR caches to force fresh fetch from DB
-        mutate() // Portfolio cache
+        // Use optimistic update with fresh data from server
+        mutate(async () => {
+          // Fetch fresh data from server
+          const freshRes = await fetch('/api/portfolio?enrich=1', { cache: 'no-store' })
+          if (freshRes.ok) {
+            return freshRes.json()
+          }
+          return portfolioData // Fallback to current data
+        }, {
+          // Optimistically update with server response data
+          optimisticData: portfolioData ? {
+            ...portfolioData,
+            items: j.holdings || (j.item ? [j.item] : portfolioData.items),
+            wallet: j.wallet || portfolioData.wallet,
+          } : undefined,
+          // Revalidate in background
+          revalidate: true,
+        })
+        
         try {
-          // Trigger global events for other components
+          // Trigger global events for other components (navbar, wallet page, etc.)
           window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: (j.item?.symbol || symbol).toUpperCase() } }))
           window.dispatchEvent(new CustomEvent('walletUpdated'))
         } catch {}
