@@ -228,11 +228,28 @@ export function PortfolioChartFast() {
       }
     }
 
-    // Call initializeChart if container is ready
-    if (containerWidth > 0) {
-      initializeChart()
-      window.addEventListener('resize', handleResize)
+    // Ensure container has dimensions
+    const containerWidth = container.clientWidth || container.offsetWidth || 800
+    if (containerWidth === 0) {
+      // Wait for next frame if container isn't ready
+      requestAnimationFrame(() => {
+        if (!chartContainerRef.current || chartRef.current) return
+        initializeChart()
+        window.addEventListener('resize', handleResize)
+      })
+      return () => {
+        window.removeEventListener('resize', handleResize)
+        if (chartRef.current) {
+          chartRef.current.remove()
+          chartRef.current = null
+          seriesRef.current = null
+        }
+      }
     }
+
+    // Call initializeChart if container is ready
+    initializeChart()
+    window.addEventListener('resize', handleResize)
 
     return () => {
       window.removeEventListener('resize', handleResize)
