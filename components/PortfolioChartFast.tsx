@@ -15,7 +15,6 @@ import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 import { authClient } from '@/lib/auth-client'
 import { useFastPricePolling } from '@/hooks/useFastPricePolling'
 import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from '@/lib/portfolio-mark-to-market-fast'
-import { savePortfolioSnapshot } from '@/lib/portfolio-mark-to-market'
 
 export function PortfolioChartFast() {
   const userId = useUserId()
@@ -112,16 +111,21 @@ export function PortfolioChartFast() {
       })
     }
 
-    // Throttled DB save (non-blocking)
+    // Throttled DB save (non-blocking) - call API endpoint instead of direct DB access
     if (snapshotThrottleRef.current.shouldSave(result.tpv)) {
-      savePortfolioSnapshot(userId, {
-        tpv: result.tpv,
-        costBasis: result.costBasis,
-        totalReturn: result.totalReturn,
-        totalReturnPct: result.totalReturnPct,
-        holdings: result.holdings,
-        walletBalance,
-        lastUpdated: now,
+      // Save snapshot via API (server-side only)
+      fetch('/api/portfolio/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tpv: result.tpv,
+          costBasis: result.costBasis,
+          totalReturn: result.totalReturn,
+          totalReturnPct: result.totalReturnPct,
+          holdings: result.holdings,
+          walletBalance,
+          lastUpdated: now,
+        }),
       }).catch(err => {
         console.error('Error saving snapshot:', err)
       })

@@ -12,6 +12,9 @@ import { HeadlineRotator } from '@/components/HeadlineRotator'
 import { TiltCard } from '@/components/TiltCard'
 import TradingViewTickerTape from '@/components/TradingViewTickerTape'
 import useSWR from 'swr'
+import { Reveal } from '@/components/anim/Reveal'
+import { StaggerGrid } from '@/components/anim/StaggerGrid'
+import { ParallaxImage } from '@/components/anim/ParallaxImage'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
