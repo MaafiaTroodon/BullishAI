@@ -179,7 +179,8 @@ export async function saveWalletTransactionToDB(
       amount: walletTx.amount,
       timestamp: new Date(walletTx.timestamp),
       method: walletTx.method || 'Manual',
-    })
+    },
+  })
 
   // Update portfolio wallet balance
   await db.portfolio.update({

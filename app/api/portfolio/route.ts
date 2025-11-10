@@ -180,19 +180,49 @@ export async function POST(req: NextRequest) {
       
       const input = TradeInputSchema.parse(body)
       try {
+        // Ensure portfolio is loaded before trade
+        const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
+        await ensurePortfolioLoaded(userId)
+        
         const result = await upsertTrade(userId, input)
+        
+        // Get fresh snapshot of all holdings and wallet after trade
         const updatedBal = getWalletBalance(userId)
+        const allPositions = listPositions(userId)
+        const { listTransactions } = await import('@/lib/portfolio')
+        const allTransactions = listTransactions(userId)
+        
+        // Calculate portfolio totals
+        const totalCost = allPositions.reduce((sum, p) => sum + (p.totalCost || p.avgPrice * p.totalShares || 0), 0)
+        const totalReturn = allPositions.reduce((sum, p) => sum + (p.realizedPnl || 0), 0)
+        
+        // Return complete fresh snapshot for client to use
         const res = NextResponse.json({ 
+          // Single item that was traded (for backward compatibility)
           item: result.position, 
           transaction: result.transaction,
-          wallet: { balance: updatedBal, cap: 1_000_000 } 
+          // Complete fresh snapshot
+          holdings: allPositions,
+          wallet: { balance: updatedBal, cap: 1_000_000 },
+          totals: {
+            costBasis: totalCost,
+            totalReturn: totalReturn,
+            totalReturnPct: totalCost > 0 ? (totalReturn / totalCost) * 100 : 0,
+          },
+          // Cache invalidation hint
+          _invalidated: true,
         })
+        
         // Persist wallet balance to user-specific cookie after trade
         try { res.cookies.set(cookieName, String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
-        // Trigger wallet update event
+        
+        // Trigger cache invalidation headers
         try { 
           res.headers.set('X-Wallet-Updated', 'true')
+          res.headers.set('X-Portfolio-Updated', 'true')
+          res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
         } catch {}
+        
         return res
       } catch (e: any) {
         return NextResponse.json({ error: e?.message || 'trade_failed' }, { status: 400 })

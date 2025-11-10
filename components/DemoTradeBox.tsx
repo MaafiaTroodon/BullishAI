@@ -135,63 +135,67 @@ export function DemoTradeBox({ symbol, price }: Props) {
         // Immediately reset submitting state - don't wait for async operations
         setSubmitting(false)
         
-        // Update local positions
-        mutate() // Refresh SWR cache
-        try {
-          if (!positionsStorageKey || !transactionsStorageKey) return
-          
-          const raw = localStorage.getItem(positionsStorageKey)
-          const map = raw ? JSON.parse(raw) : {}
-          // Always use uppercase symbol as key
-          const symbolKey = (j.item.symbol || symbol).toUpperCase()
-          // If position has 0 shares, remove it
-          if (j.item.totalShares <= 0) {
-            delete map[symbolKey]
-          } else {
-            // Ensure symbol is uppercase in the item
-            map[symbolKey] = { ...j.item, symbol: symbolKey }
+        // Server returned fresh snapshot - use it directly
+        if (j.holdings) {
+          // Update local storage with fresh holdings from server
+          if (positionsStorageKey) {
+            const map: Record<string, any> = {}
+            j.holdings.forEach((p: any) => {
+              const symbolKey = (p.symbol || '').toUpperCase()
+              if (symbolKey && p.totalShares > 0) {
+                map[symbolKey] = { ...p, symbol: symbolKey }
+              }
+            })
+            localStorage.setItem(positionsStorageKey, JSON.stringify(map))
+            const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+            setLocalItems(items)
           }
-          localStorage.setItem(positionsStorageKey, JSON.stringify(map))
-          // Immediately reload positions
-          const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-          setLocalItems(items)
-          console.log('[DemoTradeBox] Position updated after trade:', items)
-          
-          // Persist transaction history - use transaction from server response if available
-          const txRaw = localStorage.getItem(transactionsStorageKey)
-          const transactions = txRaw ? JSON.parse(txRaw) : []
-          const transaction = j.transaction || {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            symbol: symbol.toUpperCase(),
-            action: mode,
-            price: currentPrice,
-            quantity: estShares,
-            timestamp: Date.now(),
+        } else if (j.item) {
+          // Fallback: update single position (backward compatibility)
+          if (positionsStorageKey) {
+            const raw = localStorage.getItem(positionsStorageKey)
+            const map = raw ? JSON.parse(raw) : {}
+            const symbolKey = (j.item.symbol || symbol).toUpperCase()
+            if (j.item.totalShares <= 0) {
+              delete map[symbolKey]
+            } else {
+              map[symbolKey] = { ...j.item, symbol: symbolKey }
+            }
+            localStorage.setItem(positionsStorageKey, JSON.stringify(map))
+            const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+            setLocalItems(items)
           }
-          // Check if transaction already exists (avoid duplicates)
-          const exists = transactions.some((t: any) => 
-            t.id === transaction.id || 
-            (t.timestamp === transaction.timestamp && t.symbol === transaction.symbol && t.action === transaction.action)
-          )
-          if (!exists) {
-            transactions.push(transaction)
-            localStorage.setItem(transactionsStorageKey, JSON.stringify(transactions))
-          }
-          
-          window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
-          // Trigger wallet update event since trades affect wallet balance
+        }
+        
+        // Persist transaction history
+        if (j.transaction && transactionsStorageKey) {
           try {
-            window.dispatchEvent(new CustomEvent('walletUpdated'))
+            const txRaw = localStorage.getItem(transactionsStorageKey)
+            const transactions = txRaw ? JSON.parse(txRaw) : []
+            const exists = transactions.some((t: any) => 
+              t.id === j.transaction.id || 
+              (t.timestamp === j.transaction.timestamp && t.symbol === j.transaction.symbol && t.action === j.transaction.action)
+            )
+            if (!exists) {
+              transactions.push(j.transaction)
+              localStorage.setItem(transactionsStorageKey, JSON.stringify(transactions))
+            }
           } catch {}
-          showToast(
-            `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${symbolKey} at $${currentPrice.toFixed(2)}`,
-            'success'
-          )
-          
-          // Sync to server in background (non-blocking)
-          const snapshot = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-          fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ syncPositions: snapshot }) }).catch(() => {})
+        }
+        
+        // Invalidate all SWR caches to force fresh fetch from DB
+        mutate() // Portfolio cache
+        try {
+          // Trigger global events for other components
+          window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: (j.item?.symbol || symbol).toUpperCase() } }))
+          window.dispatchEvent(new CustomEvent('walletUpdated'))
         } catch {}
+        
+        showToast(
+          `${mode === 'buy' ? 'Bought' : 'Sold'} ${estShares.toFixed(4)} shares of ${(j.item?.symbol || symbol).toUpperCase()} at $${currentPrice.toFixed(2)}`,
+          'success'
+        )
+        
         setAmount(0)
       }
     } finally {
