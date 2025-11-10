@@ -19,17 +19,18 @@ import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from 
 let chartsModule: any = null
 const getChartsModule = async () => {
   if (chartsModule) {
-    console.log('Using cached charts module')
     return chartsModule
   }
-  console.log('Loading lightweight-charts module...')
   try {
+    // Try importing the module - it should work in browser
     chartsModule = await import('lightweight-charts')
-    console.log('Charts module loaded:', {
-      hasCreateChart: typeof chartsModule.createChart === 'function',
-      hasColorType: !!chartsModule.ColorType,
-      keys: Object.keys(chartsModule).slice(0, 10)
-    })
+    
+    // Verify the exports
+    if (!chartsModule.createChart) {
+      console.error('createChart not found in module. Available:', Object.keys(chartsModule))
+      throw new Error('createChart not exported from lightweight-charts')
+    }
+    
     return chartsModule
   } catch (error) {
     console.error('Error loading lightweight-charts:', error)
@@ -282,36 +283,59 @@ export function PortfolioChartFast() {
           return
         }
 
-        // Try to add line series - the method should exist on the chart object
+        // Wait a tick to ensure chart is fully initialized
+        await new Promise(resolve => setTimeout(resolve, 0))
+        
+        // Try to add line series - check if method exists
+        if (typeof chart.addLineSeries !== 'function') {
+          console.error('addLineSeries method not found on chart object')
+          console.error('Chart type:', typeof chart)
+          console.error('Chart keys:', Object.keys(chart))
+          console.error('Chart prototype:', Object.getPrototypeOf(chart))
+          console.error('Has addLineSeries in object:', 'addLineSeries' in chart)
+          console.error('Has addLineSeries in prototype:', 'addLineSeries' in Object.getPrototypeOf(chart))
+          
+          // Try to access via any possible way
+          const possibleMethods = ['addLineSeries', 'addSeries', 'createLineSeries']
+          for (const methodName of possibleMethods) {
+            if (typeof chart[methodName] === 'function') {
+              console.log(`Found alternative method: ${methodName}`)
+              try {
+                const series = chart[methodName]({
+                  color: '#10b981',
+                  lineWidth: 2,
+                  priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                })
+                chartRef.current = chart
+                seriesRef.current = series
+                setChartInitialized(true)
+                return
+              } catch (e) {
+                console.error(`Error using ${methodName}:`, e)
+              }
+            }
+          }
+          
+          if (chart && typeof chart.remove === 'function') {
+            chart.remove()
+          }
+          return
+        }
+
+        // Add line series using the standard API
         let series
         try {
-          // Direct call - this should work if the API is correct
-          if (typeof chart.addLineSeries === 'function') {
-            series = chart.addLineSeries({
-              color: '#10b981', // emerald-500
-              lineWidth: 2,
-              priceFormat: {
-                type: 'price',
-                precision: 2,
-                minMove: 0.01,
-              },
-            })
-          } else {
-            // Log detailed info for debugging
-            console.error('addLineSeries not found. Chart object:', {
-              type: typeof chart,
-              keys: Object.keys(chart),
-              prototypeKeys: Object.getOwnPropertyNames(Object.getPrototypeOf(chart)),
-              hasAddLineSeries: 'addLineSeries' in chart,
-              chartValue: chart
-            })
-            if (chart && typeof chart.remove === 'function') {
-              chart.remove()
-            }
-            return
-          }
+          series = chart.addLineSeries({
+            color: '#10b981', // emerald-500
+            lineWidth: 2,
+            priceFormat: {
+              type: 'price',
+              precision: 2,
+              minMove: 0.01,
+            },
+          })
         } catch (seriesError) {
-          console.error('Error adding line series:', seriesError)
+          console.error('Error calling addLineSeries:', seriesError)
           if (chart && typeof chart.remove === 'function') {
             chart.remove()
           }
