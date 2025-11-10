@@ -220,26 +220,68 @@ export async function POST(req: NextRequest) {
         // Get fresh snapshot of all holdings and wallet after trade
         const updatedBal = getWalletBalance(userId)
         const allPositions = listPositions(userId)
-        const { listTransactions } = await import('@/lib/portfolio')
-        const allTransactions = listTransactions(userId)
         
-        // Calculate portfolio totals
-        const totalCost = allPositions.reduce((sum, p) => sum + (p.totalCost || p.avgPrice * p.totalShares || 0), 0)
-        const totalReturn = allPositions.reduce((sum, p) => sum + (p.realizedPnl || 0), 0)
+        // Calculate mark-to-market totals using live prices
+        const { calculateMarkToMarket, savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
+        let mtm
+        try {
+          mtm = await calculateMarkToMarket(allPositions, updatedBal, false) // R3A: wallet excluded
+          // Save snapshot asynchronously
+          savePortfolioSnapshot(userId, mtm).catch(err => {
+            console.error('Error saving portfolio snapshot after trade:', err)
+          })
+        } catch (error) {
+          console.error('Mark-to-market calculation failed after trade:', error)
+          // Fallback to basic calculation
+          const totalCost = allPositions.reduce((sum, p) => sum + (p.totalCost || p.avgPrice * p.totalShares || 0), 0)
+          mtm = {
+            tpv: totalCost, // Fallback: use cost basis if mark-to-market fails
+            costBasis: totalCost,
+            totalReturn: 0,
+            totalReturnPct: 0,
+            holdings: allPositions.map(p => ({
+              symbol: p.symbol,
+              shares: p.totalShares,
+              avgPrice: p.avgPrice,
+              currentPrice: null,
+              marketValue: p.totalCost || p.avgPrice * p.totalShares || 0,
+              unrealizedPnl: 0,
+              unrealizedPnlPct: 0,
+              costBasis: p.totalCost || p.avgPrice * p.totalShares || 0,
+            })),
+            walletBalance: updatedBal,
+            lastUpdated: Date.now(),
+          }
+        }
         
-        // Return complete fresh snapshot for client to use
+        // Convert holdings to enriched format
+        const enrichedHoldings = mtm.holdings.map(h => ({
+          symbol: h.symbol,
+          totalShares: h.shares,
+          avgPrice: h.avgPrice,
+          currentPrice: h.currentPrice,
+          totalValue: h.marketValue,
+          unrealizedPnl: h.unrealizedPnl,
+          unrealizedPnlPct: h.unrealizedPnlPct,
+          totalCost: h.costBasis,
+          realizedPnl: allPositions.find(p => p.symbol === h.symbol)?.realizedPnl || 0,
+        }))
+        
+        // Return complete fresh snapshot with mark-to-market totals
         const res = NextResponse.json({ 
           // Single item that was traded (for backward compatibility)
           item: result.position, 
           transaction: result.transaction,
-          // Complete fresh snapshot
-          holdings: allPositions,
+          // Complete fresh snapshot with mark-to-market values
+          holdings: enrichedHoldings,
           wallet: { balance: updatedBal, cap: 1_000_000 },
           totals: {
-            costBasis: totalCost,
-            totalReturn: totalReturn,
-            totalReturnPct: totalCost > 0 ? (totalReturn / totalCost) * 100 : 0,
+            tpv: mtm.tpv,
+            costBasis: mtm.costBasis,
+            totalReturn: mtm.totalReturn,
+            totalReturnPct: mtm.totalReturnPct,
           },
+          lastUpdated: mtm.lastUpdated,
           // Cache invalidation hint
           _invalidated: true,
         })

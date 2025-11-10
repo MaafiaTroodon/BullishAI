@@ -197,12 +197,14 @@ export function DemoTradeBox({ symbol, price }: Props) {
         }
         
         // Immediately update SWR cache with server response (optimistic update)
-        if (j.holdings || j.item) {
-          // Update cache immediately with fresh data from server
+        if (j.holdings || j.item || j.totals) {
+          // Update cache immediately with fresh mark-to-market data from server
           mutate({
             ...portfolioData,
             items: j.holdings || (j.item ? [j.item] : portfolioData?.items || []),
             wallet: j.wallet || portfolioData?.wallet,
+            totals: j.totals || portfolioData?.totals, // Include mark-to-market totals
+            lastUpdated: j.lastUpdated || portfolioData?.lastUpdated,
           }, {
             // Don't revalidate immediately - we already have fresh data
             revalidate: false,
