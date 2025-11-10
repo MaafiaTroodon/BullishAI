@@ -311,6 +311,7 @@ export default function WatchlistPage() {
                             </div>
                           </td>
                         </tr>
+                        </Reveal>
                       )
                     })}
                   </tbody>

@@ -25,6 +25,7 @@ export default function RootLayout({
         {children}
         <AnimationRoot />
         <ToastContainer />
+        <Footer />
       </body>
     </html>
   );
