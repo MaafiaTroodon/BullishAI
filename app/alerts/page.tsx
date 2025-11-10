@@ -103,18 +103,21 @@ export default function AlertsPage() {
             </div>
             <button onClick={() => setOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">+ Create Alert</button>
           </div>
-        </div>
+        </Reveal>
 
         {isLoading || items.length === 0 ? (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
-            <div className="text-slate-400 mb-3">No alerts yet</div>
-            <button onClick={() => setOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">Create Alert</button>
-          </div>
+          <Reveal variant="fade">
+            <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
+              <div className="text-slate-400 mb-3">No alerts yet</div>
+              <button onClick={() => setOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">Create Alert</button>
+            </div>
+          </Reveal>
         ) : (
-          <div className="bg-slate-800 rounded-lg border border-slate-700">
-            <div className="divide-y divide-slate-700">
-              {filteredItems.map(a => (
-                <div key={a.id} className="flex items-center justify-between px-4 py-4">
+          <Reveal variant="fade" delay={0.1}>
+            <div className="bg-slate-800 rounded-lg border border-slate-700">
+              <StaggerGrid staggerDelay={0.04} variant="rise" className="divide-y divide-slate-700">
+                {filteredItems.map(a => (
+                  <div key={a.id} className="flex items-center justify-between px-4 py-4">
                   <div className="flex items-center gap-4">
                     <div className="text-white font-semibold">{a.symbol}</div>
                     <div className="text-slate-300 text-sm">
