@@ -190,7 +190,7 @@ export async function saveTradeToDB(
 
   try {
     await client.query(
-      `INSERT INTO trades (id, portfolio_id, symbol, action, price, quantity, timestamp, note, created_at)
+      `INSERT INTO trades (id, "portfolioId", symbol, action, price, quantity, timestamp, note, "createdAt")
        VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, NOW())`,
       [
         portfolioId,
@@ -227,9 +227,9 @@ export async function saveWalletTransactionToDB(
     await client.query('BEGIN')
 
     try {
-      // Insert wallet transaction
+      // Insert wallet transaction (use camelCase column names)
       await client.query(
-        `INSERT INTO wallet_transactions (id, portfolio_id, action, amount, timestamp, method, created_at)
+        `INSERT INTO wallet_transactions (id, "portfolioId", action, amount, timestamp, method, "createdAt")
          VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW())`,
         [
           portfolioId,
@@ -240,9 +240,9 @@ export async function saveWalletTransactionToDB(
         ]
       )
 
-      // Update portfolio wallet balance
+      // Update portfolio wallet balance (use camelCase column names)
       await client.query(
-        'UPDATE portfolios SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+        'UPDATE portfolios SET "walletBalance" = $1, "updatedAt" = NOW() WHERE id = $2',
         [walletTx.resultingBalance, portfolioId]
       )
 
@@ -268,7 +268,7 @@ export async function updateWalletBalanceInDB(
 
   try {
     await client.query(
-      'UPDATE portfolios SET wallet_balance = $1, updated_at = NOW() WHERE id = $2',
+      'UPDATE portfolios SET "walletBalance" = $1, "updatedAt" = NOW() WHERE id = $2',
       [balance, portfolioId]
     )
   } finally {
@@ -291,14 +291,14 @@ export async function syncPositionsToDB(
 
     try {
       // Delete all existing positions
-      await client.query('DELETE FROM positions WHERE portfolio_id = $1', [portfolioId])
+      await client.query('DELETE FROM positions WHERE "portfolioId" = $1', [portfolioId])
 
-      // Insert new positions (only non-zero shares)
+      // Insert new positions (only non-zero shares, use camelCase column names)
       const validPositions = positions.filter(p => p.totalShares > 0)
       if (validPositions.length > 0) {
         for (const pos of validPositions) {
           await client.query(
-            `INSERT INTO positions (id, portfolio_id, symbol, total_shares, avg_price, total_cost, realized_pnl, created_at, updated_at)
+            `INSERT INTO positions (id, "portfolioId", symbol, "totalShares", "avgPrice", "totalCost", "realizedPnl", "createdAt", "updatedAt")
              VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())`,
             [
               portfolioId,
