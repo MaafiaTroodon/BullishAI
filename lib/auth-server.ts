@@ -1,22 +1,17 @@
 import { auth } from "./auth"
 import { cookies } from "next/headers"
+import { headers } from "next/headers"
 
 export async function getSession() {
-  const cookieStore = await cookies()
-  const sessionToken = cookieStore.get("better-auth.session_token")?.value
-  
-  if (!sessionToken) {
-    return null
-  }
-  
   try {
+    const cookieStore = await cookies()
+    const allHeaders = await headers()
     const session = await auth.api.getSession({
-      headers: {
-        cookie: `better-auth.session_token=${sessionToken}`,
-      },
+      headers: allHeaders,
     })
     return session
-  } catch {
+  } catch (err) {
+    console.error('getSession error:', err)
     return null
   }
 }

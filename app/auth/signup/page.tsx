@@ -38,6 +38,8 @@ export default function SignUp() {
         name,
       })
       
+      console.log('Sign up result:', result)
+      
       if (result.error) {
         setError(result.error.message || 'Failed to create account')
         setLoading(false)
