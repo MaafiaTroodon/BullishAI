@@ -81,9 +81,14 @@ async function loadPortfolioFromDB(userId: string): Promise<void> {
         walletBalance: dbData.walletBalance,
         walletTransactions: dbData.walletTransactions,
       }
-    } catch (error) {
-      console.error(`Error loading portfolio from DB for user ${userId}:`, error)
-      // Fallback to empty portfolio if DB load fails
+    } catch (error: any) {
+      // Log error but don't throw - fallback to empty portfolio
+      const errorMsg = error?.message || 'Unknown error'
+      // Only log if it's not a "Database client not available" error (expected during hot reload)
+      if (!errorMsg.includes('Database client not available')) {
+        console.error(`Error loading portfolio from DB for user ${userId}:`, errorMsg)
+      }
+      // Fallback to empty portfolio if DB load fails (will retry on next access)
       store[userId] = {
         positions: {},
         transactions: [],
