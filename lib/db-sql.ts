@@ -46,9 +46,9 @@ export const pool = getPool()
 export async function getOrCreatePortfolio(userId: string) {
   const client = await pool.connect()
   try {
-    // Check if portfolio exists
+    // Check if portfolio exists (use camelCase column names as per Prisma schema)
     const checkResult = await client.query(
-      'SELECT id FROM portfolios WHERE user_id = $1',
+      'SELECT id FROM portfolios WHERE "userId" = $1',
       [userId]
     )
 
@@ -56,9 +56,9 @@ export async function getOrCreatePortfolio(userId: string) {
       return checkResult.rows[0].id
     }
 
-    // Create new portfolio
+    // Create new portfolio (use camelCase column names)
     const insertResult = await client.query(
-      'INSERT INTO portfolios (id, user_id, wallet_balance, created_at, updated_at) VALUES (gen_random_uuid()::text, $1, 0, NOW(), NOW()) RETURNING id',
+      'INSERT INTO portfolios (id, "userId", "walletBalance", "createdAt", "updatedAt") VALUES (gen_random_uuid()::text, $1, 0, NOW(), NOW()) RETURNING id',
       [userId]
     )
 
