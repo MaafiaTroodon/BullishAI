@@ -8,17 +8,20 @@ export default function MomentumPage() {
   const [data, setData] = useState<MomentumRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/screens/strongest-momentum')
+      const d = await res.json()
+      setData(d.items || [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    fetch('/api/screens/strongest-momentum')
-      .then(r => r.json())
-      .then(d => {
-        setData(d.items || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
+    fetchData()
   }, [])
 
   if (loading) {
@@ -45,6 +48,7 @@ export default function MomentumPage() {
       data={data}
       screenType="momentum"
       apiEndpoint="/api/screens/strongest-momentum"
+      onRefresh={fetchData}
     />
   )
 }

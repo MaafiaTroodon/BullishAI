@@ -8,17 +8,20 @@ export default function ReboundPage() {
   const [data, setData] = useState<ReboundRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/screens/undervalued-rebound')
+      const d = await res.json()
+      setData(d.items || [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    fetch('/api/screens/undervalued-rebound')
-      .then(r => r.json())
-      .then(d => {
-        setData(d.items || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
+    fetchData()
   }, [])
 
   if (loading) {
@@ -44,6 +47,7 @@ export default function ReboundPage() {
       data={data}
       screenType="rebound"
       apiEndpoint="/api/screens/undervalued-rebound"
+      onRefresh={fetchData}
     />
   )
 }

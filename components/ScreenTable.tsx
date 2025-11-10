@@ -18,9 +18,10 @@ interface ScreenTableProps {
   data: ScreenRow[]
   screenType: ScreenType
   apiEndpoint: string
+  onRefresh?: () => void
 }
 
-export function ScreenTable({ title, columns, data, screenType, apiEndpoint }: ScreenTableProps) {
+export function ScreenTable({ title, columns, data, screenType, apiEndpoint, onRefresh }: ScreenTableProps) {
   const [sortKey, setSortKey] = useState<string>(columns.find(c => c.key.includes('score'))?.key || columns[0].key)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [selectedRow, setSelectedRow] = useState<ScreenRow | null>(null)
@@ -59,9 +60,9 @@ export function ScreenTable({ title, columns, data, screenType, apiEndpoint }: S
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await fetch(apiEndpoint)
-      // In a real app, we'd update the data here
-      // For now, just simulate a refresh
+      if (onRefresh) {
+        await onRefresh()
+      }
       setTimeout(() => setIsRefreshing(false), 500)
     } catch (error) {
       setIsRefreshing(false)
