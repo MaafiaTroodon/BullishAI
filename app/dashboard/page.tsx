@@ -111,16 +111,22 @@ export default function Dashboard() {
 
       <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Portfolio Overview - Wealthsimple style */}
-        <div className="space-y-6">
+        <StaggerGrid staggerDelay={0.1} variant="fade" className="space-y-6">
           {/* Summary Card at top - shows total balance and return */}
-          <PortfolioSummary />
+          <Reveal variant="rise">
+            <PortfolioSummary />
+          </Reveal>
           
           {/* Large prominent chart - fast canvas-based rendering */}
-          <PortfolioChartFast />
+          <Reveal variant="fade" delay={0.1}>
+            <PortfolioChartFast />
+          </Reveal>
           
           {/* Holdings list below */}
-          <PortfolioHoldings />
-        </div>
+          <Reveal variant="fade" delay={0.2}>
+            <PortfolioHoldings />
+          </Reveal>
+        </StaggerGrid>
         
       </main>
     </div>
