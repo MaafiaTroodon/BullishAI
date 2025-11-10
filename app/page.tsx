@@ -185,10 +185,12 @@ export default function Home() {
       </Reveal>
 
       {/* Live Market Preview */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
-        <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Reveal variant="slide-left">
+          <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
+        </Reveal>
           {/* Top Stocks */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8" data-anim="fade-up" data-anim-stagger="40">
+          <StaggerGrid staggerDelay={0.04} variant="scale" className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
             {TOP_STOCKS.map((symbol) => (
               <button
                 key={symbol}
@@ -202,10 +204,10 @@ export default function Home() {
                 <div className="text-white font-bold">{symbol}</div>
               </button>
             ))}
-          </div>
+          </StaggerGrid>
 
           {/* Chart and Top Stories Side by Side */}
-          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6" data-anim="fade-up" data-anim-stagger="60">
+          <StaggerGrid staggerDelay={0.06} variant="fade" className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
             {/* Advanced Chart */}
             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden h-[700px] hover-card">
               {topQuotes && (
@@ -243,17 +245,19 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </div>
+          </StaggerGrid>
         </section>
 
       {/* Features */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-stagger="40">
-        <div className="text-center mb-16" data-anim="fade-up">
-          <h2 className="text-4xl font-bold text-white mb-4">Everything You Need</h2>
-          <p className="text-xl text-slate-400">Powerful tools for informed trading decisions</p>
-        </div>
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <Reveal variant="fade">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-white mb-4">Everything You Need</h2>
+            <p className="text-xl text-slate-400">Powerful tools for informed trading decisions</p>
+          </div>
+        </Reveal>
         
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8" data-anim="fade-up" data-anim-stagger="40">
+          <StaggerGrid staggerDelay={0.04} variant="rise" className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           <TiltCard className="rounded-xl" hoverScale={1.04} rotateAmplitude={6}>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-800/30 p-8 rounded-xl border border-slate-700 hover:border-blue-500/50 transition group">
             <div className="h-16 w-16 bg-blue-500/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-blue-500/20 transition">
