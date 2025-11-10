@@ -47,6 +47,7 @@ export default function StablePage() {
       data={data}
       screenType="stable"
       apiEndpoint="/api/screens/stable-growth"
+      onRefresh={fetchData}
     />
   )
 }
