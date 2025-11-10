@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listTransactions, listPositions } from '@/lib/portfolio'
+import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-function getUserId() { return 'demo-user' }
 
 // Helper to get historical prices for a symbol
 async function getHistoricalPrices(symbol: string, range: string, startTime: number, endTime: number, baseUrl: string): Promise<Array<{t: number, c: number}>> {
@@ -66,7 +65,10 @@ function forwardFillPrices(prices: Array<{t: number, c: number}>, timestamps: nu
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = getUserId()
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
     const url = new URL(req.url)
     const range = url.searchParams.get('range') || '1M'
     const gran = url.searchParams.get('gran') || '1d'

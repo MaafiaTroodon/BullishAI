@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listTransactions } from '@/lib/portfolio'
+import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-function getUserId() { return 'demo-user' }
 
 /**
  * GET /api/portfolio/transactions
@@ -12,7 +11,10 @@ function getUserId() { return 'demo-user' }
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = getUserId()
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
     const transactions = listTransactions(userId)
     
     return NextResponse.json({

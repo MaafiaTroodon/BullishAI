@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listAlerts, updateAlert } from '@/lib/alerts/types'
+import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-function getUserId() { return 'demo-user' }
 
 async function getQuote(symbol: string) {
   const r = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/quote?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })

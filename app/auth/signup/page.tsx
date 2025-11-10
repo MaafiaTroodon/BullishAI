@@ -46,8 +46,10 @@ export default function SignUp() {
       
       // Success - redirect to dashboard
       router.push('/dashboard')
+      router.refresh() // Refresh to update session
     } catch (err: any) {
-      setError(err?.message || 'An error occurred')
+      console.error('Sign up error:', err)
+      setError(err?.message || 'An error occurred. Please try again.')
       setLoading(false)
     }
   }

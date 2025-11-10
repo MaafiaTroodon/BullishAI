@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, Mail, Lock, AlertCircle } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 
-export default function SignIn() {
+function SignInContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -34,8 +34,10 @@ export default function SignIn() {
       // Success - redirect to dashboard or next URL
       const next = searchParams.get('next') || '/dashboard'
       router.push(next)
+      router.refresh() // Refresh to update session
     } catch (err: any) {
-      setError(err?.message || 'An error occurred')
+      console.error('Sign in error:', err)
+      setError(err?.message || 'An error occurred. Please try again.')
       setLoading(false)
     }
   }
@@ -116,5 +118,17 @@ export default function SignIn() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SignIn() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <SignInContent />
+    </Suspense>
   )
 }
