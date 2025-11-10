@@ -189,25 +189,21 @@ export function DemoTradeBox({ symbol, price }: Props) {
           } catch {}
         }
         
-        // Invalidate all SWR caches to force fresh fetch from DB
-        // Use optimistic update with fresh data from server
-        mutate(async () => {
-          // Fetch fresh data from server
-          const freshRes = await fetch('/api/portfolio?enrich=1', { cache: 'no-store' })
-          if (freshRes.ok) {
-            return freshRes.json()
-          }
-          return portfolioData // Fallback to current data
-        }, {
-          // Optimistically update with server response data
-          optimisticData: portfolioData ? {
+        // Immediately update SWR cache with server response (optimistic update)
+        if (j.holdings || j.item) {
+          // Update cache immediately with fresh data from server
+          mutate({
             ...portfolioData,
-            items: j.holdings || (j.item ? [j.item] : portfolioData.items),
-            wallet: j.wallet || portfolioData.wallet,
-          } : undefined,
-          // Revalidate in background
-          revalidate: true,
-        })
+            items: j.holdings || (j.item ? [j.item] : portfolioData?.items || []),
+            wallet: j.wallet || portfolioData?.wallet,
+          }, {
+            // Don't revalidate immediately - we already have fresh data
+            revalidate: false,
+          })
+        }
+        
+        // Then revalidate in background to ensure consistency
+        mutate()
         
         try {
           // Trigger global events for other components (navbar, wallet page, etc.)
