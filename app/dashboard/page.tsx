@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, TrendingUp, TrendingDown, Settings, LogOut, User as UserIcon, Bell, ChevronDown } from 'lucide-react'
+import { Search, TrendingUp, TrendingDown, Settings, LogOut, User as UserIcon, Bell, ChevronDown, Zap } from 'lucide-react'
 import useSWR from 'swr'
 import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
@@ -110,6 +110,19 @@ export default function Dashboard() {
       {/* Header removed; GlobalNavbar renders from app/layout.tsx */}
 
       <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* AI Menu Link */}
+        <Reveal variant="fade">
+          <div className="mb-6">
+            <Link 
+              href="/ai"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition"
+            >
+              <Zap className="w-4 h-4" />
+              AI-Powered Analysis
+            </Link>
+          </div>
+        </Reveal>
+        
         {/* Portfolio Overview - Wealthsimple style */}
         <StaggerGrid staggerDelay={0.1} variant="fade" className="space-y-6">
           {/* Summary Card at top - shows total balance and return */}

@@ -1,0 +1,524 @@
+{
+  "sections": [
+    {
+      "id": "quick-insights",
+      "title": "Quick Insights",
+      "cards": [
+        {
+          "id": "market-snapshot",
+          "label": "Market Snapshot",
+          "description": "Macro pulse + 3 tickers to watch",
+          "params": {},
+          "data_fetch": [
+            "/api/quotes?tickers=SPY,QQQ,DIA,IWM,VIX,DXY",
+            "/api/market/breadth",
+            "/api/news/movers?limit=5"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "merge_quotes_and_breadth",
+          "render": {
+            "component": "InsightCard",
+            "props": {
+              "showSparkline": true,
+              "showBullets": true
+            }
+          },
+          "output_schema": {
+            "summary": "string",
+            "bullets": ["string"],
+            "tickers": [{"symbol": "string", "change": "number", "reason": "string"}],
+            "sparkline": {"symbol": "string", "data": ["number"]}
+          },
+          "model_routing": {
+            "prefer": "groq_llama3",
+            "prompt_template": "Summarize current market conditions: indices {{indices}}, breadth {{breadth}}, top news {{news}}. Provide 1 paragraph + 3 key bullets + top 3 tickers to watch."
+          }
+        },
+        {
+          "id": "breadth-momentum",
+          "label": "Breadth & Momentum",
+          "description": "Adv/Dec, vol ratio, NH/NL",
+          "params": {},
+          "data_fetch": [
+            "/api/market/breadth"
+          ],
+          "refresh_ms": 30000,
+          "cache_ttl_ms": 15000,
+          "compute": "format_breadth_data",
+          "render": {
+            "component": "HeatmapGrid",
+            "props": {}
+          },
+          "output_schema": {
+            "advancing": "number",
+            "declining": "number",
+            "volume_up": "number",
+            "volume_down": "number",
+            "new_highs": "number",
+            "new_lows": "number",
+            "adv_dec_ratio": "number"
+          }
+        },
+        {
+          "id": "top-news-movers",
+          "label": "Top News Movers",
+          "description": "Fresh headlines → biggest moves",
+          "params": {},
+          "data_fetch": [
+            "/api/news/movers?limit=10",
+            "/api/market/top-movers?limit=10"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "merge_news_and_movers",
+          "render": {
+            "component": "RankedList",
+            "props": {
+              "showChange": true,
+              "showNews": true
+            }
+          },
+          "output_schema": {
+            "items": [{
+              "symbol": "string",
+              "name": "string",
+              "change": "number",
+              "changePercent": "number",
+              "headline": "string",
+              "source": "string"
+            }]
+          }
+        },
+        {
+          "id": "unusual-volume",
+          "label": "Unusual Volume",
+          "description": "RelVol vs 30-day average",
+          "params": {},
+          "data_fetch": [
+            "/api/screeners/unusual-volume"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "format_volume_data",
+          "render": {
+            "component": "Table",
+            "props": {
+              "columns": ["symbol", "volume_ratio", "price_change", "reason"]
+            }
+          },
+          "output_schema": {
+            "stocks": [{
+              "symbol": "string",
+              "volume_ratio": "number",
+              "avg_volume": "number",
+              "current_volume": "number",
+              "price_change": "number",
+              "reason": "string"
+            }]
+          }
+        },
+        {
+          "id": "earnings-today",
+          "label": "Earnings Today",
+          "description": "Today's prints + implied move",
+          "params": {},
+          "data_fetch": [
+            "/api/calendar/earnings?when=today"
+          ],
+          "refresh_ms": 300000,
+          "cache_ttl_ms": 60000,
+          "compute": "format_earnings_data",
+          "render": {
+            "component": "SparkTable",
+            "props": {
+              "showImpliedMove": true
+            }
+          },
+          "output_schema": {
+            "earnings": [{
+              "symbol": "string",
+              "name": "string",
+              "time": "string",
+              "estimated_eps": "number",
+              "implied_move": "number",
+              "current_price": "number"
+            }]
+          }
+        },
+        {
+          "id": "sector-momentum",
+          "label": "Sector Momentum",
+          "description": "Sector performance heatmap",
+          "params": {},
+          "data_fetch": [
+            "/api/market/sector-momentum"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "format_sector_data",
+          "render": {
+            "component": "HeatmapGrid",
+            "props": {
+              "type": "sector"
+            }
+          },
+          "output_schema": {
+            "sectors": [{
+              "name": "string",
+              "change": "number",
+              "changePercent": "number",
+              "strength": "number"
+            }]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recommended",
+      "title": "Today's Recommended Stocks",
+      "cards": [
+        {
+          "id": "analyst-upgrades",
+          "label": "Analyst Upgrades",
+          "description": "New Buys/target hikes today",
+          "params": {},
+          "data_fetch": [
+            "/api/analyst/upgrades?limit=10"
+          ],
+          "refresh_ms": 300000,
+          "cache_ttl_ms": 60000,
+          "compute": "format_upgrades",
+          "render": {
+            "component": "RankedList",
+            "props": {
+              "showRating": true,
+              "showTarget": true
+            }
+          },
+          "output_schema": {
+            "upgrades": [{
+              "symbol": "string",
+              "name": "string",
+              "rating": "string",
+              "previous_rating": "string",
+              "target_price": "number",
+              "current_price": "number",
+              "analyst": "string",
+              "reason": "string"
+            }]
+          }
+        },
+        {
+          "id": "breakouts",
+          "label": "Breakouts",
+          "description": "52-W High + Vol",
+          "params": {},
+          "data_fetch": [
+            "/api/screeners/highs",
+            "/api/quotes?tickers={{symbols}}"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "filter_breakouts",
+          "render": {
+            "component": "BadgeGrid",
+            "props": {
+              "showVolume": true,
+              "show52WHigh": true
+            }
+          },
+          "output_schema": {
+            "breakouts": [{
+              "symbol": "string",
+              "name": "string",
+              "price": "number",
+              "52w_high": "number",
+              "volume_ratio": "number",
+              "change": "number"
+            }]
+          }
+        },
+        {
+          "id": "value-quality",
+          "label": "Value + Quality",
+          "description": "PE<15, ROE>15%, RevYoY>10%",
+          "params": {},
+          "data_fetch": [
+            "/api/screeners/value-quality"
+          ],
+          "refresh_ms": 300000,
+          "cache_ttl_ms": 120000,
+          "compute": "format_value_quality",
+          "render": {
+            "component": "Table",
+            "props": {
+              "columns": ["symbol", "pe", "roe", "revenue_growth", "score"]
+            }
+          },
+          "output_schema": {
+            "stocks": [{
+              "symbol": "string",
+              "name": "string",
+              "pe": "number",
+              "roe": "number",
+              "revenue_growth": "number",
+              "quality_score": "number",
+              "price": "number"
+            }]
+          }
+        },
+        {
+          "id": "momentum-5d",
+          "label": "Momentum 5-Day",
+          "description": "Top 5-day % with liquidity",
+          "params": {},
+          "data_fetch": [
+            "/api/screeners/momentum?window=5d"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "format_momentum",
+          "render": {
+            "component": "RankedList",
+            "props": {
+              "showMomentum": true,
+              "showVolume": true
+            }
+          },
+          "output_schema": {
+            "stocks": [{
+              "symbol": "string",
+              "name": "string",
+              "momentum_5d": "number",
+              "volume": "number",
+              "price": "number",
+              "change": "number"
+            }]
+          }
+        },
+        {
+          "id": "rebound-candidates",
+          "label": "Rebound Candidates",
+          "description": "RSI<35 turning up",
+          "params": {},
+          "data_fetch": [
+            "/api/screeners/rebound"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "format_rebound",
+          "render": {
+            "component": "SparkTable",
+            "props": {
+              "showRSI": true,
+              "showTrend": true
+            }
+          },
+          "output_schema": {
+            "stocks": [{
+              "symbol": "string",
+              "name": "string",
+              "rsi": "number",
+              "rsi_trend": "string",
+              "price": "number",
+              "support_level": "number"
+            }]
+          }
+        },
+        {
+          "id": "dividend-momentum",
+          "label": "Dividend + Momentum",
+          "description": "Yield ≥2% with high RS",
+          "params": {},
+          "data_fetch": [
+            "/api/screeners/dividend-momentum"
+          ],
+          "refresh_ms": 300000,
+          "cache_ttl_ms": 120000,
+          "compute": "format_dividend_momentum",
+          "render": {
+            "component": "Table",
+            "props": {
+              "columns": ["symbol", "yield", "rs_score", "price", "change"]
+            }
+          },
+          "output_schema": {
+            "stocks": [{
+              "symbol": "string",
+              "name": "string",
+              "dividend_yield": "number",
+              "relative_strength": "number",
+              "price": "number",
+              "change": "number"
+            }]
+          }
+        }
+      ]
+    },
+    {
+      "id": "technical",
+      "title": "Technical Analysis",
+      "cards": [
+        {
+          "id": "trend-sr",
+          "label": "Trend & SR Levels",
+          "description": "20/50/200 SMA + pivots",
+          "params": {"symbol": "{{symbol}}"},
+          "data_fetch": [
+            "/api/ohlc?symbol={{symbol}}&tf=1d",
+            "/api/quotes?tickers={{symbol}}"
+          ],
+          "refresh_ms": 30000,
+          "cache_ttl_ms": 15000,
+          "compute": "calculate_sma_and_pivots",
+          "render": {
+            "component": "TAOverview",
+            "props": {
+              "showSMAs": true,
+              "showPivots": true
+            }
+          },
+          "output_schema": {
+            "symbol": "string",
+            "price": "number",
+            "sma_20": "number",
+            "sma_50": "number",
+            "sma_200": "number",
+            "support_levels": ["number"],
+            "resistance_levels": ["number"],
+            "trend": "string"
+          }
+        },
+        {
+          "id": "pattern-scanner",
+          "label": "Pattern Scanner",
+          "description": "Triangles/flags/doubles",
+          "params": {"symbol": "{{symbol}}"},
+          "data_fetch": [
+            "/api/ohlc?symbol={{symbol}}&tf=1d"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "detect_patterns",
+          "render": {
+            "component": "PatternList",
+            "props": {}
+          },
+          "output_schema": {
+            "symbol": "string",
+            "patterns": [{
+              "type": "string",
+              "confidence": "number",
+              "target": "number",
+              "stop": "number"
+            }]
+          }
+        },
+        {
+          "id": "momentum-dashboard",
+          "label": "Momentum Dashboard",
+          "description": "RSI/MACD/Stoch/52W",
+          "params": {"symbol": "{{symbol}}"},
+          "data_fetch": [
+            "/api/metrics/volatility?symbol={{symbol}}",
+            "/api/ohlc?symbol={{symbol}}&tf=1d"
+          ],
+          "refresh_ms": 30000,
+          "cache_ttl_ms": 15000,
+          "compute": "calculate_momentum_indicators",
+          "render": {
+            "component": "GaugesRow",
+            "props": {}
+          },
+          "output_schema": {
+            "symbol": "string",
+            "rsi": "number",
+            "macd": "number",
+            "macd_signal": "number",
+            "stochastic": "number",
+            "52w_high": "number",
+            "52w_low": "number",
+            "distance_from_high": "number"
+          }
+        },
+        {
+          "id": "breakout-rr",
+          "label": "Breakout Risk/Reward",
+          "description": "Entry/stop/target math",
+          "params": {"symbol": "{{symbol}}"},
+          "data_fetch": [
+            "/api/ohlc?symbol={{symbol}}&tf=1d",
+            "/api/quotes?tickers={{symbol}}"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "calculate_rr",
+          "render": {
+            "component": "RRCard",
+            "props": {}
+          },
+          "output_schema": {
+            "symbol": "string",
+            "entry": "number",
+            "stop": "number",
+            "target": "number",
+            "risk_reward_ratio": "number",
+            "risk_percent": "number"
+          }
+        },
+        {
+          "id": "multi-timeframe",
+          "label": "Multi-Timeframe",
+          "description": "1h/1d/1w alignment",
+          "params": {"symbol": "{{symbol}}"},
+          "data_fetch": [
+            "/api/ohlc?symbol={{symbol}}&tf=1h",
+            "/api/ohlc?symbol={{symbol}}&tf=1d",
+            "/api/ohlc?symbol={{symbol}}&tf=1w"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "analyze_timeframes",
+          "render": {
+            "component": "AlignmentMeters",
+            "props": {}
+          },
+          "output_schema": {
+            "symbol": "string",
+            "timeframes": {
+              "1h": {"trend": "string", "strength": "number"},
+              "1d": {"trend": "string", "strength": "number"},
+              "1w": {"trend": "string", "strength": "number"}
+            },
+            "alignment": "string"
+          }
+        },
+        {
+          "id": "risk-note",
+          "label": "Risk Note",
+          "description": "Concise, non-advice caution",
+          "params": {"symbol": "{{symbol}}"},
+          "data_fetch": [
+            "/api/metrics/volatility?symbol={{symbol}}",
+            "/api/quotes?tickers={{symbol}}"
+          ],
+          "refresh_ms": 60000,
+          "cache_ttl_ms": 30000,
+          "compute": "generate_risk_note",
+          "render": {
+            "component": "InlineNote",
+            "props": {}
+          },
+          "output_schema": {
+            "symbol": "string",
+            "risk_level": "string",
+            "key_risks": ["string"],
+            "disclaimer": "string"
+          }
+        }
+      ]
+    }
+  ]
+}
+

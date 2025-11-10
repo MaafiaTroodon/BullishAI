@@ -209,6 +209,15 @@ export function GlobalNavbar() {
                       </span>
                     </Link>
                   </li>
+                  <li>
+                    <Link href="/ai" className="pill">
+                      <span className="hover-circle" aria-hidden="true" />
+                      <span className="label-stack">
+                        <span className="pill-label">AI</span>
+                        <span className="pill-label-hover" aria-hidden="true">AI</span>
+                      </span>
+                    </Link>
+                  </li>
                   <li className="relative group">
                     <button
                       className="pill"

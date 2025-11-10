@@ -16,6 +16,7 @@ import { Reveal } from '@/components/anim/Reveal'
 import { StaggerGrid } from '@/components/anim/StaggerGrid'
 import { ParallaxImage } from '@/components/anim/ParallaxImage'
 import { Footer } from '@/components/Footer'
+import { authClient } from '@/lib/auth-client'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -34,10 +35,13 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusSymbol, setFocusSymbol] = useState<string | undefined>(undefined)
+  
+  // Use actual auth session instead of localStorage
+  const { data: session } = authClient.useSession()
+  const isLoggedIn = !!session?.user
 
   // Check URL for focusSymbol parameter
   useEffect(() => {
@@ -49,13 +53,6 @@ export default function Home() {
         // Clean up URL
         window.history.replaceState({}, '', '/')
       }
-    }
-  }, [])
-
-  // Simulate login state for demo
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsLoggedIn(localStorage.getItem('isLoggedIn') === 'true')
     }
   }, [])
 

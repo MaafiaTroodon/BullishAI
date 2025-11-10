@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Send, Sparkles, TrendingUp, TrendingDown, X } from 'lucide-react'
+import { AIInsightsToolbar } from './AIInsightsToolbar'
 
 interface Message {
   id: string
@@ -230,10 +231,20 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           </div>
         </div>
       ) : (
-        /* Expanded State - Full Chat Interface */
-        <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/50 backdrop-blur">
+        /* Expanded State - Full Chat Interface with Toolbar */
+        <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col" style={{ height: '800px', maxHeight: '90vh' }}>
+          {/* AI Insights Toolbar */}
+          <div className="flex-1 min-h-0 border-b border-slate-700 overflow-hidden">
+            <AIInsightsToolbar symbol={focusSymbol} onCardSelect={(card, data) => {
+              // Optionally send card data to chat
+              console.log('Card selected:', card.id, data)
+            }} />
+          </div>
+          
+          {/* Chat Interface */}
+          <div className="flex flex-col" style={{ height: '400px' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/50 backdrop-blur flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-white" />
@@ -252,7 +263,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           </div>
 
           {/* Messages */}
-          <div className="h-[500px] overflow-y-auto p-4 space-y-4 bg-slate-900/30">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/30">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -329,8 +340,8 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <div className="p-4 border-t border-slate-700 bg-slate-800/50 backdrop-blur">
+            {/* Input */}
+            <div className="p-4 border-t border-slate-700 bg-slate-800/50 backdrop-blur flex-shrink-0">
             <div className="flex gap-3">
               <input
                 ref={inputRef}
@@ -349,6 +360,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
               >
                 <Send className="h-5 w-5" />
               </button>
+            </div>
             </div>
           </div>
         </div>

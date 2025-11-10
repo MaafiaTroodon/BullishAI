@@ -196,7 +196,7 @@ ${SAFETY_DISCLAIMER}`
 }
 
 /**
- * Call Local PyTorch model (placeholder - will be implemented after training)
+ * Call Local PyTorch model (calls inference server)
  */
 async function callLocalPyTorch(
   query: string,
@@ -205,14 +205,38 @@ async function callLocalPyTorch(
 ): Promise<AIResponse> {
   const startTime = Date.now()
   
-  // Placeholder: In production, this would call a local inference server
-  // For now, fallback to Groq
-  console.log('Local PyTorch model not yet available, falling back to Groq')
+  const inferenceServerUrl = process.env.LOCAL_PYTORCH_URL || 'http://localhost:8000'
+  const ragContext = formatRAGContext(context)
   
   try {
-    return await callGroq(query, context, systemPrompt)
+    const response = await fetch(`${inferenceServerUrl}/infer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: query,
+        context: ragContext,
+        max_length: 512,
+        temperature: 0.2,
+      }),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Inference server error: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    const latency = Date.now() - startTime
+    
+    return {
+      answer: data.answer || 'Unable to generate response',
+      model: 'local-pytorch',
+      latency,
+      riskNote: 'Analysis from fine-tuned model. Always verify with current market data.',
+    }
   } catch (error: any) {
-    throw new Error(`Local model unavailable: ${error.message}`)
+    console.warn('Local PyTorch model unavailable, falling back to Groq:', error.message)
+    // Fallback to Groq
+    return await callGroq(query, context, systemPrompt)
   }
 }
 
