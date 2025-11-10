@@ -50,16 +50,9 @@ export default function ReboundPage() {
         ) : (
           <>
             <Reveal variant="fade" delay={0.1}>
-              <div className="flex items-center justify-between mb-6">
-                <p className="text-slate-400">
-                  Undervalued stocks poised for a rebound (RSI &lt; 35, turning up)
-                </p>
-                {data?.model && (
-                  <span className="px-3 py-1 bg-orange-600/20 text-orange-400 text-xs font-semibold rounded-full">
-                    {data.model}
-                  </span>
-                )}
-              </div>
+              <p className="text-slate-400 mb-6">
+                Undervalued stocks poised for a rebound (RSI &lt; 35, turning up)
+              </p>
             </Reveal>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -101,9 +94,6 @@ export default function ReboundPage() {
                             <span className="font-semibold text-green-400">${stock.support_level?.toFixed(2)}</span>
                           </div>
                         </div>
-                        {stock.rationale && (
-                          <p className="text-xs text-slate-500 mt-3 italic">{stock.rationale}</p>
-                        )}
                         
                         <div className="pt-3 border-t border-slate-700">
                           <div className="flex justify-between items-center">

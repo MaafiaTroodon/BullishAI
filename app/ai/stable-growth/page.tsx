@@ -60,16 +60,9 @@ export default function StableGrowthPage() {
         ) : (
           <>
             <Reveal variant="fade" delay={0.1}>
-              <div className="flex items-center justify-between mb-6">
-                <p className="text-slate-400">
-                  Low beta, consistent EPS stocks for long-term holding
-                </p>
-                {data?.model && (
-                  <span className="px-3 py-1 bg-teal-600/20 text-teal-400 text-xs font-semibold rounded-full">
-                    {data.model}
-                  </span>
-                )}
-              </div>
+              <p className="text-slate-400 mb-6">
+                Low beta, consistent EPS stocks for long-term holding
+              </p>
             </Reveal>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
