@@ -1,7 +1,8 @@
 'use client'
 
 import useSWR from 'swr'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { usePathname } from 'next/navigation'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { MarketSessionBadge } from './MarketSessionBadge'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -12,6 +13,7 @@ const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.j
 
 export function PortfolioSummary() {
   const userId = useUserId()
+  const pathname = usePathname()
   const storageKey = getUserStorageKey('bullish_pf_positions', userId)
   
   // Get market session for dynamic refresh interval
@@ -30,6 +32,13 @@ export function PortfolioSummary() {
     // Revalidate on mount to ensure fresh data on route changes
     revalidateOnMount: true,
   })
+  
+  // Revalidate portfolio data on route change to ensure consistency
+  useEffect(() => {
+    if (userId) {
+      mutate()
+    }
+  }, [pathname, userId, mutate])
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Fetch timeseries for Net Deposits (Cost Basis) - less frequent since it's historical
