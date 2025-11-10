@@ -32,6 +32,10 @@ export function PortfolioChart() {
     dedupingInterval: 2000,
     // Revalidate on mount to ensure fresh data on route changes
     revalidateOnMount: true,
+    // Keep previous data during revalidation to prevent $0 flicker
+    keepPreviousData: true,
+    // Don't show error retry to prevent flicker
+    shouldRetryOnError: false,
   })
   
   // Revalidate portfolio data on route change to ensure consistency
