@@ -159,7 +159,8 @@ export default function WatchlistPage() {
               New Watchlist
             </button>
           </div>
-        </div>
+          </div>
+        </Reveal>
 
         <div className="grid lg:grid-cols-12 gap-6">
           {/* Watchlist Table */}
