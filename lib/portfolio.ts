@@ -249,7 +249,10 @@ export function getWalletBalance(userId: string): number {
   return getPf(userId).walletBalance
 }
 
-export function depositToWallet(userId: string, amount: number, method: string = 'Manual', idempotencyKey?: string): { balance: number; transaction: any } {
+export async function depositToWallet(userId: string, amount: number, method: string = 'Manual', idempotencyKey?: string): Promise<{ balance: number; transaction: any }> {
+  // Ensure portfolio is loaded from DB
+  await ensurePortfolioLoaded(userId)
+  
   if (amount <= 0) throw new Error('invalid_amount')
   if (amount > 1_000_000) throw new Error('amount_exceeds_cap')
   
@@ -292,6 +295,12 @@ export function depositToWallet(userId: string, amount: number, method: string =
     if (!pf.walletTransactions) pf.walletTransactions = []
     pf.walletTransactions.push(transaction)
   } catch {}
+  
+  // Save to database (non-blocking)
+  const { saveWalletTransactionToDB } = await import('@/lib/portfolio-db')
+  saveWalletTransactionToDB(userId, transaction).catch(err => {
+    console.error('Error saving wallet transaction to DB:', err)
+  })
   
   return { balance: pf.walletBalance, transaction }
 }
