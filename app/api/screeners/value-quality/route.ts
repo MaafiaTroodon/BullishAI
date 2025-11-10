@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { routeAIQuery, RAGContext } from '@/lib/ai-router'
 
 export async function GET(req: NextRequest) {
   try {
