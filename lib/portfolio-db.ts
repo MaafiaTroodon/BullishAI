@@ -12,6 +12,12 @@ import type { Position, Transaction } from './portfolio'
  * Returns portfolio with all related data loaded
  */
 export async function getOrCreatePortfolio(userId: string) {
+  // Ensure db.portfolio is available (handle Prisma client initialization issues)
+  if (!db || !db.portfolio) {
+    console.error('Prisma client not initialized properly. db.portfolio is undefined.')
+    throw new Error('Database client not available')
+  }
+  
   let portfolio = await db.portfolio.findUnique({
     where: { userId },
     include: {
