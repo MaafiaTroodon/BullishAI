@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Reveal } from '@/components/anim/Reveal'
 import Image from 'next/image'
 
@@ -66,33 +67,38 @@ export default function GuidesPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {/* Guides Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {guides.map((guide, idx) => (
-            <Reveal key={guide.title} variant="rise" delay={idx * 0.05}>
-              <div className="bg-slate-800/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-600 transition-all cursor-pointer group">
-                <div className="relative h-48 overflow-hidden">
-                  <Image
-                    src={guide.image}
-                    alt={guide.title}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                  />
-                </div>
-                <div className="p-6">
-                  <span className="inline-block px-3 py-1 bg-purple-600/20 text-purple-400 text-xs font-semibold rounded-full mb-3">
-                    {guide.category}
-                  </span>
-                  <h2 className="text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition">
-                    {guide.title}
-                  </h2>
-                  <p className="text-slate-400 text-sm leading-relaxed mb-4">{guide.description}</p>
-                  <span className="text-blue-400 text-sm font-semibold group-hover:translate-x-1 transition inline-block">
-                    Read guide →
-                  </span>
-                </div>
-              </div>
-            </Reveal>
-          ))}
+          {guides.map((guide, idx) => {
+            const slug = guide.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+            return (
+              <Reveal key={guide.title} variant="rise" delay={idx * 0.05}>
+                <Link href={`/guides/${slug}`} className="block">
+                  <div className="bg-slate-800/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-600 transition-all cursor-pointer group">
+                    <div className="relative h-48 overflow-hidden">
+                      <Image
+                        src={guide.image}
+                        alt={guide.title}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <span className="inline-block px-3 py-1 bg-purple-600/20 text-purple-400 text-xs font-semibold rounded-full mb-3">
+                        {guide.category}
+                      </span>
+                      <h2 className="text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition">
+                        {guide.title}
+                      </h2>
+                      <p className="text-slate-400 text-sm leading-relaxed mb-4">{guide.description}</p>
+                      <span className="text-blue-400 text-sm font-semibold group-hover:translate-x-1 transition inline-block">
+                        Read guide →
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              </Reveal>
+            )
+          })}
         </div>
 
         {/* Featured Guide */}
@@ -120,12 +126,12 @@ export default function GuidesPage() {
                     New to BullishAI? This comprehensive guide will walk you through setting up your account, 
                     adding your first positions, and using our AI-powered features to track and optimize your portfolio.
                   </p>
-                  <a
-                    href="#"
+                  <Link
+                    href="/guides/getting-started-with-bullishai"
                     className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
                   >
                     Read Full Guide
-                  </a>
+                  </Link>
                 </div>
               </Reveal>
             </div>

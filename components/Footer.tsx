@@ -24,7 +24,6 @@ const footerSections = [
     links: [
       { label: 'Features', href: '/features' },
       { label: 'Pricing', href: '/pricing' },
-      { label: 'API', href: '/api' },
       { label: 'Integrations', href: '/integrations' },
     ],
   },
@@ -50,8 +49,8 @@ const footerSections = [
     title: 'Connect',
     links: [
       { label: 'Twitter', href: 'https://twitter.com/bullishai', external: true },
-      { label: 'LinkedIn', href: 'https://linkedin.com/company/bullishai', external: true },
-      { label: 'GitHub', href: 'https://github.com/bullishai', external: true },
+      { label: 'LinkedIn', href: 'https://www.linkedin.com/in/malhar-mahajan-24a93214a/', external: true },
+      { label: 'GitHub', href: 'https://github.com/MaafiaTroodon', external: true },
       { label: 'Discord', href: 'https://discord.gg/bullishai', external: true },
     ],
   },

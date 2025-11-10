@@ -11,11 +11,7 @@ import { Footer } from './Footer'
 export function FooterWrapper() {
   const pathname = usePathname()
   
-  // Don't show footer on landing page (it has its own footer)
-  if (pathname === '/') {
-    return null
-  }
-  
+  // Show footer on all pages including landing page
   return <Footer />
 }
 

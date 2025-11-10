@@ -12,13 +12,6 @@ const pressReleases = [
     image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80',
   },
   {
-    title: 'BullishAI Raises $25M Series A to Accelerate AI Development',
-    date: 'January 10, 2024',
-    category: 'Funding',
-    excerpt: 'The company secured funding from leading venture capital firms to expand its AI research team and enhance platform capabilities for institutional investors.',
-    image: 'https://images.unsplash.com/photo-1553729459-efe14ef6055d?w=800&q=80',
-  },
-  {
     title: 'Partnership with TradingView Brings Advanced Charting to Users',
     date: 'December 5, 2023',
     category: 'Partnership',
