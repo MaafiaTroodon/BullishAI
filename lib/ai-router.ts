@@ -224,7 +224,10 @@ async function callLocalPyTorch(
         context: ragContext,
         max_length: 512,
         temperature: 0.2,
+        top_k: 50,
+        top_p: 0.9,
       }),
+      signal: AbortSignal.timeout(10000), // 10s timeout
     })
     
     if (!response.ok) {
@@ -239,9 +242,17 @@ async function callLocalPyTorch(
       model: 'local-pytorch',
       latency,
       riskNote: 'Analysis from fine-tuned model. Always verify with current market data.',
+      metadata: {
+        confidence: data.confidence,
+        model_version: data.model_version,
+      },
     }
   } catch (error: any) {
-    console.warn('Local PyTorch model unavailable, falling back to Groq:', error.message)
+    if (error.name === 'AbortError') {
+      console.warn('Local PyTorch model timeout, falling back to Groq')
+    } else {
+      console.warn('Local PyTorch model unavailable, falling back to Groq:', error.message)
+    }
     // Fallback to Groq
     return await callGroq(query, context, systemPrompt)
   }
