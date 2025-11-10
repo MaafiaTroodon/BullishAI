@@ -286,40 +286,63 @@ export function PortfolioChartFast() {
         // Wait a tick to ensure chart is fully initialized
         await new Promise(resolve => setTimeout(resolve, 0))
         
-        // Try to add line series - check if method exists
-        if (typeof chart.addLineSeries !== 'function') {
-          console.error('addLineSeries method not found on chart object')
-          console.error('Chart type:', typeof chart)
-          console.error('Chart keys:', Object.keys(chart))
-          console.error('Chart prototype:', Object.getPrototypeOf(chart))
-          console.error('Has addLineSeries in object:', 'addLineSeries' in chart)
-          console.error('Has addLineSeries in prototype:', 'addLineSeries' in Object.getPrototypeOf(chart))
-          
-          // Try to access via any possible way
-          const possibleMethods = ['addLineSeries', 'addSeries', 'createLineSeries']
-          for (const methodName of possibleMethods) {
-            if (typeof chart[methodName] === 'function') {
-              console.log(`Found alternative method: ${methodName}`)
-              try {
-                const series = chart[methodName]({
-                  color: '#10b981',
-                  lineWidth: 2,
-                  priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-                })
-                chartRef.current = chart
-                seriesRef.current = series
-                setChartInitialized(true)
-                return
-              } catch (e) {
-                console.error(`Error using ${methodName}:`, e)
+        // Try to add line series - the method might be non-enumerable
+        let addLineSeriesMethod = chart.addLineSeries
+        let series: any = null
+        
+        // If not found directly, check prototype chain for non-enumerable methods
+        if (!addLineSeriesMethod || typeof addLineSeriesMethod !== 'function') {
+          const proto = Object.getPrototypeOf(chart)
+          if (proto) {
+            // Get all properties including non-enumerable ones
+            const allProtoProps = Object.getOwnPropertyNames(proto)
+            for (const prop of allProtoProps) {
+              if (prop === 'addLineSeries') {
+                const descriptor = Object.getOwnPropertyDescriptor(proto, prop)
+                if (descriptor && typeof descriptor.value === 'function') {
+                  addLineSeriesMethod = descriptor.value
+                  break
+                } else if (descriptor && typeof descriptor.get === 'function') {
+                  addLineSeriesMethod = descriptor.get.call(chart)
+                  break
+                }
               }
             }
           }
-          
-          if (chart && typeof chart.remove === 'function') {
-            chart.remove()
+        }
+        
+        // If still not found, try calling it directly anyway (methods might exist but not be enumerable)
+        if (typeof addLineSeriesMethod !== 'function') {
+          try {
+            // Try direct call - sometimes it works even if typeof says it doesn't
+            series = chart.addLineSeries({
+              color: '#10b981',
+              lineWidth: 2,
+              priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+            })
+            // If that worked, we're good
+            if (series) {
+              addLineSeriesMethod = chart.addLineSeries // Now we know it exists
+            }
+          } catch (directCallError: any) {
+            // If direct call fails, log detailed info
+            console.error('Direct call to addLineSeries failed:', directCallError?.message || directCallError)
+            const proto = Object.getPrototypeOf(chart)
+            console.error('Chart inspection:', {
+              type: typeof chart,
+              ownKeys: Object.keys(chart),
+              ownPropertyNames: Object.getOwnPropertyNames(chart),
+              prototypeKeys: proto ? Object.keys(proto) : [],
+              prototypePropertyNames: proto ? Object.getOwnPropertyNames(proto) : [],
+              hasAddLineSeries: 'addLineSeries' in chart,
+              chartConstructor: chart.constructor?.name,
+              chartValue: chart
+            })
+            if (chart && typeof chart.remove === 'function') {
+              chart.remove()
+            }
+            return
           }
-          return
         }
 
         // Add line series using the method we found (or use the one from direct call)
