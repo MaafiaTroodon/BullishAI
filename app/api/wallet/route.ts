@@ -11,7 +11,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
   
-  // Get current balance from in-memory store (this is the source of truth)
+  // Load portfolio from database first (ensures data persists across logouts)
+  const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
+  await ensurePortfolioLoaded(userId)
+  
+  // Get current balance from in-memory store (now loaded from DB)
   // It already accounts for deposits, withdrawals, buys, and sells
   let balance = getWalletBalance(userId)
   const walletTx = listWalletTransactions(userId)
@@ -26,13 +30,14 @@ export async function GET(req: NextRequest) {
   const isNewUser = walletTx.length === 0 && transactions.length === 0 && positions.length === 0
   
   // For new users, always start with $0 (don't restore from cookie)
-  // Only restore from cookie if user has existing activity
+  // Only restore from cookie if user has existing activity (legacy support)
   if (!isNewUser && balance === 0 && walletTx.length === 0) {
     try {
       const cookieBal = req.cookies.get(cookieName)?.value
       if (cookieBal) {
         const parsed = Number(cookieBal)
         if (!Number.isNaN(parsed) && parsed >= 0) {
+          // Only restore from cookie if DB balance is 0 (migration scenario)
           balance = parsed
           initializeWalletFromBalance(userId, parsed)
         }

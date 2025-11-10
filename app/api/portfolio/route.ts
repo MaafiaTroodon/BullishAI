@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
         try { validated.push(PositionSchema.parse(p)) } catch {}
       }
       if (validated.length > 0) {
-        mergePositions(userId, validated)
+        await mergePositions(userId, validated)
       }
     }
 
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
       
       const input = TradeInputSchema.parse(body)
       try {
-        const result = upsertTrade(userId, input)
+        const result = await upsertTrade(userId, input)
         const updatedBal = getWalletBalance(userId)
         const res = NextResponse.json({ 
           item: result.position, 
