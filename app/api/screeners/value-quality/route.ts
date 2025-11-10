@@ -11,23 +11,23 @@ export async function GET(req: NextRequest) {
     const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
     const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
 
-    // Ensure we have some stocks to work with
-    let workingQuotes = quotes.quotes || []
+    // Always use fallback stocks to ensure we have proper data
+    const fallbackStocks = [
+      { symbol: 'AAPL', name: 'Apple Inc.' },
+      { symbol: 'MSFT', name: 'Microsoft Corporation' },
+      { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+      { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+      { symbol: 'TSLA', name: 'Tesla Inc.' },
+      { symbol: 'META', name: 'Meta Platforms Inc.' },
+      { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+      { symbol: 'NFLX', name: 'Netflix Inc.' },
+      { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
+      { symbol: 'V', name: 'Visa Inc.' },
+    ]
     
-    // If no quotes, use fallback symbols with proper names
+    // Use quotes if they have valid symbols, otherwise use fallback
+    let workingQuotes = (quotes.quotes || []).filter((q: any) => q.symbol && q.symbol !== 'UNKNOWN')
     if (workingQuotes.length === 0) {
-      const fallbackStocks = [
-        { symbol: 'AAPL', name: 'Apple Inc.' },
-        { symbol: 'MSFT', name: 'Microsoft Corporation' },
-        { symbol: 'GOOGL', name: 'Alphabet Inc.' },
-        { symbol: 'AMZN', name: 'Amazon.com Inc.' },
-        { symbol: 'TSLA', name: 'Tesla Inc.' },
-        { symbol: 'META', name: 'Meta Platforms Inc.' },
-        { symbol: 'NVDA', name: 'NVIDIA Corporation' },
-        { symbol: 'NFLX', name: 'Netflix Inc.' },
-        { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
-        { symbol: 'V', name: 'Visa Inc.' },
-      ]
       workingQuotes = fallbackStocks.map(stock => ({
         symbol: stock.symbol,
         data: { price: 100 + Math.random() * 200, dp: (Math.random() - 0.5) * 5 },
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       ...q,
       symbol: q.symbol || 'UNKNOWN',
       name: q.name || q.symbol || 'Unknown Company',
-    }))
+    })).filter((q: any) => q.symbol && q.symbol !== 'UNKNOWN')
     
     // Filter for value + quality (PE < 15, mock ROE > 15%, mock revenue growth > 10%)
     const stocks = workingQuotes
