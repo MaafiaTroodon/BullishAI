@@ -14,7 +14,6 @@ export default function TechnicalPage() {
   const [symbol, setSymbol] = useState(searchParams.get('symbol')?.toUpperCase() || 'AAPL')
   const [searchQuery, setSearchQuery] = useState('')
   const [recentSymbols, setRecentSymbols] = useState<string[]>([])
-  const [expanded, setExpanded] = useState(false)
 
   const { data, error, isLoading } = useSWR(
     symbol ? `/api/ai/technical?symbol=${symbol}` : null,
