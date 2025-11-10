@@ -50,9 +50,16 @@ export default function MomentumPage() {
         ) : (
           <>
             <Reveal variant="fade" delay={0.1}>
-              <p className="text-slate-400 mb-6">
-                5 stocks with strongest short-term momentum (5-day performance)
-              </p>
+              <div className="flex items-center justify-between mb-6">
+                <p className="text-slate-400">
+                  5 stocks with strongest short-term momentum (5-day performance)
+                </p>
+                {data?.model && (
+                  <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full">
+                    {data.model}
+                  </span>
+                )}
+              </div>
             </Reveal>
 
             <div className="space-y-4">
@@ -68,11 +75,19 @@ export default function MomentumPage() {
                           <div>
                             <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
                             <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
-                            <div className="mt-2">
+                            <div className="mt-2 flex flex-wrap gap-2">
                               <span className="px-2 py-1 bg-orange-600/20 text-orange-400 text-xs font-semibold rounded">
                                 Short-term Trend Continuation
                               </span>
+                              {stock.momentum_score && (
+                                <span className="px-2 py-1 bg-purple-600/20 text-purple-400 text-xs font-semibold rounded">
+                                  Score: {stock.momentum_score.toFixed(0)}
+                                </span>
+                              )}
                             </div>
+                            {stock.rationale && (
+                              <p className="text-xs text-slate-500 mt-2 italic">{stock.rationale}</p>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">
