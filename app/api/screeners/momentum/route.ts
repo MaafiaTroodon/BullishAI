@@ -17,18 +17,25 @@ export async function GET(req: NextRequest) {
     // Calculate momentum (simplified - in production, use actual historical data)
     const stocks = (quotes.quotes || [])
       .map((q: any) => {
+        // Handle both formats
+        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+        const volume = q.data ? (q.data.volume || 0) : (q.volume || 0)
+        const name = q.name || q.symbol
+        
         // Mock momentum calculation
-        const momentum5d = parseFloat(q.changePercent || 0) * (window === '5d' ? 1.2 : 1)
+        const momentum5d = changePercent * (window === '5d' ? 1.2 : 1)
         
         return {
           symbol: q.symbol,
-          name: q.name,
+          name,
           momentum_5d: momentum5d,
-          volume: q.volume || 0,
-          price: parseFloat(q.price || 0),
-          change: parseFloat(q.changePercent || 0),
+          volume,
+          price,
+          change: changePercent,
         }
       })
+      .filter((s: any) => s.price > 0)
       .sort((a: any, b: any) => b.momentum_5d - a.momentum_5d)
       .slice(0, 10)
 

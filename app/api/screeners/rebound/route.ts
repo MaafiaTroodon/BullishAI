@@ -14,21 +14,24 @@ export async function GET(req: NextRequest) {
     // Filter for rebound candidates (RSI < 35, turning up)
     const stocks = (quotes.quotes || [])
       .map((q: any) => {
-        const price = parseFloat(q.price || 0)
-        const change = parseFloat(q.changePercent || 0)
+        // Handle both formats
+        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+        const name = q.name || q.symbol
+        
         // Mock RSI calculation (simplified)
-        const rsi = change < -5 ? 30 + Math.random() * 10 : 40 + Math.random() * 20
+        const rsi = changePercent < -5 ? 30 + Math.random() * 10 : 40 + Math.random() * 20
         
         return {
           symbol: q.symbol,
-          name: q.name,
+          name,
           rsi,
-          rsi_trend: change > 0 && rsi < 35 ? 'turning_up' : 'oversold',
+          rsi_trend: changePercent > 0 && rsi < 35 ? 'turning_up' : 'oversold',
           price,
           support_level: price * 0.95, // Mock support
         }
       })
-      .filter((s: any) => s.rsi < 35 && s.rsi_trend === 'turning_up')
+      .filter((s: any) => s.price > 0 && s.rsi < 35 && s.rsi_trend === 'turning_up')
       .sort((a: any, b: any) => a.rsi - b.rsi) // Lowest RSI first
       .slice(0, 10)
 

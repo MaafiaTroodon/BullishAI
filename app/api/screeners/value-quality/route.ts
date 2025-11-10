@@ -14,21 +14,26 @@ export async function GET(req: NextRequest) {
     // Filter for value + quality (PE < 15, mock ROE > 15%, mock revenue growth > 10%)
     const stocks = (quotes.quotes || [])
       .map((q: any) => {
-        const pe = parseFloat(q.pe || Math.random() * 30 + 5)
+        // Handle both formats
+        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+        const name = q.name || q.symbol
+        
+        const pe = q.data?.peRatio || Math.random() * 30 + 5
         const roe = Math.random() * 20 + 10 // Mock ROE
         const revenueGrowth = Math.random() * 15 + 5 // Mock revenue growth
         
         return {
           symbol: q.symbol,
-          name: q.name,
+          name,
           pe,
           roe,
           revenue_growth: revenueGrowth,
           quality_score: (roe * 0.4 + revenueGrowth * 0.3 + (30 - pe) * 0.3), // Higher is better
-          price: parseFloat(q.price || 0),
+          price,
+          change: q.data ? parseFloat(q.data.change || 0) : parseFloat(q.change || 0),
         }
       })
-      .filter((s: any) => s.pe < 15 && s.roe > 15 && s.revenue_growth > 10)
+      .filter((s: any) => s.price > 0 && s.pe < 15 && s.roe > 15 && s.revenue_growth > 10)
       .sort((a: any, b: any) => b.quality_score - a.quality_score)
       .slice(0, 10)
 

@@ -81,13 +81,20 @@ Format as JSON array with fields: symbol, price, changePercent, reason, rational
       stocks = parsed.stocks || []
     } catch {
       // Fallback: use top movers
-      stocks = quotes.quotes?.slice(0, 10).map((q: any) => ({
-        symbol: q.symbol,
-        price: parseFloat(q.price || 0),
-        changePercent: parseFloat(q.changePercent || 0),
-        reason: 'momentum',
-        rationale: 'High trading volume and positive price action',
-      })) || []
+      stocks = quotes.quotes?.slice(0, 10).map((q: any) => {
+        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+        const name = q.name || q.symbol
+        
+        return {
+          symbol: q.symbol,
+          name,
+          price,
+          changePercent,
+          reason: 'momentum',
+          rationale: 'High trading volume and positive price action',
+        }
+      }).filter((s: any) => s.price > 0) || []
     }
 
     return NextResponse.json({
