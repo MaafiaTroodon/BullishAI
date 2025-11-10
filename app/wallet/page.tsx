@@ -128,6 +128,9 @@ export default function WalletPage() {
       // Clear input after successful transaction
       setAmount('')
       
+      // Get new balance from response for toast message
+      const newBalance = j.balance || 0
+      
       // Show success toast with new balance
       showToast(
         action==='deposit' 
