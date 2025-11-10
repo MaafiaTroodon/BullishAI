@@ -4,6 +4,7 @@ import "./globals.css";
 import { GlobalNavbar } from "@/components/GlobalNavbar";
 import { AnimationRoot } from "@/components/anim/AnimationRoot";
 import { ToastContainer } from "@/components/Toast";
+import { Footer } from "@/components/Footer";
 
 const inter = Inter({ subsets: ["latin"] });
 
