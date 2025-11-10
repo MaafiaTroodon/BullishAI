@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { routeAIQuery, RAGContext } from '@/lib/ai-router'
-import { searchKnowledgeBase, detectSection, extractTickers } from '@/lib/chat-knowledge-base'
+import { searchKnowledgeBase, detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-knowledge-base'
 import { calculateTechnical } from '@/lib/technical-calculator'
 
 /**

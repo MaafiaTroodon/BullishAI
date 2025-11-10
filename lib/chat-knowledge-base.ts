@@ -2,7 +2,10 @@
  * Chat Knowledge Base - Uses stock_qa_100k.json for contextual Q&A
  */
 
-interface QAData {
+import fs from 'fs'
+import path from 'path'
+
+export interface QAData {
   id: number
   section: string
   question: string
@@ -17,24 +20,33 @@ interface QAData {
 let knowledgeBase: QAData[] | null = null
 
 /**
- * Load knowledge base from JSON file
+ * Load knowledge base from JSON file (server-side only)
  */
-async function loadKnowledgeBase(): Promise<QAData[]> {
+export async function loadKnowledgeBase(): Promise<QAData[]> {
   if (knowledgeBase) return knowledgeBase
 
   try {
-    // In Next.js, we need to fetch from public or use a server-side approach
-    // For now, we'll load it server-side via API
-    const response = await fetch('/api/chat/knowledge-base')
-    if (response.ok) {
-      knowledgeBase = await response.json()
-      return knowledgeBase || []
-    }
+    // Load from file system (server-side)
+    const filePath = path.join(process.cwd(), 'components', 'stock_qa_100k.json')
+    const fileContent = fs.readFileSync(filePath, 'utf-8')
+    const lines = fileContent.trim().split('\n')
+    
+    knowledgeBase = lines
+      .map((line, index) => {
+        try {
+          return JSON.parse(line)
+        } catch (error) {
+          console.error(`Error parsing line ${index + 1}:`, error)
+          return null
+        }
+      })
+      .filter(item => item !== null) as QAData[]
+    
+    return knowledgeBase
   } catch (error) {
     console.error('Failed to load knowledge base:', error)
+    return []
   }
-
-  return []
 }
 
 /**
