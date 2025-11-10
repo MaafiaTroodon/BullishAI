@@ -74,9 +74,15 @@ export function PortfolioSummary() {
           return
         }
         const r = localStorage.getItem(storageKey)
-        if (r) setLocalItems(Object.values(JSON.parse(r)))
-        else setLocalItems([])
-        mutate() // Invalidate SWR cache
+        if (r) {
+          const map = JSON.parse(r)
+          const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+          setLocalItems(items)
+        } else {
+          setLocalItems([])
+        }
+        // Force immediate revalidation to get fresh data from API
+        mutate()
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
       return () => window.removeEventListener('portfolioUpdated', onUpd as any)
