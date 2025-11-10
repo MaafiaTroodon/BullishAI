@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { Reveal } from '@/components/anim/Reveal'
+import { StaggerGrid } from '@/components/anim/StaggerGrid'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)

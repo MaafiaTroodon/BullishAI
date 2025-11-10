@@ -336,6 +336,7 @@ export default function WatchlistPage() {
                 <TradingViewMiniChart key={selectedSymbol} symbol={selectedSymbol} />
               </div>
             </div>
+            </Reveal>
           </div>
         </div>
       </div>
