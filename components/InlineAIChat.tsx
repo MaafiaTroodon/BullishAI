@@ -116,7 +116,14 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       return
     }
     setShowPresets(false)
-    handleSend(preset.question)
+    
+    // For technical analysis, include focusSymbol if available
+    let question = preset.question
+    if (preset.category === 'technical' && focusSymbol) {
+      question = question.replace(/AAPL|this stock|it/gi, focusSymbol)
+    }
+    
+    handleSend(question)
   }
 
   const handleSend = async (customMessage?: string) => {
