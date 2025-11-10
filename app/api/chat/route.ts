@@ -188,6 +188,23 @@ Tone: Chatty, confident, helpful, not robotic.`
     // 6. Format response naturally
     let answer = response.answer || "I'm not sure how to answer that right now. Can you rephrase?"
     
+    // If we have a very good knowledge base match, enhance the answer
+    if (relevantContext.length > 0 && relevantContext[0]) {
+      const bestMatch = relevantContext[0]
+      // If the answer is too generic or matches the knowledge base closely, use KB answer as base
+      if (answer.length < 50 || answer.toLowerCase().includes(bestMatch.answer.toLowerCase().substring(0, 20))) {
+        // Enhance with real-time data if available
+        if (Object.keys(context.prices || {}).length > 0) {
+          // Keep AI-generated answer but ensure it's informative
+        } else {
+          // Use knowledge base answer as fallback if AI answer is too short
+          if (answer.length < 30) {
+            answer = bestMatch.answer
+          }
+        }
+      }
+    }
+    
     // Add follow-up question if not present
     if (!answer.includes('?') && !answer.match(/want|should|need|can/i)) {
       const followUps = [
