@@ -6,7 +6,6 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import dynamic from 'next/dynamic'
 import useSWR from 'swr'
 import { usePathname } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -191,17 +190,40 @@ export function PortfolioChartFast() {
 
       try {
         // Load the charts module
-        const module = await getChartsModule()
-        if (!module) {
-          console.error('Failed to load lightweight-charts module')
+        let module
+        try {
+          module = await getChartsModule()
+          if (!module) {
+            console.error('Failed to load lightweight-charts module - returned null/undefined')
+            return
+          }
+        } catch (importError) {
+          console.error('Failed to import lightweight-charts:', importError)
           return
         }
 
-        const { createChart, ColorType } = module
+        // Try to get createChart and ColorType from module
+        let createChart = module.createChart
+        let ColorType = module.ColorType
+
+        // If not found, try default export
+        if (!createChart && module.default) {
+          createChart = module.default.createChart
+          ColorType = module.default.ColorType
+        }
 
         // Verify createChart is available
-        if (typeof createChart !== 'function') {
-          console.error('createChart is not a function. Module keys:', Object.keys(module))
+        if (!createChart || typeof createChart !== 'function') {
+          console.error('createChart is not a function. Module structure:', {
+            keys: Object.keys(module),
+            hasDefault: !!module.default,
+            defaultKeys: module.default ? Object.keys(module.default) : []
+          })
+          return
+        }
+
+        if (!ColorType) {
+          console.error('ColorType is not available in module')
           return
         }
 
@@ -408,6 +430,17 @@ export function PortfolioChartFast() {
     )
   }
 
+  // Fallback: Show simple message if chart fails to load after timeout
+  const [showFallback, setShowFallback] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!chartInitialized) {
+        setShowFallback(true)
+      }
+    }, 5000) // Show fallback after 5 seconds
+    return () => clearTimeout(timer)
+  }, [chartInitialized])
+
   return (
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
       <div className="flex items-center justify-between mb-4">
@@ -419,7 +452,7 @@ export function PortfolioChartFast() {
         </div>
       </div>
       <div className="relative h-[400px] w-full">
-        {!chartInitialized && (
+        {!chartInitialized && !showFallback && (
           <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
@@ -427,7 +460,15 @@ export function PortfolioChartFast() {
             </div>
           </div>
         )}
-        <div ref={chartContainerRef} className="h-full w-full" />
+        {showFallback && !chartInitialized && (
+          <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
+            <div className="text-center">
+              <p className="mb-2">Chart unavailable</p>
+              <p className="text-xs text-slate-500">Portfolio value: {lastTPVRef.current !== null ? `$${lastTPVRef.current.toLocaleString()}` : 'Loading...'}</p>
+            </div>
+          </div>
+        )}
+        <div ref={chartContainerRef} className="h-full w-full" style={{ minHeight: '400px' }} />
       </div>
     </div>
   )
