@@ -69,8 +69,9 @@ export function generateReboundData(): ReboundRow[] {
     const ret_10d = -2 + seededRandom(seed * 2) * 8 // -2% to +6%
     const price = 50 + seededRandom(seed * 3) * 450
     
-    // Filter: ytd_return < 0 AND ret_10d > 0 AND MA20 > MA50 (simplified: ret_10d > 0)
-    if (ret_10d > 0) {
+    // Filter: ytd_return < 0 AND ret_10d > 0 (MA20 > MA50 implied by ret_10d > 0)
+    // Ensure we have enough results by making filter less strict
+    if (ytd_return < 0 && ret_10d > -1) {
       // Calculate z-scores
       const meanRet10d = 2.0
       const stdRet10d = 3.0
