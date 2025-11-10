@@ -189,10 +189,16 @@ export async function mergePositions(userId: string, positions: Position[]): Pro
     }
   }
   
-  // Save all positions to database (non-blocking)
-  const { syncPositionsToDB } = await import('@/lib/portfolio-db')
-  syncPositionsToDB(userId, positions).catch(err => {
-    console.error('Error syncing positions to DB:', err)
+  // Save all positions to database (non-blocking, graceful failure)
+  import('@/lib/portfolio-db').then(({ syncPositionsToDB }) => 
+    syncPositionsToDB(userId, positions).catch(err => {
+      // Only log if it's not a "Database client not available" error (expected during hot reload)
+      if (!err?.message?.includes('Database client not available')) {
+        console.error('Error syncing positions to DB:', err)
+      }
+    })
+  ).catch(() => {
+    // Silently handle import errors
   })
 }
 
