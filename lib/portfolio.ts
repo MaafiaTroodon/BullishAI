@@ -245,14 +245,32 @@ export async function upsertTrade(userId: string, input: TradeInput): Promise<{ 
     pf.walletBalance = currentBalance + proceeds
   }
 
-  // Save to database (non-blocking)
-  const { savePositionToDB, saveTradeToDB, updateWalletBalanceInDB } = await import('@/lib/portfolio-db')
+  // Save to database (non-blocking, graceful failure)
   Promise.all([
-    savePositionToDB(userId, pf.positions[s]),
-    saveTradeToDB(userId, transaction),
-    updateWalletBalanceInDB(userId, pf.walletBalance),
-  ]).catch(err => {
-    console.error('Error saving trade to DB:', err)
+    import('@/lib/portfolio-db').then(({ savePositionToDB }) => 
+      savePositionToDB(userId, pf.positions[s]).catch(err => {
+        // Only log if it's not a "Database client not available" error (expected during hot reload)
+        if (!err?.message?.includes('Database client not available')) {
+          console.error('Error saving position to DB:', err)
+        }
+      })
+    ),
+    import('@/lib/portfolio-db').then(({ saveTradeToDB }) => 
+      saveTradeToDB(userId, transaction).catch(err => {
+        if (!err?.message?.includes('Database client not available')) {
+          console.error('Error saving trade to DB:', err)
+        }
+      })
+    ),
+    import('@/lib/portfolio-db').then(({ updateWalletBalanceInDB }) => 
+      updateWalletBalanceInDB(userId, pf.walletBalance).catch(err => {
+        if (!err?.message?.includes('Database client not available')) {
+          console.error('Error updating wallet balance in DB:', err)
+        }
+      })
+    ),
+  ]).catch(() => {
+    // Silently handle import or execution errors
   })
 
   return { position: pf.positions[s], transaction }

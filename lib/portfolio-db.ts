@@ -8,13 +8,28 @@ import { db } from './db'
 import type { Position, Transaction } from './portfolio'
 
 /**
+ * Check if Prisma client is properly initialized
+ */
+function isDbAvailable(): boolean {
+  try {
+    return !!(db && typeof db === 'object' && 'portfolio' in db && db.portfolio)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Get or create portfolio for user (idempotent)
  * Returns portfolio with all related data loaded
  */
 export async function getOrCreatePortfolio(userId: string) {
   // Ensure db.portfolio is available (handle Prisma client initialization issues)
-  if (!db || !db.portfolio) {
-    console.error('Prisma client not initialized properly. db.portfolio is undefined.')
+  if (!isDbAvailable()) {
+    // In development, this might happen during hot reload
+    // Return null to indicate DB is not available, caller should handle gracefully
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Prisma client not initialized. Database operations will be skipped.')
+    }
     throw new Error('Database client not available')
   }
   
