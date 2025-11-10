@@ -291,16 +291,32 @@ export function PortfolioChartFast() {
           return
         }
 
+        // Check for addLineSeries - it might be on the chart object directly
+        let addLineSeries = chart.addLineSeries
+        
+        // If not found, check if it's a getter or on prototype
+        if (!addLineSeries) {
+          // Try to find it in the prototype chain
+          const proto = Object.getPrototypeOf(chart)
+          if (proto && proto.addLineSeries) {
+            addLineSeries = proto.addLineSeries
+          }
+        }
+
         // Verify addLineSeries exists
-        if (typeof chart.addLineSeries !== 'function') {
+        if (typeof addLineSeries !== 'function') {
           console.error('Chart object does not have addLineSeries method. Available methods:', Object.keys(chart))
+          console.error('Chart prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(chart)))
+          // Try to inspect the chart more deeply
+          console.error('Full chart object:', chart)
           if (chart && typeof chart.remove === 'function') {
             chart.remove()
           }
           return
         }
 
-        const series = chart.addLineSeries({
+        // Use the addLineSeries function we found
+        const series = addLineSeries.call(chart, {
           color: '#10b981', // emerald-500
           lineWidth: 2,
           priceFormat: {
