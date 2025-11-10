@@ -89,7 +89,10 @@ export function PortfolioSummary() {
   const [enriched, setEnriched] = useState<any[]>([])
   // Always prioritize API data (even if empty) over localStorage
   // This ensures new users see empty state, not data from localStorage
-  const items = data?.items !== undefined ? data.items : localItems
+  // But if API returns empty array and we have localItems, use localItems as fallback
+  const items = data?.items !== undefined 
+    ? (data.items.length > 0 ? data.items : (localItems.length > 0 ? localItems : data.items))
+    : localItems
 
   useEffect(() => {
     let cancelled = false
