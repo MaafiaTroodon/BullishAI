@@ -53,7 +53,8 @@ export async function getOrCreatePortfolio(userId: string) {
  * Load portfolio data from database
  */
 export async function loadPortfolioFromDB(userId: string) {
-  const portfolio = await getOrCreatePortfolio(userId)
+  try {
+    const portfolio = await getOrCreatePortfolio(userId)
   
   // Convert DB positions to Position format
   const positions: Position[] = portfolio.positions
@@ -78,21 +79,34 @@ export async function loadPortfolioFromDB(userId: string) {
     note: t.note || undefined,
   }))
 
-  // Convert wallet transactions
-  const walletTransactions = portfolio.walletTransactions.map(wt => ({
-    id: wt.id,
-    action: wt.action as 'deposit' | 'withdraw',
-    amount: wt.amount,
-    timestamp: wt.timestamp.getTime(),
-    method: wt.method || 'Manual',
-    resultingBalance: 0, // Will be calculated
-  }))
+    // Convert wallet transactions
+    const walletTransactions = portfolio.walletTransactions.map(wt => ({
+      id: wt.id,
+      action: wt.action as 'deposit' | 'withdraw',
+      amount: wt.amount,
+      timestamp: wt.timestamp.getTime(),
+      method: wt.method || 'Manual',
+      resultingBalance: 0, // Will be calculated
+    }))
 
-  return {
-    positions,
-    transactions,
-    walletBalance: portfolio.walletBalance,
-    walletTransactions,
+    return {
+      positions,
+      transactions,
+      walletBalance: portfolio.walletBalance,
+      walletTransactions,
+    }
+  } catch (error: any) {
+    // If DB is not available (e.g., during hot reload), return empty portfolio
+    // The in-memory store will be used as fallback
+    if (error?.message?.includes('Database client not available')) {
+      return {
+        positions: [],
+        transactions: [],
+        walletBalance: 0,
+        walletTransactions: [],
+      }
+    }
+    throw error
   }
 }
 
