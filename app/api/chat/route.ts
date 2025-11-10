@@ -123,9 +123,15 @@ Tone: Chatty, confident, helpful, not robotic.`
       answer += ` ${followUps[Math.floor(Math.random() * followUps.length)]}`
     }
 
+    // Add model badge info (will be displayed in UI)
+    const modelBadge = response.model === 'groq-llama' ? 'Groq Live' : 
+                      response.model === 'gemini' ? 'Gemini AI' : 
+                      response.model || 'AI'
+
     return NextResponse.json({
       answer,
       model: response.model,
+      modelBadge,
       latency: response.latency,
       section: section || undefined,
       tickers: tickers.length > 0 ? tickers : undefined,

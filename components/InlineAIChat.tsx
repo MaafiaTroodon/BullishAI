@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Send, Sparkles, TrendingUp, TrendingDown, X } from 'lucide-react'
+import { chatPresets, getPresetsByCategory, ChatPreset } from '@/lib/chat-presets'
 // Removed AIInsightsToolbar - everything is conversational now
 
 interface Message {
@@ -27,6 +28,8 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [showPresets, setShowPresets] = useState(true)
+  const [selectedCategory, setSelectedCategory] = useState<'quick-insights' | 'recommended' | 'technical' | 'all'>('all')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -90,7 +93,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       setMessages([
         {
           id: '1',
-          text: "**BullishAI Market Analyst** here 👋\n\nI provide real-time stock data, prices, news, and market insights. Ask me about any ticker or market topic.\n\n*Try: \"AAPL price\", \"NVDA news\", or \"trending stocks\"*",
+          text: "**BullishAI Market Analyst** here 👋\n\nI provide real-time stock data, prices, news, and market insights. Ask me about any ticker or market topic.\n\n*Try clicking one of the questions below, or ask me anything!*",
           sender: 'bot',
           timestamp: new Date(),
         },
@@ -98,9 +101,28 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     }
   }, [])
 
+  // Hide presets after first message
+  useEffect(() => {
+    if (messages.length > 1) {
+      setShowPresets(false)
+    }
+  }, [messages.length])
+
+  const handlePresetClick = (preset: ChatPreset) => {
+    if (!isLoggedIn) {
+      alert('Please sign in to chat with BullishAI')
+      window.location.href = '/auth/signin'
+      return
+    }
+    setShowPresets(false)
+    handleSend(preset.question)
+  }
+
   const handleSend = async (customMessage?: string) => {
     const messageToSend = typeof customMessage === 'string' ? customMessage : inputValue
     if (!messageToSend.trim() || !isLoggedIn) return
+    
+    setShowPresets(false)
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -151,9 +173,16 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         return
       }
 
+      let answer = data.answer || data.response || "Unable to generate response at this time."
+      
+      // Add disclaimer if not present
+      if (!answer.toLowerCase().includes('not financial advice') && !answer.toLowerCase().includes('educational')) {
+        answer += '\n\n⚠️ *This is for educational purposes, not financial advice.*'
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.answer || data.response || "Unable to generate response at this time.",
+        text: answer,
         sender: 'bot',
         timestamp: new Date(),
       }
@@ -259,6 +288,81 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/30">
+            {/* Preset Questions - Show when no conversation started */}
+            {showPresets && messages.length <= 1 && (
+              <div className="space-y-4 mb-4">
+                {/* Category Tabs */}
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      selectedCategory === 'all'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('quick-insights')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      selectedCategory === 'quick-insights'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    Quick Insights
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('recommended')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      selectedCategory === 'recommended'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    Recommended
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('technical')}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      selectedCategory === 'technical'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    Technical
+                  </button>
+                </div>
+
+                {/* Preset Buttons */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {(selectedCategory === 'all' 
+                    ? chatPresets 
+                    : getPresetsByCategory(selectedCategory)
+                  ).map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => handlePresetClick(preset)}
+                      className="text-left p-3 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-blue-500/50 hover:bg-slate-800 transition group"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">{preset.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-white group-hover:text-blue-400 transition mb-1">
+                            {preset.title}
+                          </div>
+                          <div className="text-xs text-slate-400 line-clamp-2">
+                            {preset.description}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {messages.map((message) => (
               <div
                 key={message.id}
