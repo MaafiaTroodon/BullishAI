@@ -62,8 +62,9 @@ export function PortfolioChart() {
   }, [pathname, userId, mutatePf, pf])
   const [localItems, setLocalItems] = useState<any[]>([])
   
-  // Map internal ranges to API ranges (consistent mapping) - REMOVED 1H
+  // Map internal ranges to API ranges (consistent mapping)
   const apiRangeMap: Record<string, string> = {
+    '1h': '1d',
     '1d': '1d',
     '3d': '3d',
     '1week': '1week',
@@ -76,7 +77,8 @@ export function PortfolioChart() {
   
   const apiRange = apiRangeMap[chartRange] || '1d'
   // Determine granularity based on range for better data density
-  const gran = chartRange === '1d' || chartRange === '3d' ? '5m' : 
+  const gran = chartRange === '1h' ? '1m' :
+               chartRange === '1d' || chartRange === '3d' ? '5m' : 
                chartRange === '1week' ? '1h' : '1d'
   
   // Get refresh interval for timeseries (same as portfolio)
@@ -224,6 +226,7 @@ export function PortfolioChart() {
   }, [points])
 
   const ranges = [
+    { label: '1H', value: '1h' },
     { label: '1D', value: '1d' },
     { label: '3D', value: '3d' },
     { label: '1W', value: '1week' },
@@ -241,7 +244,7 @@ export function PortfolioChart() {
 
   const formatXAxis = (t: number) => {
     const date = new Date(t)
-    if (chartRange === '1d') {
+    if (chartRange === '1h' || chartRange === '1d') {
       return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     } else if (chartRange === '3d' || chartRange === '1week') {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
