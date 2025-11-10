@@ -20,7 +20,9 @@ let lightweightCharts: any = null
 const loadLightweightCharts = async () => {
   if (lightweightCharts) return lightweightCharts
   try {
-    lightweightCharts = await import('lightweight-charts')
+    const module = await import('lightweight-charts')
+    // Handle both default and named exports
+    lightweightCharts = module.default || module
     return lightweightCharts
   } catch (error) {
     console.error('Failed to load lightweight-charts:', error)
@@ -33,12 +35,12 @@ export function PortfolioChartFast() {
   const pathname = usePathname()
   const { data: session } = authClient.useSession()
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<IChartApi | null>(null)
-  const seriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const chartRef = useRef<any>(null)
+  const seriesRef = useRef<any>(null)
   const lastTPVRef = useRef<number | null>(null)
   const priceMapRef = useRef<Map<string, number>>(new Map())
   const snapshotThrottleRef = useRef(new SnapshotThrottle())
-  const pointsRef = useRef<LineData[]>([])
+  const pointsRef = useRef<Array<{ time: number; value: number }>>([])
   const rafPendingRef = useRef(false)
   const [chartInitialized, setChartInitialized] = useState(false)
 
@@ -88,7 +90,7 @@ export function PortfolioChartFast() {
 
     // Update chart with new TPV point
     const now = Date.now()
-    const newPoint: LineData = {
+    const newPoint = {
       time: Math.floor(now / 1000), // Lightweight Charts uses Unix timestamp in seconds
       value: result.tpv,
     }
@@ -196,16 +198,22 @@ export function PortfolioChartFast() {
       try {
         // Load lightweight-charts dynamically
         const chartsLib = await loadLightweightCharts()
-        if (!chartsLib || !chartsLib.createChart) {
+        if (!chartsLib) {
           console.error('Failed to load lightweight-charts library')
           return
         }
 
-        const { createChart, ColorType } = chartsLib
+        // Try different ways to access createChart
+        const createChart = chartsLib.createChart || chartsLib.default?.createChart
+        const ColorType = chartsLib.ColorType || chartsLib.default?.ColorType
 
-        // Verify createChart is available
-        if (typeof createChart !== 'function') {
-          console.error('createChart is not a function. Lightweight Charts may not be loaded.')
+        if (!createChart || typeof createChart !== 'function') {
+          console.error('createChart is not available. Library structure:', Object.keys(chartsLib))
+          return
+        }
+
+        if (!ColorType) {
+          console.error('ColorType is not available')
           return
         }
 
@@ -266,13 +274,13 @@ export function PortfolioChartFast() {
             const data = await response.json()
             
             if (data?.series && Array.isArray(data.series) && seriesRef.current) {
-              const historicalPoints: LineData[] = data.series
+              const historicalPoints: Array<{ time: number; value: number }> = data.series
                 .map((p: any) => ({
                   time: Math.floor((p.t || Date.now()) / 1000),
                   value: p.portfolio || p.portfolioAbs || 0,
                 }))
-                .filter((p: LineData) => p.value > 0)
-                .sort((a: LineData, b: LineData) => (a.time as number) - (b.time as number))
+                .filter((p) => p.value > 0)
+                .sort((a, b) => a.time - b.time)
 
               if (historicalPoints.length > 0 && seriesRef.current) {
                 pointsRef.current = historicalPoints
@@ -345,7 +353,7 @@ export function PortfolioChartFast() {
     const tpv = pf.totals.tpv
     if (lastTPVRef.current !== tpv) {
       const now = Math.floor(Date.now() / 1000)
-      const newPoint: LineData = { time: now, value: tpv }
+      const newPoint = { time: now, value: tpv }
       
       // Coalesce
       if (pointsRef.current.length > 0) {
