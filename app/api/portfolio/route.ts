@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance, TransactionSchema, syncTransactions, syncWalletTransactions } from '@/lib/portfolio'
+import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function getUserId() { return 'demo-user' }
-
 export async function GET(req: NextRequest) {
-  const userId = getUserId()
+  const userId = await getUserId()
+  if (!userId) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
   const url = new URL(req.url)
   const enrich = url.searchParams.get('enrich') === '1'
   const includeTransactions = url.searchParams.get('transactions') === '1'
@@ -101,8 +103,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
     const body = await req.json()
-    const userId = getUserId()
 
     // Optional: bulk sync positions snapshot from client localStorage
     if (Array.isArray(body?.syncPositions)) {

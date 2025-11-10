@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, Mail, Lock, AlertCircle } from 'lucide-react'
+import { authClient } from '@/lib/auth-client'
 
 export default function SignIn() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -17,16 +19,25 @@ export default function SignIn() {
     setLoading(true)
     setError('')
     
-    // Simulate login
-    setTimeout(() => {
-      setLoading(false)
-      // Set logged in state
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('isLoggedIn', 'true')
+    try {
+      const result = await authClient.signIn.email({
+        email,
+        password,
+      })
+      
+      if (result.error) {
+        setError(result.error.message || 'Failed to sign in')
+        setLoading(false)
+        return
       }
-      alert('Successfully signed in!')
-      router.push('/dashboard')
-    }, 1000)
+      
+      // Success - redirect to dashboard or next URL
+      const next = searchParams.get('next') || '/dashboard'
+      router.push(next)
+    } catch (err: any) {
+      setError(err?.message || 'An error occurred')
+      setLoading(false)
+    }
   }
 
   return (

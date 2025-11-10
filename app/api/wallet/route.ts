@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWalletBalance, depositToWallet, withdrawFromWallet, listWalletTransactions, initializeWalletFromBalance, setWalletBalance } from '@/lib/portfolio'
+import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function getUserId() { return 'demo-user' }
-
 export async function GET(req: NextRequest) {
-  const userId = getUserId()
+  const userId = await getUserId()
+  if (!userId) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
   
   // Get current balance from in-memory store (this is the source of truth)
   // It already accounts for deposits, withdrawals, buys, and sells

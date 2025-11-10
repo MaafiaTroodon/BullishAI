@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, Calendar, Newspaper, History, Wallet } from 'lucide-react'
 import { DevStatus } from './DevStatus'
 import useSWR from 'swr'
+import { authClient } from '@/lib/auth-client'
 
 export function GlobalNavbar() {
   const router = useRouter()
@@ -14,6 +15,7 @@ export function GlobalNavbar() {
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const { data: session, isLoading: sessionLoading } = authClient.useSession()
   const { data: wallet, mutate: mutateWallet } = useSWR('/api/wallet', (url)=>fetch(url).then(r=>r.json()), { refreshInterval: 10000 })
   useEffect(() => {
     function onWalletUpd() { mutateWallet() }
@@ -228,36 +230,67 @@ export function GlobalNavbar() {
                 <span className="text-slate-400 mr-2">Wallet</span>
                 <span>${(wallet?.balance ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
               </Link>
-              <div className="relative">
-                <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 text-slate-300 hover:text-white transition"
-                >
-                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-                    JD
-                  </div>
-                  <span className="hidden md:inline">John Doe</span>
-                  <ChevronDown className="h-4 w-4 hidden md:block" />
-                </button>
-                {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
-                    <Link href="/settings" className="flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-t-lg">
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </Link>
-                    <button 
-                      onClick={() => {
-                        alert('Logged out successfully!')
-                        router.push('/')
+              {sessionLoading ? (
+                <div className="w-8 h-8 rounded-full bg-slate-700 animate-pulse" />
+              ) : session?.user ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    onBlur={(e) => {
+                      // Close menu when clicking outside
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setTimeout(() => setUserMenuOpen(false), 200)
+                      }
+                    }}
+                    className="flex items-center gap-2 text-slate-300 hover:text-white transition"
+                    aria-expanded={userMenuOpen}
+                    aria-haspopup="true"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+                      {session.user.name 
+                        ? session.user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                        : session.user.email[0].toUpperCase()}
+                    </div>
+                    <span className="hidden md:inline">{session.user.name || session.user.email}</span>
+                    <ChevronDown className="h-4 w-4 hidden md:block" />
+                  </button>
+                  {userMenuOpen && (
+                    <div 
+                      className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setUserMenuOpen(false)
                       }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left"
                     >
-                      <LogOut className="h-4 w-4" />
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <Link 
+                        href="/settings" 
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-t-lg transition"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Settings
+                      </Link>
+                      <button 
+                        onClick={async () => {
+                          setUserMenuOpen(false)
+                          await authClient.signOut()
+                          router.push('/')
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left transition"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/auth/signin"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                >
+                  Log in
+                </Link>
+              )}
             </div>
           </div>
         </div>

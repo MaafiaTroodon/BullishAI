@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, Mail, Lock, User, AlertCircle } from 'lucide-react'
+import { authClient } from '@/lib/auth-client'
 
 export default function SignUp() {
   const router = useRouter()
@@ -22,15 +23,33 @@ export default function SignUp() {
       return
     }
     
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    
     setLoading(true)
     setError('')
     
-    // TODO: Integrate with actual auth
-    // For now, just redirect to dashboard
-    setTimeout(() => {
-      setLoading(false)
+    try {
+      const result = await authClient.signUp.email({
+        email,
+        password,
+        name,
+      })
+      
+      if (result.error) {
+        setError(result.error.message || 'Failed to create account')
+        setLoading(false)
+        return
+      }
+      
+      // Success - redirect to dashboard
       router.push('/dashboard')
-    }, 1000)
+    } catch (err: any) {
+      setError(err?.message || 'An error occurred')
+      setLoading(false)
+    }
   }
 
   return (
