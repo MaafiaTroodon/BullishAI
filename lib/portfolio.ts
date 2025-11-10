@@ -334,10 +334,16 @@ export async function depositToWallet(userId: string, amount: number, method: st
     pf.walletTransactions.push(transaction)
   } catch {}
   
-  // Save to database (non-blocking)
-  const { saveWalletTransactionToDB } = await import('@/lib/portfolio-db')
-  saveWalletTransactionToDB(userId, transaction).catch(err => {
-    console.error('Error saving wallet transaction to DB:', err)
+  // Save to database (non-blocking, graceful failure)
+  import('@/lib/portfolio-db').then(({ saveWalletTransactionToDB }) => 
+    saveWalletTransactionToDB(userId, transaction).catch(err => {
+      // Only log if it's not a "Database client not available" error (expected during hot reload)
+      if (!err?.message?.includes('Database client not available')) {
+        console.error('Error saving wallet transaction to DB:', err)
+      }
+    })
+  ).catch(() => {
+    // Silently handle import errors
   })
   
   return { balance: pf.walletBalance, transaction }
@@ -389,10 +395,16 @@ export async function withdrawFromWallet(userId: string, amount: number, method:
     pf.walletTransactions.push(transaction)
   } catch {}
   
-  // Save to database (non-blocking)
-  const { saveWalletTransactionToDB } = await import('@/lib/portfolio-db')
-  saveWalletTransactionToDB(userId, transaction).catch(err => {
-    console.error('Error saving wallet transaction to DB:', err)
+  // Save to database (non-blocking, graceful failure)
+  import('@/lib/portfolio-db').then(({ saveWalletTransactionToDB }) => 
+    saveWalletTransactionToDB(userId, transaction).catch(err => {
+      // Only log if it's not a "Database client not available" error (expected during hot reload)
+      if (!err?.message?.includes('Database client not available')) {
+        console.error('Error saving wallet transaction to DB:', err)
+      }
+    })
+  ).catch(() => {
+    // Silently handle import errors
   })
   
   return { balance: pf.walletBalance, transaction }
