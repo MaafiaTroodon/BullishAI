@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Load and search knowledge base for best matches
-    await loadKnowledgeBase()
     const kb = await loadKnowledgeBase()
     const relevantContext = findBestMatch(query, kb, 5)
     
