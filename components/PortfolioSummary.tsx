@@ -34,11 +34,17 @@ export function PortfolioSummary() {
   })
   
   // Revalidate portfolio data on route change to ensure consistency
+  // Use a ref to track last pathname to avoid unnecessary revalidations
+  const lastPathnameRef = useRef<string | null>(null)
   useEffect(() => {
-    if (userId) {
-      mutate()
+    if (userId && pathname !== lastPathnameRef.current) {
+      lastPathnameRef.current = pathname
+      // Only revalidate if we have existing data (to prevent initial $0 flicker)
+      if (data) {
+        mutate()
+      }
     }
-  }, [pathname, userId, mutate])
+  }, [pathname, userId, mutate, data])
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Fetch timeseries for Net Deposits (Cost Basis) - less frequent since it's historical
