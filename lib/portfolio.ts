@@ -305,7 +305,10 @@ export async function depositToWallet(userId: string, amount: number, method: st
   return { balance: pf.walletBalance, transaction }
 }
 
-export function withdrawFromWallet(userId: string, amount: number, method: string = 'Manual', idempotencyKey?: string): { balance: number; transaction: any } {
+export async function withdrawFromWallet(userId: string, amount: number, method: string = 'Manual', idempotencyKey?: string): Promise<{ balance: number; transaction: any }> {
+  // Ensure portfolio is loaded from DB
+  await ensurePortfolioLoaded(userId)
+  
   if (amount <= 0) throw new Error('invalid_amount')
   
   // Validate decimal places (max 2)
@@ -347,6 +350,12 @@ export function withdrawFromWallet(userId: string, amount: number, method: strin
     if (!pf.walletTransactions) pf.walletTransactions = []
     pf.walletTransactions.push(transaction)
   } catch {}
+  
+  // Save to database (non-blocking)
+  const { saveWalletTransactionToDB } = await import('@/lib/portfolio-db')
+  saveWalletTransactionToDB(userId, transaction).catch(err => {
+    console.error('Error saving wallet transaction to DB:', err)
+  })
   
   return { balance: pf.walletBalance, transaction }
 }
