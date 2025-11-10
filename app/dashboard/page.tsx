@@ -9,7 +9,7 @@ import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { DevStatus } from '@/components/DevStatus'
 import { AIInsights } from '@/components/AIInsights'
-import { PortfolioChart } from '@/components/PortfolioChart'
+import { PortfolioChartFast } from '@/components/PortfolioChartFast'
 import { PortfolioHoldings } from '@/components/PortfolioHoldings'
 import { PortfolioSummary } from '@/components/PortfolioSummary'
 
@@ -113,8 +113,8 @@ export default function Dashboard() {
           {/* Summary Card at top - shows total balance and return */}
           <PortfolioSummary />
           
-          {/* Large prominent chart */}
-          <PortfolioChart />
+          {/* Large prominent chart - fast canvas-based rendering */}
+          <PortfolioChartFast />
           
           {/* Holdings list below */}
           <PortfolioHoldings />

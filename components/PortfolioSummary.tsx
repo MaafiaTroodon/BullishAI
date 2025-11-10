@@ -1,7 +1,7 @@
 'use client'
 
 import useSWR, { useSWRConfig } from 'swr'
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { MarketSessionBadge } from './MarketSessionBadge'
@@ -9,6 +9,8 @@ import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 import { authClient } from '@/lib/auth-client'
+import { useFastPricePolling } from '@/hooks/useFastPricePolling'
+import { createHoldingsMap, calculateMarkToMarketDelta } from '@/lib/portfolio-mark-to-market-fast'
 
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
@@ -23,18 +25,14 @@ export function PortfolioSummary() {
   const marketSession = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
   const refreshInterval = getRefreshInterval(marketSession.session)
   
-  // Update frequently for real-time portfolio value based on market session
-  // During market hours: refresh every 15-30 seconds for live price updates (mark-to-market)
-  // When closed: refresh every 60 seconds (prices frozen)
-  // Only fetch when user is logged in
+  // Fast price polling will update this via cache mutations
+  // Initial load only, then fast polling takes over
   const { data, isLoading, mutate } = useSWR(
     session?.user ? '/api/portfolio?enrich=1' : null,
     fetcher,
     { 
-      // Real-time mark-to-market: poll every 15-30s during market hours
-      refreshInterval: session?.user 
-        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 20000 : refreshInterval) // 20s during market hours, slower when closed
-        : 0, // Stop refreshing when logged out
+      // Initial load only - fast polling will update cache directly
+      refreshInterval: 0,
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user,
       // Dedupe requests to prevent duplicate fetches during navigation
@@ -193,10 +191,97 @@ export function PortfolioSummary() {
 
   const enrichedItems = (Array.isArray(enriched) && enriched.length > 0) ? enriched : (Array.isArray(items) ? items : [])
 
+  // Fast price polling for real-time updates
+  const symbols = useMemo(() => {
+    return enrichedItems
+      .filter((p: any) => (p.totalShares || 0) > 0)
+      .map((p: any) => p.symbol?.toUpperCase())
+      .filter(Boolean)
+  }, [enrichedItems])
+
+  const holdingsMap = useMemo(() => {
+    return createHoldingsMap(enrichedItems)
+  }, [enrichedItems])
+
+  const priceMapRef = useRef<Map<string, number>>(new Map())
+  const [liveTotals, setLiveTotals] = useState<{
+    tpv: number
+    costBasis: number
+    totalReturn: number
+    totalReturnPct: number
+  } | null>(null)
+
+  // Handle fast price updates
+  const handlePriceUpdate = useCallback((updates: Array<{ symbol: string; price: number; timestamp: number }>) => {
+    if (updates.length === 0) return
+
+    // Update price map
+    for (const update of updates) {
+      priceMapRef.current.set(update.symbol.toUpperCase(), update.price)
+    }
+
+    // Calculate delta mark-to-market
+    const walletBalance = data?.wallet?.balance || 0
+    const result = calculateMarkToMarketDelta(
+      holdingsMap,
+      updates,
+      priceMapRef.current,
+      walletBalance,
+      false // R3A: wallet excluded
+    )
+
+    // Update live totals
+    setLiveTotals({
+      tpv: result.tpv,
+      costBasis: result.costBasis,
+      totalReturn: result.totalReturn,
+      totalReturnPct: result.totalReturnPct,
+    })
+
+    // Update SWR cache
+    mutate({
+      ...data,
+      totals: {
+        tpv: result.tpv,
+        costBasis: result.costBasis,
+        totalReturn: result.totalReturn,
+        totalReturnPct: result.totalReturnPct,
+      },
+      items: result.holdings.map(h => ({
+        symbol: h.symbol,
+        totalShares: h.shares,
+        avgPrice: h.avgPrice,
+        currentPrice: h.currentPrice,
+        totalValue: h.marketValue,
+        unrealizedPnl: h.unrealizedPnl,
+        unrealizedPnlPct: h.unrealizedPnlPct,
+        totalCost: h.costBasis,
+      })),
+    }, { revalidate: false })
+  }, [holdingsMap, data, mutate])
+
+  // Start fast price polling after holdings are loaded
+  useFastPricePolling({
+    symbols,
+    onUpdate: handlePriceUpdate,
+    enabled: !!session?.user && symbols.length > 0 && Object.keys(holdingsMap).length > 0,
+  })
+
   // Calculate portfolio metrics
   // Cost Basis = Net Deposits (from timeseries), not position cost basis
   // Use totals from API if available (mark-to-market), otherwise calculate from enriched items
   const metrics = useMemo(() => {
+    // Prefer live totals from fast polling, then server-calculated totals, then fallback
+    if (liveTotals) {
+      return {
+        totalValue: liveTotals.tpv || 0,
+        totalCost: liveTotals.costBasis || 0,
+        totalReturn: liveTotals.totalReturn || 0,
+        totalReturnPercent: liveTotals.totalReturnPct || 0,
+        holdingCount: Array.isArray(enrichedItems) ? enrichedItems.filter((p: any) => (p.totalShares || 0) > 0).length : 0,
+        isPositive: (liveTotals.totalReturn || 0) >= 0
+      }
+    }
     // Prefer server-calculated totals (mark-to-market) if available
     if (data?.totals) {
       return {
