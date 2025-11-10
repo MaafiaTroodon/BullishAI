@@ -66,63 +66,95 @@ export async function GET(req: NextRequest) {
     return res
   }
 
-  // Enrich with fast concurrent quotes from our own quote endpoint
-  const enriched = await Promise.all(items.map(async (p) => {
-    try {
-      // Determine base URL dynamically
-      const protocol = req.headers.get('x-forwarded-proto') || 'http'
-      const host = req.headers.get('host') || 'localhost:3000'
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
-      
-      const r = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { 
-        cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json',
+  // Use mark-to-market calculation for real-time portfolio valuation
+  const { calculateMarkToMarket, savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
+  
+  try {
+    const mtm = await calculateMarkToMarket(items, bal, false) // R3A: wallet excluded from TPV
+    
+    // Save snapshot asynchronously (don't block response)
+    savePortfolioSnapshot(userId, mtm).catch(err => {
+      console.error('Error saving portfolio snapshot:', err)
+    })
+    
+    // Convert holdings to enriched format
+    const enriched = mtm.holdings.map(h => ({
+      symbol: h.symbol,
+      totalShares: h.shares,
+      avgPrice: h.avgPrice,
+      currentPrice: h.currentPrice,
+      totalValue: h.marketValue,
+      unrealizedPnl: h.unrealizedPnl,
+      unrealizedPnlPct: h.unrealizedPnlPct,
+      totalCost: h.costBasis,
+      // Keep original position fields
+      realizedPnl: items.find(p => p.symbol === h.symbol)?.realizedPnl || 0,
+    }))
+    
+    const res = NextResponse.json({ 
+      items: enriched, 
+      wallet: { balance: bal, cap: 1_000_000 },
+      totals: {
+        tpv: mtm.tpv,
+        costBasis: mtm.costBasis,
+        totalReturn: mtm.totalReturn,
+        totalReturnPct: mtm.totalReturnPct,
+      },
+      lastUpdated: mtm.lastUpdated,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+    return res
+  } catch (error: any) {
+    console.error('Mark-to-market calculation failed:', error)
+    // Fallback to basic enrichment if mark-to-market fails
+    const enriched = await Promise.all(items.map(async (p) => {
+      try {
+        const protocol = req.headers.get('x-forwarded-proto') || 'http'
+        const host = req.headers.get('host') || 'localhost:3000'
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
+        
+        const r = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { 
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        
+        if (!r.ok) throw new Error(`Quote API returned ${r.status}`)
+        const j = await r.json()
+        const price = j?.data?.price ?? j?.price ?? null
+        const totalValue = price ? price * p.totalShares : 0
+        const base = (p.totalCost || p.avgPrice * p.totalShares) || 0
+        const unreal = price ? (price - p.avgPrice) * p.totalShares : 0
+        const unrealPct = base > 0 ? (unreal / base) * 100 : 0
+        return { 
+          ...p, 
+          currentPrice: price, 
+          totalValue, 
+          unrealizedPnl: unreal, 
+          unrealizedPnlPct: unrealPct,
+          totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
         }
-      })
-      
-      if (!r.ok) {
-        throw new Error(`Quote API returned ${r.status}`)
+      } catch (err: any) {
+        return { 
+          ...p, 
+          currentPrice: null, 
+          totalValue: 0, 
+          unrealizedPnl: 0, 
+          unrealizedPnlPct: 0,
+          totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
+        }
       }
-      
-      const contentType = r.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Quote API returned non-JSON response')
-      }
-      
-      const j = await r.json()
-      const price = j?.data?.price ?? j?.price ?? null
-      const totalValue = price ? price * p.totalShares : 0
-      const base = (p.totalCost || p.avgPrice * p.totalShares) || 0
-      const unreal = price ? (price - p.avgPrice) * p.totalShares : 0
-      const unrealPct = base > 0 ? (unreal / base) * 100 : 0
-      return { 
-        ...p, 
-        currentPrice: price, 
-        totalValue, 
-        unrealizedPnl: unreal, 
-        unrealizedPnlPct: unrealPct,
-        totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
-      }
-    } catch (err: any) {
-      console.error(`Error enriching position ${p.symbol}:`, err.message)
-      return { 
-        ...p, 
-        currentPrice: null, 
-        totalValue: 0, 
-        unrealizedPnl: 0, 
-        unrealizedPnlPct: 0,
-        totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
-      }
-    }
-  }))
-  const res = NextResponse.json({ items: enriched, wallet: { balance: bal, cap: 1_000_000 } }, {
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  })
-  try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
-  return res
+    }))
+    
+    const res = NextResponse.json({ items: enriched, wallet: { balance: bal, cap: 1_000_000 } }, {
+      headers: { 'Content-Type': 'application/json' }
+    })
+    try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+    return res
+  }
 }
 
 export async function POST(req: NextRequest) {
