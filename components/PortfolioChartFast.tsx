@@ -28,6 +28,7 @@ export function PortfolioChartFast() {
   const snapshotThrottleRef = useRef(new SnapshotThrottle())
   const pointsRef = useRef<LineData[]>([])
   const rafPendingRef = useRef(false)
+  const [chartInitialized, setChartInitialized] = useState(false)
 
   // Fetch portfolio data
   const { data: pf } = useSWR(
@@ -218,6 +219,7 @@ export function PortfolioChartFast() {
 
         chartRef.current = chart
         seriesRef.current = series
+        setChartInitialized(true)
 
         // Load historical data
         const loadHistoricalData = async () => {
@@ -293,6 +295,7 @@ export function PortfolioChartFast() {
         chartRef.current.remove()
         chartRef.current = null
         seriesRef.current = null
+        setChartInitialized(false)
       }
     }
   }, [])
@@ -352,7 +355,17 @@ export function PortfolioChartFast() {
             : 'Loading...'}
         </div>
       </div>
-      <div ref={chartContainerRef} className="h-[400px] w-full" />
+      <div className="relative h-[400px] w-full">
+        {!chartInitialized && (
+          <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+              <p>Loading chart...</p>
+            </div>
+          </div>
+        )}
+        <div ref={chartContainerRef} className="h-full w-full" />
+      </div>
     </div>
   )
 }
