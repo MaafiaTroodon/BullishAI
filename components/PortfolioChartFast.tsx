@@ -147,22 +147,37 @@ export function PortfolioChartFast() {
     if (!chartContainerRef.current || chartRef.current) return
 
     let mounted = true
-    const container = chartContainerRef.current
+    let retryCount = 0
+    const maxRetries = 20
     
     function initializeChart() {
       if (!mounted || !chartContainerRef.current || chartRef.current) return
       
       const container = chartContainerRef.current
-      const containerWidth = container.clientWidth || container.offsetWidth
+      let containerWidth = container.clientWidth || container.offsetWidth
+      
+      // Fallback to getBoundingClientRect if clientWidth is 0
+      if (!containerWidth || containerWidth === 0) {
+        const rect = container.getBoundingClientRect()
+        containerWidth = rect.width
+      }
+      
+      // Use a minimum width of 400 if still no width (fallback)
+      if (!containerWidth || containerWidth === 0) {
+        containerWidth = 800
+      }
       
       // Ensure container has valid dimensions
-      if (!containerWidth || containerWidth === 0) {
-        // Retry after a short delay
-        setTimeout(() => {
-          if (mounted && chartContainerRef.current && !chartRef.current) {
-            initializeChart()
-          }
-        }, 100)
+      if (containerWidth < 100) {
+        retryCount++
+        if (retryCount < maxRetries) {
+          // Retry after a short delay
+          setTimeout(() => {
+            if (mounted && chartContainerRef.current && !chartRef.current) {
+              initializeChart()
+            }
+          }, 200)
+        }
         return
       }
 
@@ -241,10 +256,26 @@ export function PortfolioChartFast() {
               if (historicalPoints.length > 0 && seriesRef.current) {
                 pointsRef.current = historicalPoints
                 seriesRef.current.setData(historicalPoints)
+              } else if (seriesRef.current) {
+                // If no historical data, add a placeholder point
+                const now = Math.floor(Date.now() / 1000)
+                const placeholderValue = pf?.totals?.tpv || 0
+                if (placeholderValue > 0) {
+                  seriesRef.current.setData([{ time: now, value: placeholderValue }])
+                }
               }
+            } else if (seriesRef.current && pf?.totals?.tpv) {
+              // Fallback: use current portfolio value if no historical data
+              const now = Math.floor(Date.now() / 1000)
+              seriesRef.current.setData([{ time: now, value: pf.totals.tpv }])
             }
           } catch (error) {
             console.error('Error loading historical data:', error)
+            // Even if historical data fails, show current value
+            if (seriesRef.current && pf?.totals?.tpv) {
+              const now = Math.floor(Date.now() / 1000)
+              seriesRef.current.setData([{ time: now, value: pf.totals.tpv }])
+            }
           }
         }
 
@@ -257,34 +288,20 @@ export function PortfolioChartFast() {
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        const width = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth
+        const width = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || chartContainerRef.current.getBoundingClientRect().width
         if (width > 0) {
           chartRef.current.applyOptions({ width })
         }
       }
     }
 
-    // Try to initialize immediately, or wait for container to be ready
-    const containerWidth = container.clientWidth || container.offsetWidth
-    if (containerWidth > 0) {
-      initializeChart()
-    } else {
-      // Wait for container to be ready
-      const checkReady = setInterval(() => {
-        if (!mounted) {
-          clearInterval(checkReady)
-          return
-        }
-        const width = chartContainerRef.current?.clientWidth || chartContainerRef.current?.offsetWidth
-        if (width > 0 && !chartRef.current) {
-          clearInterval(checkReady)
-          initializeChart()
-        }
-      }, 50)
-
-      // Cleanup interval after 5 seconds
-      setTimeout(() => clearInterval(checkReady), 5000)
-    }
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!mounted || !chartContainerRef.current || chartRef.current) return
+        initializeChart()
+      })
+    })
 
     window.addEventListener('resize', handleResize)
 
@@ -298,7 +315,7 @@ export function PortfolioChartFast() {
         setChartInitialized(false)
       }
     }
-  }, [])
+  }, [pf?.totals?.tpv])
 
   // Update chart when portfolio data changes
   useEffect(() => {
