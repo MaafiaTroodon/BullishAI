@@ -322,20 +322,29 @@ export function PortfolioChartFast() {
           return
         }
 
-        // Add line series using the standard API
-        let series
-        try {
-          series = chart.addLineSeries({
-            color: '#10b981', // emerald-500
-            lineWidth: 2,
-            priceFormat: {
-              type: 'price',
-              precision: 2,
-              minMove: 0.01,
-            },
-          })
-        } catch (seriesError) {
-          console.error('Error calling addLineSeries:', seriesError)
+        // Add line series using the method we found (or use the one from direct call)
+        if (!series && addLineSeriesMethod) {
+          try {
+            series = addLineSeriesMethod.call(chart, {
+              color: '#10b981', // emerald-500
+              lineWidth: 2,
+              priceFormat: {
+                type: 'price',
+                precision: 2,
+                minMove: 0.01,
+              },
+            })
+          } catch (seriesError) {
+            console.error('Error calling addLineSeries:', seriesError)
+            if (chart && typeof chart.remove === 'function') {
+              chart.remove()
+            }
+            return
+          }
+        }
+        
+        if (!series) {
+          console.error('Failed to create series')
           if (chart && typeof chart.remove === 'function') {
             chart.remove()
           }
