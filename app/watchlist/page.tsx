@@ -5,6 +5,8 @@ import { Plus, Trash2, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 import TradingViewMiniChart from '@/components/TradingViewMiniChart'
 import { showToast } from '@/components/Toast'
+import { Reveal } from '@/components/anim/Reveal'
+import { StaggerGrid } from '@/components/anim/StaggerGrid'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -145,11 +147,12 @@ export default function WatchlistPage() {
     <div className="min-h-screen bg-slate-900">
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">My Watchlist</h1>
-            <p className="text-slate-400">Track your favorite stocks</p>
-          </div>
+        <Reveal variant="slide-left">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">My Watchlist</h1>
+              <p className="text-slate-400">Track your favorite stocks</p>
+            </div>
           <div className="flex items-center gap-4">
             <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white transition">
               <Plus className="h-4 w-4" />
