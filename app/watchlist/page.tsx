@@ -222,8 +222,8 @@ export default function WatchlistPage() {
                       const isStarred = starredItems.includes(symbol)
 
                       return (
+                        <Reveal key={symbol} variant="fade" delay={idx * 0.03} once={false}>
                         <tr
-                          key={symbol}
                           onClick={() => setSelectedSymbol(symbol)}
                           className={`border-b border-slate-700 hover:bg-slate-700/50 cursor-pointer transition ${
                             isSelected ? 'bg-blue-600/10' : ''
