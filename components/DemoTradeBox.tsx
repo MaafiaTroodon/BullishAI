@@ -5,6 +5,7 @@ import { showToast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
+import { authClient } from '@/lib/auth-client'
 
 type Props = {
   symbol: string
