@@ -12,6 +12,8 @@ import { AIInsights } from '@/components/AIInsights'
 import { PortfolioChartFast } from '@/components/PortfolioChartFast'
 import { PortfolioHoldings } from '@/components/PortfolioHoldings'
 import { PortfolioSummary } from '@/components/PortfolioSummary'
+import { Reveal } from '@/components/anim/Reveal'
+import { StaggerGrid } from '@/components/anim/StaggerGrid'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
