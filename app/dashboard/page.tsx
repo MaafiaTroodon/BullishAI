@@ -9,7 +9,7 @@ import { StockChart } from '@/components/charts/StockChart'
 import { NewsFeed } from '@/components/NewsFeed'
 import { DevStatus } from '@/components/DevStatus'
 import { AIInsights } from '@/components/AIInsights'
-import { PortfolioChartFast } from '@/components/PortfolioChartFast'
+import { PortfolioChart } from '@/components/PortfolioChart'
 import { PortfolioHoldings } from '@/components/PortfolioHoldings'
 import { PortfolioSummary } from '@/components/PortfolioSummary'
 import { Reveal } from '@/components/anim/Reveal'
@@ -117,10 +117,8 @@ export default function Dashboard() {
             <PortfolioSummary />
           </Reveal>
           
-          {/* Large prominent chart - fast canvas-based rendering */}
-          <Reveal variant="fade" delay={0.1}>
-            <PortfolioChartFast />
-          </Reveal>
+          {/* Large prominent chart */}
+          <PortfolioChart />
           
           {/* Holdings list below */}
           <Reveal variant="fade" delay={0.2}>

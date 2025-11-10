@@ -6,6 +6,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { createChart, ColorType, IChartApi, ISeriesApi, LineData } from 'lightweight-charts'
 import useSWR from 'swr'
 import { usePathname } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
@@ -15,43 +16,18 @@ import { authClient } from '@/lib/auth-client'
 import { useFastPricePolling } from '@/hooks/useFastPricePolling'
 import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from '@/lib/portfolio-mark-to-market-fast'
 
-// Dynamic import for lightweight-charts to ensure it only loads client-side
-let chartsModule: any = null
-const getChartsModule = async () => {
-  if (chartsModule) {
-    return chartsModule
-  }
-  try {
-    // Try importing the module - it should work in browser
-    chartsModule = await import('lightweight-charts')
-    
-    // Verify the exports
-    if (!chartsModule.createChart) {
-      console.error('createChart not found in module. Available:', Object.keys(chartsModule))
-      throw new Error('createChart not exported from lightweight-charts')
-    }
-    
-    return chartsModule
-  } catch (error) {
-    console.error('Error loading lightweight-charts:', error)
-    throw error
-  }
-}
-
 export function PortfolioChartFast() {
   const userId = useUserId()
   const pathname = usePathname()
   const { data: session } = authClient.useSession()
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<any>(null)
-  const seriesRef = useRef<any>(null)
+  const chartRef = useRef<IChartApi | null>(null)
+  const seriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const lastTPVRef = useRef<number | null>(null)
   const priceMapRef = useRef<Map<string, number>>(new Map())
   const snapshotThrottleRef = useRef(new SnapshotThrottle())
-  const pointsRef = useRef<Array<{ time: number; value: number }>>([])
+  const pointsRef = useRef<LineData[]>([])
   const rafPendingRef = useRef(false)
-  const [chartInitialized, setChartInitialized] = useState(false)
-  const [showFallback, setShowFallback] = useState(false)
 
   // Fetch portfolio data
   const { data: pf } = useSWR(
@@ -99,7 +75,7 @@ export function PortfolioChartFast() {
 
     // Update chart with new TPV point
     const now = Date.now()
-    const newPoint = {
+    const newPoint: LineData = {
       time: Math.floor(now / 1000), // Lightweight Charts uses Unix timestamp in seconds
       value: result.tpv,
     }
@@ -169,219 +145,46 @@ export function PortfolioChartFast() {
   useEffect(() => {
     if (!chartContainerRef.current || chartRef.current) return
 
-    let mounted = true
-    let retryCount = 0
-    const maxRetries = 20
+    const container = chartContainerRef.current
     
-    async function initializeChart() {
-      if (!mounted || !chartContainerRef.current || chartRef.current) return
+    function initializeChart() {
+      if (!chartContainerRef.current || chartRef.current) return
       
-      const container = chartContainerRef.current
-      let containerWidth = container.clientWidth || container.offsetWidth
-      
-      // Fallback to getBoundingClientRect if clientWidth is 0
-      if (!containerWidth || containerWidth === 0) {
-        const rect = container.getBoundingClientRect()
-        containerWidth = rect.width
-      }
-      
-      // Use a minimum width of 400 if still no width (fallback)
-      if (!containerWidth || containerWidth === 0) {
-        containerWidth = 800
-      }
-      
-      // Ensure container has valid dimensions
-      if (containerWidth < 100) {
-        retryCount++
-        if (retryCount < maxRetries) {
-          // Retry after a short delay
-          setTimeout(() => {
-            if (mounted && chartContainerRef.current && !chartRef.current) {
-              initializeChart()
-            }
-          }, 200)
-        }
-        return
-      }
-
       try {
-        // Load the charts module
-        let module
-        try {
-          module = await getChartsModule()
-          if (!module) {
-            console.error('Failed to load lightweight-charts module - returned null/undefined')
-            return
-          }
-        } catch (importError) {
-          console.error('Failed to import lightweight-charts:', importError)
+        const chart = createChart(chartContainerRef.current, {
+          layout: {
+            background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
+            textColor: '#94a3b8', // slate-400
+          },
+          grid: {
+            vertLines: { color: '#334155' }, // slate-700
+            horzLines: { color: '#334155' },
+          },
+          width: chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800,
+          height: 400,
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+          },
+        })
+
+        if (!chart || typeof chart.addLineSeries !== 'function') {
+          console.error('Chart initialization failed: addLineSeries not available', chart)
           return
         }
 
-        // Try to get createChart and ColorType from module
-        let createChart = module.createChart
-        let ColorType = module.ColorType
-        let LineSeriesApi = module.LineSeriesApi || module.LineSeries
-
-        // If not found, try default export
-        if (!createChart && module.default) {
-          createChart = module.default.createChart
-          ColorType = module.default.ColorType
-          LineSeriesApi = module.default.LineSeriesApi || module.default.LineSeries
-        }
-
-        // Verify createChart is available
-        if (!createChart || typeof createChart !== 'function') {
-          console.error('createChart is not a function. Module structure:', {
-            keys: Object.keys(module),
-            hasDefault: !!module.default,
-            defaultKeys: module.default ? Object.keys(module.default) : []
-          })
-          return
-        }
-
-        if (!ColorType) {
-          console.error('ColorType is not available in module')
-          return
-        }
-
-        // Verify container is a valid DOM element
-        if (!container || !(container instanceof HTMLElement)) {
-          console.error('Container is not a valid HTMLElement', container)
-          return
-        }
-
-        // Ensure container is visible and has dimensions
-        if (containerWidth < 100 || container.offsetHeight < 100) {
-          console.error('Container dimensions too small:', { width: containerWidth, height: container.offsetHeight })
-          return
-        }
-
-        let chart
-        try {
-          chart = createChart(container, {
-            layout: {
-              background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
-              textColor: '#94a3b8', // slate-400
-            },
-            grid: {
-              vertLines: { color: '#334155' }, // slate-700
-              horzLines: { color: '#334155' },
-            },
-            width: containerWidth,
-            height: 400,
-            timeScale: {
-              timeVisible: true,
-              secondsVisible: false,
-            },
-          })
-        } catch (createError) {
-          console.error('Error calling createChart:', createError)
-          return
-        }
-
-        if (!chart) {
-          console.error('Chart creation returned null/undefined')
-          return
-        }
-
-        // Wait a tick to ensure chart is fully initialized
-        await new Promise(resolve => setTimeout(resolve, 0))
-        
-        // The chart object has 'addSeries' method, not 'addLineSeries'
-        // We need to use addSeries with line series options
-        let series: any = null
-        
-        try {
-          // Try addLineSeries first (for compatibility)
-          if (typeof chart.addLineSeries === 'function') {
-            series = chart.addLineSeries({
-              color: '#10b981',
-              lineWidth: 2,
-              priceFormat: {
-                type: 'price',
-                precision: 2,
-                minMove: 0.01,
-              },
-            })
-          } 
-          // If that doesn't work, use addSeries (v5 API)
-          else if (typeof chart.addSeries === 'function') {
-            // In lightweight-charts v5, addSeries takes the series type as first param
-            // Try different approaches based on the API
-            try {
-              // Approach 1: addSeries('Line', options)
-              series = chart.addSeries('Line', {
-                color: '#10b981',
-                lineWidth: 2,
-                priceFormat: {
-                  type: 'price',
-                  precision: 2,
-                  minMove: 0.01,
-                },
-              })
-            } catch (e1: any) {
-              // Approach 2: addSeries({ type: 'Line', ...options })
-              try {
-                series = chart.addSeries({
-                  type: 'Line',
-                  color: '#10b981',
-                  lineWidth: 2,
-                  priceFormat: {
-                    type: 'price',
-                    precision: 2,
-                    minMove: 0.01,
-                  },
-                })
-              } catch (e2: any) {
-                // Approach 3: Just pass options (might infer type)
-                try {
-                  series = chart.addSeries({
-                    color: '#10b981',
-                    lineWidth: 2,
-                    priceFormat: {
-                      type: 'price',
-                      precision: 2,
-                      minMove: 0.01,
-                    },
-                  })
-                } catch (e3: any) {
-                  console.error('All addSeries attempts failed:', {
-                    e1: e1?.message,
-                    e2: e2?.message,
-                    e3: e3?.message
-                  })
-                  throw e3
-                }
-              }
-            }
-          } else {
-            throw new Error('Neither addLineSeries nor addSeries found on chart object')
-          }
-        } catch (seriesError: any) {
-          console.error('Error creating line series:', seriesError?.message || seriesError)
-          if (chart && typeof chart.remove === 'function') {
-            chart.remove()
-          }
-          return
-        }
-        
-        if (!series) {
-          console.error('Failed to create series - method returned null/undefined')
-          if (chart && typeof chart.remove === 'function') {
-            chart.remove()
-          }
-          return
-        }
-
-        if (!mounted) {
-          chart.remove()
-          return
-        }
+        const series = chart.addLineSeries({
+          color: '#10b981', // emerald-500
+          lineWidth: 2,
+          priceFormat: {
+            type: 'price',
+            precision: 2,
+            minMove: 0.01,
+          },
+        })
 
         chartRef.current = chart
         seriesRef.current = series
-        setChartInitialized(true)
 
         // Load historical data
         const loadHistoricalData = async () => {
@@ -391,38 +194,22 @@ export function PortfolioChartFast() {
             })
             const data = await response.json()
             
-            if (data?.series && Array.isArray(data.series) && seriesRef.current) {
-              const historicalPoints: Array<{ time: number; value: number }> = data.series
+            if (data?.series && Array.isArray(data.series)) {
+              const historicalPoints: LineData[] = data.series
                 .map((p: any) => ({
                   time: Math.floor((p.t || Date.now()) / 1000),
                   value: p.portfolio || p.portfolioAbs || 0,
                 }))
-                .filter((p) => p.value > 0)
-                .sort((a, b) => a.time - b.time)
+                .filter((p: LineData) => p.value > 0)
+                .sort((a: LineData, b: LineData) => (a.time as number) - (b.time as number))
 
-              if (historicalPoints.length > 0 && seriesRef.current) {
+              if (historicalPoints.length > 0) {
                 pointsRef.current = historicalPoints
-                seriesRef.current.setData(historicalPoints)
-              } else if (seriesRef.current) {
-                // If no historical data, add a placeholder point
-                const now = Math.floor(Date.now() / 1000)
-                const placeholderValue = pf?.totals?.tpv || 0
-                if (placeholderValue > 0) {
-                  seriesRef.current.setData([{ time: now, value: placeholderValue }])
-                }
+                series.setData(historicalPoints)
               }
-            } else if (seriesRef.current && pf?.totals?.tpv) {
-              // Fallback: use current portfolio value if no historical data
-              const now = Math.floor(Date.now() / 1000)
-              seriesRef.current.setData([{ time: now, value: pf.totals.tpv }])
             }
           } catch (error) {
             console.error('Error loading historical data:', error)
-            // Even if historical data fails, show current value
-            if (seriesRef.current && pf?.totals?.tpv) {
-              const now = Math.floor(Date.now() / 1000)
-              seriesRef.current.setData([{ time: now, value: pf.totals.tpv }])
-            }
           }
         }
 
@@ -435,34 +222,44 @@ export function PortfolioChartFast() {
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        const width = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || chartContainerRef.current.getBoundingClientRect().width
-        if (width > 0) {
-          chartRef.current.applyOptions({ width })
+        chartRef.current.applyOptions({
+          width: chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800,
+        })
+      }
+    }
+
+    // Ensure container has dimensions
+    const containerWidth = container.clientWidth || container.offsetWidth || 800
+    if (containerWidth === 0) {
+      // Wait for next frame if container isn't ready
+      requestAnimationFrame(() => {
+        if (!chartContainerRef.current || chartRef.current) return
+        initializeChart()
+        window.addEventListener('resize', handleResize)
+      })
+      return () => {
+        window.removeEventListener('resize', handleResize)
+        if (chartRef.current) {
+          chartRef.current.remove()
+          chartRef.current = null
+          seriesRef.current = null
         }
       }
     }
 
-    // Use requestAnimationFrame to ensure DOM is ready
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!mounted || !chartContainerRef.current || chartRef.current) return
-        initializeChart()
-      })
-    })
-
+    // Call initializeChart if container is ready
+    initializeChart()
     window.addEventListener('resize', handleResize)
 
     return () => {
-      mounted = false
       window.removeEventListener('resize', handleResize)
       if (chartRef.current) {
         chartRef.current.remove()
         chartRef.current = null
         seriesRef.current = null
-        setChartInitialized(false)
       }
     }
-  }, [pf?.totals?.tpv])
+  }, [])
 
   // Update chart when portfolio data changes
   useEffect(() => {
@@ -471,7 +268,7 @@ export function PortfolioChartFast() {
     const tpv = pf.totals.tpv
     if (lastTPVRef.current !== tpv) {
       const now = Math.floor(Date.now() / 1000)
-      const newPoint = { time: now, value: tpv }
+      const newPoint: LineData = { time: now, value: tpv }
       
       // Coalesce
       if (pointsRef.current.length > 0) {
@@ -499,17 +296,6 @@ export function PortfolioChartFast() {
     }
   }, [pf?.totals?.tpv])
 
-  // Fallback: Show simple message if chart fails to load after timeout
-  useEffect(() => {
-    if (!session?.user) return
-    const timer = setTimeout(() => {
-      if (!chartInitialized) {
-        setShowFallback(true)
-      }
-    }, 5000) // Show fallback after 5 seconds
-    return () => clearTimeout(timer)
-  }, [chartInitialized, session?.user])
-
   if (!session?.user) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -530,26 +316,7 @@ export function PortfolioChartFast() {
             : 'Loading...'}
         </div>
       </div>
-      <div className="relative h-[400px] w-full">
-        {!chartInitialized && !showFallback && (
-          <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-              <p>Loading chart...</p>
-            </div>
-          </div>
-        )}
-        {showFallback && !chartInitialized && (
-          <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10">
-            <div className="text-center">
-              <p className="mb-2">Chart unavailable</p>
-              <p className="text-xs text-slate-500">Portfolio value: {lastTPVRef.current !== null ? `$${lastTPVRef.current.toLocaleString()}` : 'Loading...'}</p>
-            </div>
-          </div>
-        )}
-        <div ref={chartContainerRef} className="h-full w-full" style={{ minHeight: '400px' }} />
-      </div>
+      <div ref={chartContainerRef} className="h-[400px] w-full" />
     </div>
   )
 }
-
