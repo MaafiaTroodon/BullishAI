@@ -89,11 +89,12 @@ export default function AlertsPage() {
   return (
     <div className="min-h-screen bg-slate-900">
       <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Price Alerts</h1>
-            <p className="text-slate-400 text-sm">Get notified when stocks hit your target prices</p>
-          </div>
+        <Reveal variant="slide-left">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Price Alerts</h1>
+              <p className="text-slate-400 text-sm">Get notified when stocks hit your target prices</p>
+            </div>
           <div className="flex items-center gap-3">
             <div className="bg-slate-800 border border-slate-700 rounded-lg p-1">
               {(['all','active','paused'] as const).map(f => (
