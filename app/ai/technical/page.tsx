@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { BarChart3, ArrowLeft, Search } from 'lucide-react'

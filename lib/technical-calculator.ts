@@ -219,16 +219,34 @@ export function calculateTechnical(
     }
   }
   
-  const prices = ohlc.map(c => c.close)
-  const volumes = ohlc.map(c => c.volume || 0)
+  // Filter out invalid data
+  const validOhlc = ohlc.filter(c => 
+    c.close > 0 && 
+    c.high >= c.low && 
+    c.high >= c.close && 
+    c.low <= c.close
+  )
+  
+  if (validOhlc.length < 5) {
+    return {
+      trend: 'RANGE',
+      support: null,
+      resistance: null,
+      momentum_score: null,
+      patterns: [],
+    }
+  }
+  
+  const prices = validOhlc.map(c => c.close)
+  const volumes = validOhlc.map(c => c.volume || 0)
   
   // Calculate indicators
   const trend = calculateTrend(prices)
-  const support = findSupport(ohlc.map(c => ({ low: c.low })))
-  const resistance = findResistance(ohlc.map(c => ({ high: c.high })))
+  const support = findSupport(validOhlc.map(c => ({ low: c.low })))
+  const resistance = findResistance(validOhlc.map(c => ({ high: c.high })))
   const rsi = calculateRSI(prices)
   const momentum_score = calculateMomentumScore(prices, volumes, rsi)
-  const patterns = detectPatterns(ohlc.map(c => ({ high: c.high, low: c.low, close: c.close })))
+  const patterns = detectPatterns(validOhlc.map(c => ({ high: c.high, low: c.low, close: c.close })))
   
   return {
     trend,
