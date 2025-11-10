@@ -8,17 +8,20 @@ export default function TodayPage() {
   const [data, setData] = useState<TodayRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/screens/strongest-today')
+      const d = await res.json()
+      setData(d.items || [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    fetch('/api/screens/strongest-today')
-      .then(r => r.json())
-      .then(d => {
-        setData(d.items || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
+    fetchData()
   }, [])
 
   if (loading) {
@@ -44,6 +47,7 @@ export default function TodayPage() {
       data={data}
       screenType="today"
       apiEndpoint="/api/screens/strongest-today"
+      onRefresh={fetchData}
     />
   )
 }
