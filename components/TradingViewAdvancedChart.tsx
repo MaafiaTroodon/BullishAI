@@ -50,6 +50,8 @@ function TradingViewAdvancedChart({
   const container = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Guard: only run on client, ensure container exists
+    if (typeof window === 'undefined') return
     if (!container.current) return
 
     // Clear previous content
@@ -60,6 +62,10 @@ function TradingViewAdvancedChart({
       'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
     script.type = 'text/javascript'
     script.async = true
+    
+    // Guard: ensure container still exists before setting innerHTML
+    if (!container.current) return
+    
     script.innerHTML = JSON.stringify({
       allow_symbol_change: allowSymbolChange,
       calendar,
