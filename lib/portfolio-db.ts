@@ -1,10 +1,20 @@
 /**
  * Database persistence layer for portfolio data
- * This ensures all portfolio, positions, trades, and wallet data is saved to the database
- * and persists across logouts and server restarts
+ * DEPRECATED: Use lib/db-sql.ts instead (direct Neon SQL)
+ * This file is kept for backward compatibility during migration
  */
 
-import { db } from './db'
+// Re-export from db-sql for backward compatibility
+export {
+  loadPortfolioFromDB,
+  savePositionToDB,
+  saveTradeToDB,
+  saveWalletTransactionToDB,
+  updateWalletBalanceInDB,
+  syncPositionsToDB,
+  getOrCreatePortfolio,
+} from './db-sql'
+
 import type { Position, Transaction } from './portfolio'
 
 /**

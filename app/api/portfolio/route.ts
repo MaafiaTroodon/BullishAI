@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance, TransactionSchema, syncTransactions, syncWalletTransactions } from '@/lib/portfolio'
+import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance, TransactionSchema, syncTransactions, syncWalletTransactions, ensurePortfolioLoaded } from '@/lib/portfolio'
 import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
