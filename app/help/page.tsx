@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Reveal } from '@/components/anim/Reveal'
 import Image from 'next/image'
 import { useState } from 'react'
@@ -33,26 +34,6 @@ const helpTopics = [
       'Alert types and conditions',
       'Managing notifications',
       'Troubleshooting alerts',
-    ],
-  },
-  {
-    title: 'API & Integrations',
-    icon: '🔌',
-    articles: [
-      'Getting your API key',
-      'API authentication',
-      'Rate limits and best practices',
-      'Webhook setup',
-    ],
-  },
-  {
-    title: 'Account & Billing',
-    icon: '💳',
-    articles: [
-      'Upgrading your plan',
-      'Managing subscriptions',
-      'Payment methods',
-      'Canceling your account',
     ],
   },
   {
@@ -127,19 +108,24 @@ export default function HelpPage() {
                     <div className="text-4xl mb-4">{topic.icon}</div>
                     <h3 className="text-xl font-semibold text-white mb-4">{topic.title}</h3>
                     <ul className="space-y-2">
-                      {topic.articles.map((article) => (
-                        <li key={article} className="flex items-start">
-                          <svg
-                            className="w-4 h-4 text-blue-400 mr-2 mt-1 flex-shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                          <span className="text-slate-400 text-sm hover:text-white transition">{article}</span>
-                        </li>
-                      ))}
+                      {topic.articles.map((article) => {
+                        const slug = article.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+                        return (
+                          <li key={article} className="flex items-start">
+                            <svg
+                              className="w-4 h-4 text-blue-400 mr-2 mt-1 flex-shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <Link href={`/help/${slug}`} className="text-slate-400 text-sm hover:text-white transition">
+                              {article}
+                            </Link>
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 </Reveal>
