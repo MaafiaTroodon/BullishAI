@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const section = detectSection(query)
     const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
 
-    // 3. Fetch real-time market data
+    // 3. Fetch real-time market data based on query intent
     const context: RAGContext = {
       symbol: symbol || tickers[0] || undefined,
       prices: {},
@@ -35,6 +35,37 @@ export async function POST(req: NextRequest) {
         indices: {},
       },
       news: [],
+    }
+
+    // Fetch market indices for quick insights
+    if (section === 'Quick Insights' || query.toLowerCase().includes('market') || query.toLowerCase().includes('index')) {
+      try {
+        const indicesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=SPY,QQQ,DIA,IWM,VIX`)
+        const indices = await indicesRes.json().catch(() => ({ quotes: [] }))
+        
+        indices.quotes?.forEach((q: any) => {
+          const sym = q.symbol
+          const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+          const change = q.data ? parseFloat(q.data.change || 0) : parseFloat(q.change || 0)
+          const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+          
+          if (sym && price > 0) {
+            context.prices![sym] = {
+              price,
+              change,
+              changePercent,
+              timestamp: Date.now(),
+            }
+            context.marketData!.indices[sym] = {
+              value: price,
+              change,
+              changePercent,
+            }
+          }
+        })
+      } catch (error) {
+        console.error('Failed to fetch indices:', error)
+      }
     }
 
     // Fetch quotes for detected tickers
@@ -61,6 +92,17 @@ export async function POST(req: NextRequest) {
         })
       } catch (error) {
         console.error('Failed to fetch quotes:', error)
+      }
+    }
+
+    // Fetch news for news-related queries
+    if (query.toLowerCase().includes('news') || query.toLowerCase().includes('headline') || section === 'Quick Insights') {
+      try {
+        const newsRes = await fetch(`${req.nextUrl.origin}/api/news/movers?limit=10`)
+        const news = await newsRes.json().catch(() => ({ items: [] }))
+        context.news = news.items || []
+      } catch (error) {
+        console.error('Failed to fetch news:', error)
       }
     }
 
