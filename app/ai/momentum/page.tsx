@@ -58,26 +58,36 @@ export default function MomentumPage() {
             <div className="space-y-4">
               {data?.stocks?.slice(0, 5).map((stock: any, idx: number) => (
                 <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.1}>
-                  <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
-                          {idx + 1}
+                  <Link href={`/stocks/${stock.symbol}`}>
+                    <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
+                            <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+                            <div className="mt-2">
+                              <span className="px-2 py-1 bg-orange-600/20 text-orange-400 text-xs font-semibold rounded">
+                                Short-term Trend Continuation
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
-                          <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-white mb-1">${stock.price?.toFixed(2)}</div>
+                          <div className={`text-lg font-semibold ${stock.momentum_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {stock.momentum_5d >= 0 ? '+' : ''}{stock.momentum_5d?.toFixed(2)}%
+                          </div>
+                          <div className="text-sm text-slate-400 mt-1">5-day momentum</div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Vol: {stock.volume ? (stock.volume / 1e6).toFixed(1) + 'M' : 'N/A'}
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-white mb-1">${stock.price?.toFixed(2)}</div>
-                        <div className={`text-lg font-semibold ${stock.momentum_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {stock.momentum_5d >= 0 ? '+' : ''}{stock.momentum_5d?.toFixed(2)}%
-                        </div>
-                        <div className="text-sm text-slate-400 mt-1">5-day momentum</div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </Reveal>
               ))}
             </div>

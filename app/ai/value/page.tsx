@@ -56,41 +56,63 @@ export default function ValuePage() {
               </p>
             </Reveal>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {data?.stocks?.map((stock: any, idx: number) => (
-                <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
-                  <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
-                        <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-white">${stock.price?.toFixed(2)}</div>
-                        <div className={`text-sm ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {stock.change >= 0 ? '+' : ''}{stock.change?.toFixed(2)}%
+            {data?.stocks && data.stocks.length > 0 ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {data.stocks.map((stock: any, idx: number) => (
+                  <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
+                    <Link href={`/stocks/${stock.symbol}`}>
+                      <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
+                            <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-white">${stock.price?.toFixed(2)}</div>
+                            <div className={`text-sm ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stock.change >= 0 ? '+' : ''}{stock.change?.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <span className="px-2 py-1 bg-green-600/20 text-green-400 text-xs font-semibold rounded">
+                            Analyst Undervalued
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-3 text-sm">
+                          <div>
+                            <div className="text-slate-400 mb-1">P/E</div>
+                            <div className="font-semibold text-white">{stock.pe?.toFixed(1)}</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 mb-1">ROE</div>
+                            <div className="font-semibold text-white">{stock.roe?.toFixed(1)}%</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 mb-1">Growth</div>
+                            <div className="font-semibold text-white">{stock.revenue_growth?.toFixed(1)}%</div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-3 pt-3 border-t border-slate-700">
+                          <div className="text-xs text-slate-400">
+                            Quality Score: <span className="text-white font-semibold">{stock.quality_score?.toFixed(1)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <div className="text-slate-400 mb-1">P/E</div>
-                        <div className="font-semibold text-white">{stock.pe?.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-slate-400 mb-1">ROE</div>
-                        <div className="font-semibold text-white">{stock.roe?.toFixed(1)}%</div>
-                      </div>
-                      <div>
-                        <div className="text-slate-400 mb-1">Growth</div>
-                        <div className="font-semibold text-white">{stock.revenue_growth?.toFixed(1)}%</div>
-                      </div>
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
+                    </Link>
+                  </Reveal>
+                ))}
+              </div>
+            ) : (
+              <Reveal variant="fade">
+                <div className="bg-slate-800/50 rounded-xl p-8 border border-slate-700 text-center">
+                  <p className="text-slate-400">No value stocks found matching the criteria. Try again in a moment.</p>
+                </div>
+              </Reveal>
+            )}
           </>
         )}
       </div>
