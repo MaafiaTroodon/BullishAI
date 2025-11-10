@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import TradingViewSingleTicker from './TradingViewSingleTicker'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
+import { authClient } from '@/lib/auth-client'
 
 export function PortfolioHoldings() {
   const router = useRouter()
