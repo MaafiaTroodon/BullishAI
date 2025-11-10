@@ -130,9 +130,10 @@ export default function AlertsPage() {
                     <button onClick={() => removeAlert(a.id)} className="px-2 py-1 rounded-md text-xs font-semibold bg-red-600 text-white">Delete</button>
                   </div>
                 </div>
-              ))}
+                ))}
+              </StaggerGrid>
             </div>
-          </div>
+          </Reveal>
         )}
 
         {open && (
