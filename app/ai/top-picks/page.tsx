@@ -18,8 +18,16 @@ const themes = [
 export default function TopPicksPage() {
   const [selectedTheme, setSelectedTheme] = useState('value')
 
+  // Use direct screener endpoints instead of AI screener to avoid JSON format issues
+  const getEndpoint = () => {
+    if (selectedTheme === 'value') return '/api/screeners/value-quality'
+    if (selectedTheme === 'momentum') return '/api/screeners/momentum?window=5d'
+    if (selectedTheme === 'dividend') return '/api/screeners/dividend-momentum'
+    return '/api/screeners/value-quality' // quality uses value-quality
+  }
+
   const { data, error, isLoading } = useSWR(
-    `/api/ai/screener?type=${selectedTheme === 'value' ? 'value-quality' : selectedTheme === 'momentum' ? 'momentum' : selectedTheme === 'dividend' ? 'dividend-momentum' : 'value-quality'}`,
+    getEndpoint(),
     fetcher,
     { refreshInterval: 300000 }
   )
