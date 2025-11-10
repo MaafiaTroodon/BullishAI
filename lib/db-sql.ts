@@ -76,31 +76,31 @@ export async function loadPortfolioFromDB(userId: string) {
   const client = await pool.connect()
 
   try {
-    // Get portfolio with all related data
+    // Get portfolio with all related data (use camelCase column names)
     const [portfolioResult, positionsResult, tradesResult, walletTxResult] = await Promise.all([
-      client.query('SELECT wallet_balance FROM portfolios WHERE id = $1', [portfolioId]),
+      client.query('SELECT "walletBalance" FROM portfolios WHERE id = $1', [portfolioId]),
       client.query(
-        'SELECT symbol, total_shares, avg_price, total_cost, realized_pnl FROM positions WHERE portfolio_id = $1 AND total_shares > 0',
+        'SELECT symbol, "totalShares", "avgPrice", "totalCost", "realizedPnl" FROM positions WHERE "portfolioId" = $1 AND "totalShares" > 0',
         [portfolioId]
       ),
       client.query(
-        'SELECT id, symbol, action, price, quantity, timestamp, note FROM trades WHERE portfolio_id = $1 ORDER BY timestamp DESC',
+        'SELECT id, symbol, action, price, quantity, timestamp, note FROM trades WHERE "portfolioId" = $1 ORDER BY timestamp DESC',
         [portfolioId]
       ),
       client.query(
-        'SELECT id, action, amount, timestamp, method FROM wallet_transactions WHERE portfolio_id = $1 ORDER BY timestamp DESC',
+        'SELECT id, action, amount, timestamp, method FROM wallet_transactions WHERE "portfolioId" = $1 ORDER BY timestamp DESC',
         [portfolioId]
       ),
     ])
 
-    const walletBalance = portfolioResult.rows[0]?.wallet_balance || 0
+    const walletBalance = portfolioResult.rows[0]?.walletBalance || 0
 
     const positions = positionsResult.rows.map((row: any) => ({
       symbol: row.symbol,
-      totalShares: parseFloat(row.total_shares) || 0,
-      avgPrice: parseFloat(row.avg_price) || 0,
-      totalCost: parseFloat(row.total_cost) || 0,
-      realizedPnl: parseFloat(row.realized_pnl) || 0,
+      totalShares: parseFloat(row.totalShares) || 0,
+      avgPrice: parseFloat(row.avgPrice) || 0,
+      totalCost: parseFloat(row.totalCost) || 0,
+      realizedPnl: parseFloat(row.realizedPnl) || 0,
       marketValue: 0, // Will be enriched by API
     }))
 
