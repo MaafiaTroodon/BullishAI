@@ -24,14 +24,17 @@ export function PortfolioChart() {
   const { data: session } = authClient.useSession()
   
   // Update frequently for real-time portfolio value based on market session
-  // During market hours: refresh every 15 seconds for live price updates
-  // When closed: refresh every 60 seconds
+  // During market hours: refresh every 15-30 seconds for live price updates (mark-to-market)
+  // When closed: refresh every 60 seconds (prices frozen)
   // Only fetch when user is logged in
   const { data: pf, mutate: mutatePf } = useSWR(
     session?.user ? '/api/portfolio?enrich=1' : null,
     safeJsonFetcher,
     { 
-      refreshInterval: session?.user ? portfolioRefreshInterval : 0,
+      // Real-time mark-to-market: poll every 20s during market hours
+      refreshInterval: session?.user 
+        ? (marketSession.session === 'OPEN' ? 20000 : portfolioRefreshInterval)
+        : 0,
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user,
       // Dedupe requests to prevent duplicate fetches during navigation

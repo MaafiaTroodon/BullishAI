@@ -24,14 +24,17 @@ export function PortfolioSummary() {
   const refreshInterval = getRefreshInterval(marketSession.session)
   
   // Update frequently for real-time portfolio value based on market session
-  // During market hours: refresh every 15 seconds for live price updates
-  // When closed: refresh every 60 seconds
+  // During market hours: refresh every 15-30 seconds for live price updates (mark-to-market)
+  // When closed: refresh every 60 seconds (prices frozen)
   // Only fetch when user is logged in
   const { data, isLoading, mutate } = useSWR(
     session?.user ? '/api/portfolio?enrich=1' : null,
     fetcher,
     { 
-      refreshInterval: session?.user ? refreshInterval : 0, // Stop refreshing when logged out
+      // Real-time mark-to-market: poll every 15-30s during market hours
+      refreshInterval: session?.user 
+        ? (marketSession.session === 'OPEN' ? 20000 : refreshInterval) // 20s during market hours, slower when closed
+        : 0, // Stop refreshing when logged out
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user,
       // Dedupe requests to prevent duplicate fetches during navigation
@@ -192,7 +195,21 @@ export function PortfolioSummary() {
 
   // Calculate portfolio metrics
   // Cost Basis = Net Deposits (from timeseries), not position cost basis
+  // Use totals from API if available (mark-to-market), otherwise calculate from enriched items
   const metrics = useMemo(() => {
+    // Prefer server-calculated totals (mark-to-market) if available
+    if (data?.totals) {
+      return {
+        totalValue: data.totals.tpv || 0,
+        totalCost: data.totals.costBasis || 0,
+        totalReturn: data.totals.totalReturn || 0,
+        totalReturnPercent: data.totals.totalReturnPct || 0,
+        holdingCount: Array.isArray(enrichedItems) ? enrichedItems.filter((p: any) => (p.totalShares || 0) > 0).length : 0,
+        isPositive: (data.totals.totalReturn || 0) >= 0
+      }
+    }
+
+    // Fallback: calculate from enriched items
     let totalValue = 0
     let totalCost = 0
     let realizedPnl = 0
@@ -225,7 +242,6 @@ export function PortfolioSummary() {
     })
 
     // Cost Basis = sum of (avgPrice * totalShares) for all open positions
-    // This is the money invested that's still tied to open positions
     enrichedItems.forEach((p: any) => {
       if (p && typeof p === 'object' && (p.totalShares || 0) > 0) {
         const cost = p.totalCost || (p.avgPrice ? p.avgPrice * p.totalShares : 0) || 0
@@ -233,7 +249,7 @@ export function PortfolioSummary() {
       }
     })
 
-    // Total return = Portfolio Value - Cost Basis (Net Deposits)
+    // Total return = Portfolio Value - Cost Basis
     const totalReturn = totalValue - totalCost
     const totalReturnPercent = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
 
@@ -245,7 +261,7 @@ export function PortfolioSummary() {
       holdingCount,
       isPositive: totalReturn >= 0
     }
-  }, [JSON.stringify(enrichedItems), timeseriesData])
+  }, [data?.totals, JSON.stringify(enrichedItems), timeseriesData])
 
   // Only show loading if we truly have no data (not just revalidating)
   if (isLoading && !data && enrichedItems.length === 0 && localItems.length === 0) {

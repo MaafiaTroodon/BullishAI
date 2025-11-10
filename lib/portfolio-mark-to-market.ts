@@ -3,7 +3,7 @@
  * Calculates real-time portfolio value using live prices
  */
 
-import { getQuoteWithFallback } from '@/lib/providers/market-data'
+import { getQuoteWithFallback, type QuoteResult } from '@/lib/providers/market-data'
 import type { Position } from './portfolio'
 
 export interface MarkToMarketResult {
@@ -40,6 +40,7 @@ export async function calculateMarkToMarket(
   const quotePromises = positions.map(async (pos) => {
     try {
       const quote = await getQuoteWithFallback(pos.symbol)
+      // getQuoteWithFallback returns QuoteResult with price property
       return {
         symbol: pos.symbol,
         price: quote.price,

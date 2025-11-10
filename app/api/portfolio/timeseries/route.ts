@@ -510,6 +510,88 @@ export async function GET(req: NextRequest) {
       }
     })
     
+    // Try to get portfolio snapshots first (more accurate historical data)
+    try {
+      const snapshots = await getPortfolioTimeSeries(userId, range)
+      
+      // If we have snapshots, merge with live data
+      if (snapshots.length > 0) {
+        // Get current mark-to-market TPV
+        const positions = listPositions(userId)
+        const { getWalletBalance } = await import('@/lib/portfolio')
+        const walletBalance = getWalletBalance(userId)
+        
+        try {
+          const mtm = await calculateMarkToMarket(positions, walletBalance, false)
+          const currentPoint = { t: mtm.lastUpdated, y: mtm.tpv }
+          
+          // Merge snapshots with current point (avoid duplicates)
+          const allPoints = [...snapshots]
+          if (snapshots.length === 0 || snapshots[snapshots.length - 1].t < currentPoint.t - 60000) {
+            // Only add current point if it's more than 1 minute newer than last snapshot
+            allPoints.push(currentPoint)
+          }
+          
+          // Convert to series format
+          const snapshotSeries = allPoints.map((point, idx) => ({
+            t: point.t,
+            portfolio: point.y,
+            holdings: point.y, // Holdings = TPV (wallet excluded)
+            costBasis: 0, // Will be calculated if needed
+            netInvested: 0,
+            deltaFromStart$: idx === 0 ? 0 : point.y - allPoints[0].y,
+            deltaFromStartPct: idx === 0 ? 0 : allPoints[0].y > 0 ? ((point.y - allPoints[0].y) / allPoints[0].y) * 100 : 0,
+            overallReturn$: 0, // Will be calculated from cost basis
+            overallReturnPct: 0
+          }))
+          
+          return NextResponse.json({
+            range,
+            granularity: gran,
+            currency: 'USD',
+            series: snapshotSeries,
+            meta: {
+              symbols,
+              hasFx: false,
+              lastQuoteTs: new Date().toISOString(),
+              startIndex: 0,
+              startPortfolioAbs: allPoints[0]?.y || 0
+            }
+          })
+        } catch {
+          // Fallback to snapshots only
+          const snapshotSeries = snapshots.map((point, idx) => ({
+            t: point.t,
+            portfolio: point.y,
+            holdings: point.y,
+            costBasis: 0,
+            netInvested: 0,
+            deltaFromStart$: idx === 0 ? 0 : point.y - snapshots[0].y,
+            deltaFromStartPct: idx === 0 ? 0 : snapshots[0].y > 0 ? ((point.y - snapshots[0].y) / snapshots[0].y) * 100 : 0,
+            overallReturn$: 0,
+            overallReturnPct: 0
+          }))
+          
+          return NextResponse.json({
+            range,
+            granularity: gran,
+            currency: 'USD',
+            series: snapshotSeries,
+            meta: {
+              symbols,
+              hasFx: false,
+              lastQuoteTs: new Date().toISOString(),
+              startIndex: 0,
+              startPortfolioAbs: snapshots[0]?.y || 0
+            }
+          })
+        }
+      }
+    } catch (error) {
+      // If snapshots fail, fall back to calculated points
+      console.warn('Portfolio snapshots not available, using calculated points:', error)
+    }
+    
     return NextResponse.json({
       range,
       granularity: gran,
