@@ -52,6 +52,52 @@ type Portfolio = {
 }
 
 const store: Record<string, Portfolio> = {}
+const dbLoadPromises: Record<string, Promise<void>> = {}
+
+/**
+ * Load portfolio from database into in-memory store
+ * This is called once per user session to hydrate the in-memory store
+ */
+async function loadPortfolioFromDB(userId: string): Promise<void> {
+  if (dbLoadPromises[userId]) {
+    await dbLoadPromises[userId]
+    return
+  }
+
+  const loadPromise = (async () => {
+    try {
+      const { loadPortfolioFromDB: loadFromDB } = await import('@/lib/portfolio-db')
+      const dbData = await loadFromDB(userId)
+      
+      // Convert positions array to object format
+      const positionsObj: Record<string, Position> = {}
+      dbData.positions.forEach(p => {
+        positionsObj[p.symbol] = p
+      })
+      
+      store[userId] = {
+        positions: positionsObj,
+        transactions: dbData.transactions,
+        walletBalance: dbData.walletBalance,
+        walletTransactions: dbData.walletTransactions,
+      }
+    } catch (error) {
+      console.error(`Error loading portfolio from DB for user ${userId}:`, error)
+      // Fallback to empty portfolio if DB load fails
+      store[userId] = {
+        positions: {},
+        transactions: [],
+        walletBalance: 0,
+        walletTransactions: [],
+      }
+    } finally {
+      delete dbLoadPromises[userId]
+    }
+  })()
+
+  dbLoadPromises[userId] = loadPromise
+  await loadPromise
+}
 
 function getPf(userId: string): Portfolio {
   // Always initialize empty portfolio for new users
@@ -63,8 +109,21 @@ function getPf(userId: string): Portfolio {
       walletBalance: 0, 
       walletTransactions: [] 
     }
+    // Load from DB in background (non-blocking)
+    loadPortfolioFromDB(userId).catch(err => {
+      console.error('Background DB load failed:', err)
+    })
   }
   return store[userId]
+}
+
+/**
+ * Ensure portfolio is loaded from DB (for API routes)
+ */
+export async function ensurePortfolioLoaded(userId: string): Promise<void> {
+  if (!store[userId]) {
+    await loadPortfolioFromDB(userId)
+  }
 }
 
 // Initialize wallet from persisted balance (called from API routes)
@@ -123,7 +182,10 @@ export function mergePositions(userId: string, positions: Position[]): void {
   }
 }
 
-export function upsertTrade(userId: string, input: TradeInput): { position: Position; transaction: Transaction } {
+export async function upsertTrade(userId: string, input: TradeInput): Promise<{ position: Position; transaction: Transaction }> {
+  // Ensure portfolio is loaded from DB
+  await ensurePortfolioLoaded(userId)
+  
   const pf = getPf(userId)
   const s = input.symbol.toUpperCase()
   const existing = pf.positions[s] || { symbol: s, totalShares: 0, avgPrice: 0, marketValue: 0, totalCost: 0, realizedPnl: 0 }
@@ -168,6 +230,16 @@ export function upsertTrade(userId: string, input: TradeInput): { position: Posi
     const proceeds = input.price * sellQty
     pf.walletBalance = currentBalance + proceeds
   }
+
+  // Save to database (non-blocking)
+  const { savePositionToDB, saveTradeToDB, updateWalletBalanceInDB } = await import('@/lib/portfolio-db')
+  Promise.all([
+    savePositionToDB(userId, pf.positions[s]),
+    saveTradeToDB(userId, transaction),
+    updateWalletBalanceInDB(userId, pf.walletBalance),
+  ]).catch(err => {
+    console.error('Error saving trade to DB:', err)
+  })
 
   return { position: pf.positions[s], transaction }
 }
