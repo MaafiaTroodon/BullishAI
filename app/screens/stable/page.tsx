@@ -8,17 +8,20 @@ export default function StablePage() {
   const [data, setData] = useState<StableRow[]>([])
   const [loading, setLoading] = useState(true)
 
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/screens/stable-growth')
+      const d = await res.json()
+      setData(d.items || [])
+      setLoading(false)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    fetch('/api/screens/stable-growth')
-      .then(r => r.json())
-      .then(d => {
-        setData(d.items || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
+    fetchData()
   }, [])
 
   if (loading) {
