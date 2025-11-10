@@ -13,10 +13,10 @@ export function PortfolioHoldings() {
   const storageKey = getUserStorageKey('bullish_pf_positions', userId)
   const { data, isLoading, error, mutate } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { 
     refreshInterval: 2000,
-    // Keep previous data during revalidation to prevent $0 flicker
-    keepPreviousData: true,
     // Don't show error retry to prevent flicker
     shouldRetryOnError: false,
+    // Prevent showing loading state during revalidation (SWR will use cached data)
+    revalidateIfStale: true,
   })
   const [localItems, setLocalItems] = useState<any[]>([])
   
