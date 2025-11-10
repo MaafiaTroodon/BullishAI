@@ -35,11 +35,17 @@ export function PortfolioChart() {
   })
   
   // Revalidate portfolio data on route change to ensure consistency
+  // Use a ref to track last pathname to avoid unnecessary revalidations
+  const lastPathnameRef = useRef<string | null>(null)
   useEffect(() => {
-    if (userId) {
-      mutatePf()
+    if (userId && pathname !== lastPathnameRef.current) {
+      lastPathnameRef.current = pathname
+      // Only revalidate if we have existing data (to prevent initial $0 flicker)
+      if (pf) {
+        mutatePf()
+      }
     }
-  }, [pathname, userId, mutatePf])
+  }, [pathname, userId, mutatePf, pf])
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Map internal ranges to API ranges (consistent mapping) - REMOVED 1H

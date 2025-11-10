@@ -50,11 +50,17 @@ export function GlobalNavbar() {
   }, [wallet?.balance])
   
   // Revalidate wallet on route change to ensure fresh data
+  // Use a ref to track last pathname to avoid unnecessary revalidations
+  const lastPathnameRef = useRef<string | null>(null)
   useEffect(() => {
-    if (session?.user) {
-      mutateWallet()
+    if (session?.user && pathname !== lastPathnameRef.current) {
+      lastPathnameRef.current = pathname
+      // Only revalidate if we have existing data (to prevent initial $0 flicker)
+      if (wallet) {
+        mutateWallet()
+      }
     }
-  }, [pathname, session?.user, mutateWallet])
+  }, [pathname, session?.user, mutateWallet, wallet])
   
   useEffect(() => {
     function onWalletUpd() { 
