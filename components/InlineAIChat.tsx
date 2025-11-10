@@ -384,6 +384,14 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">{renderMarkdown(message.text)}</p>
+                    {/* Model Badge - Show on bot messages */}
+                    {message.sender === 'bot' && message.id !== '1' && (
+                      <div className="mt-2 pt-2 border-t border-slate-700/50">
+                        <span className="text-xs text-slate-400">
+                          Powered by {message.data?.modelBadge || 'AI'}
+                        </span>
+                      </div>
+                    )}
                     {message.data && message.data.symbol && (
                       <div className="mt-3 flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
                         <div>
