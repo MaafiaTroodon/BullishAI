@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { TrendingUp, TrendingDown } from 'lucide-react'
@@ -8,6 +8,7 @@ import { MarketSessionBadge } from './MarketSessionBadge'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
+import { authClient } from '@/lib/auth-client'
 
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
@@ -15,27 +16,42 @@ export function PortfolioSummary() {
   const userId = useUserId()
   const pathname = usePathname()
   const storageKey = getUserStorageKey('bullish_pf_positions', userId)
+  const { data: session } = authClient.useSession()
+  const { mutate: globalMutate } = useSWRConfig()
   
   // Get market session for dynamic refresh interval
-  const session = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
-  const refreshInterval = getRefreshInterval(session.session)
+  const marketSession = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
+  const refreshInterval = getRefreshInterval(marketSession.session)
   
   // Update frequently for real-time portfolio value based on market session
   // During market hours: refresh every 15 seconds for live price updates
   // When closed: refresh every 60 seconds
-  const { data, isLoading, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { 
-    refreshInterval: refreshInterval,
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true,
-    // Dedupe requests to prevent duplicate fetches during navigation
-    dedupingInterval: 2000,
-    // Revalidate on mount to ensure fresh data on route changes
-    revalidateOnMount: true,
-    // Don't show error retry to prevent flicker
-    shouldRetryOnError: false,
-    // Prevent showing loading state during revalidation (SWR will use cached data)
-    revalidateIfStale: true,
-  })
+  // Only fetch when user is logged in
+  const { data, isLoading, mutate } = useSWR(
+    session?.user ? '/api/portfolio?enrich=1' : null,
+    fetcher,
+    { 
+      refreshInterval: session?.user ? refreshInterval : 0, // Stop refreshing when logged out
+      revalidateOnFocus: !!session?.user,
+      revalidateOnReconnect: !!session?.user,
+      // Dedupe requests to prevent duplicate fetches during navigation
+      dedupingInterval: 2000,
+      // Revalidate on mount to ensure fresh data on route changes
+      revalidateOnMount: true,
+      // Don't show error retry to prevent flicker
+      shouldRetryOnError: false,
+      // Prevent showing loading state during revalidation (SWR will use cached data)
+      revalidateIfStale: true,
+    }
+  )
+  
+  // Clear cached data when user logs out
+  useEffect(() => {
+    if (!session?.user) {
+      globalMutate('/api/portfolio?enrich=1', undefined, { revalidate: false })
+      globalMutate('/api/portfolio/timeseries', undefined, { revalidate: false })
+    }
+  }, [session?.user, globalMutate])
   
   // Revalidate portfolio data on route change to ensure consistency
   // Use a ref to track last pathname to avoid unnecessary revalidations
@@ -52,7 +68,12 @@ export function PortfolioSummary() {
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Fetch timeseries for Net Deposits (Cost Basis) - less frequent since it's historical
-  const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 30000 })
+  // Only fetch when user is logged in
+  const { data: timeseriesData } = useSWR(
+    session?.user ? '/api/portfolio/timeseries?range=ALL&gran=1d' : null,
+    safeJsonFetcher,
+    { refreshInterval: session?.user ? 30000 : 0 }
+  )
   
   useEffect(() => {
     if (!storageKey) {
