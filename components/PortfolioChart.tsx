@@ -33,7 +33,7 @@ export function PortfolioChart() {
     { 
       // Real-time mark-to-market: poll every 20s during market hours
       refreshInterval: session?.user 
-        ? (marketSession.session === 'OPEN' ? 20000 : portfolioRefreshInterval)
+        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 20000 : portfolioRefreshInterval)
         : 0,
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user,
@@ -80,17 +80,20 @@ export function PortfolioChart() {
                chartRange === '1week' ? '1h' : '1d'
   
   // Get refresh interval for timeseries (same as portfolio)
-  const timeseriesRefreshInterval = getRefreshInterval(session.session)
+  const timeseriesRefreshInterval = getRefreshInterval(marketSession.session)
   
   // Fetch timeseries data - key includes range and gran for proper caching
-  // Refresh more frequently during market hours for real-time updates
+  // Refresh more frequently during market hours for real-time updates (mark-to-market)
   const { data: timeseriesData, error: timeseriesError, mutate: mutateTimeseries } = useSWR(
-    `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
+    session?.user ? `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}` : null,
     safeJsonFetcher,
     { 
-      refreshInterval: timeseriesRefreshInterval,
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true
+      // Real-time mark-to-market: poll every 20s during market hours
+      refreshInterval: session?.user 
+        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 20000 : timeseriesRefreshInterval)
+        : 0,
+      revalidateOnFocus: !!session?.user,
+      revalidateOnReconnect: !!session?.user
     }
   )
   
@@ -182,12 +185,12 @@ export function PortfolioChart() {
       return []
     }
     
-    // Map timeseries data directly - trust the API calculation
+    // Map timeseries data directly - use portfolio (TPV) from mark-to-market snapshots
     return timeseriesData.series.map((p: any) => ({
       t: p.t,
-      value: p.portfolioAbs || 0,
-      costBasis: p.costBasisAbs || 0,
-      netInvested: p.netInvestedAbs || 0,
+      value: p.portfolio || p.portfolioAbs || 0, // Use portfolio (TPV) from snapshots
+      costBasis: p.costBasis || p.costBasisAbs || 0,
+      netInvested: p.netInvested || p.netInvestedAbs || 0,
       deltaFromStart$: p.deltaFromStart$ || 0,
       deltaFromStartPct: p.deltaFromStartPct || 0,
       overallReturn$: p.overallReturn$ || 0,

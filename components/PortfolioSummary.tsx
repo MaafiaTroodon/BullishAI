@@ -33,7 +33,7 @@ export function PortfolioSummary() {
     { 
       // Real-time mark-to-market: poll every 15-30s during market hours
       refreshInterval: session?.user 
-        ? (marketSession.session === 'OPEN' ? 20000 : refreshInterval) // 20s during market hours, slower when closed
+        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 20000 : refreshInterval) // 20s during market hours, slower when closed
         : 0, // Stop refreshing when logged out
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user,
