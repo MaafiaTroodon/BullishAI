@@ -145,75 +145,94 @@ export function PortfolioChartFast() {
   useEffect(() => {
     if (!chartContainerRef.current || chartRef.current) return
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
-        textColor: '#94a3b8', // slate-400
-      },
-      grid: {
-        vertLines: { color: '#334155' }, // slate-700
-        horzLines: { color: '#334155' },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    })
-
-    const series = chart.addLineSeries({
-      color: '#10b981', // emerald-500
-      lineWidth: 2,
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
-    })
-
-    chartRef.current = chart
-    seriesRef.current = series
-
-    // Load historical data
-    const loadHistoricalData = async () => {
+    const container = chartContainerRef.current
+    
+    function initializeChart() {
+      if (!chartContainerRef.current || chartRef.current) return
+      
       try {
-        const response = await fetch(`/api/portfolio/timeseries?range=1d&gran=5m`, {
-          cache: 'no-store',
+        const chart = createChart(chartContainerRef.current, {
+          layout: {
+            background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
+            textColor: '#94a3b8', // slate-400
+          },
+          grid: {
+            vertLines: { color: '#334155' }, // slate-700
+            horzLines: { color: '#334155' },
+          },
+          width: chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800,
+          height: 400,
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+          },
         })
-        const data = await response.json()
-        
-        if (data?.series && Array.isArray(data.series)) {
-          const historicalPoints: LineData[] = data.series
-            .map((p: any) => ({
-              time: Math.floor((p.t || Date.now()) / 1000),
-              value: p.portfolio || p.portfolioAbs || 0,
-            }))
-            .filter((p: LineData) => p.value > 0)
-            .sort((a: LineData, b: LineData) => (a.time as number) - (b.time as number))
 
-          if (historicalPoints.length > 0) {
-            pointsRef.current = historicalPoints
-            series.setData(historicalPoints)
+        if (!chart || typeof chart.addLineSeries !== 'function') {
+          console.error('Chart initialization failed: addLineSeries not available', chart)
+          return
+        }
+
+        const series = chart.addLineSeries({
+          color: '#10b981', // emerald-500
+          lineWidth: 2,
+          priceFormat: {
+            type: 'price',
+            precision: 2,
+            minMove: 0.01,
+          },
+        })
+
+        chartRef.current = chart
+        seriesRef.current = series
+
+        // Load historical data
+        const loadHistoricalData = async () => {
+          try {
+            const response = await fetch(`/api/portfolio/timeseries?range=1d&gran=5m`, {
+              cache: 'no-store',
+            })
+            const data = await response.json()
+            
+            if (data?.series && Array.isArray(data.series)) {
+              const historicalPoints: LineData[] = data.series
+                .map((p: any) => ({
+                  time: Math.floor((p.t || Date.now()) / 1000),
+                  value: p.portfolio || p.portfolioAbs || 0,
+                }))
+                .filter((p: LineData) => p.value > 0)
+                .sort((a: LineData, b: LineData) => (a.time as number) - (b.time as number))
+
+              if (historicalPoints.length > 0) {
+                pointsRef.current = historicalPoints
+                series.setData(historicalPoints)
+              }
+            }
+          } catch (error) {
+            console.error('Error loading historical data:', error)
           }
         }
+
+        loadHistoricalData()
       } catch (error) {
-        console.error('Error loading historical data:', error)
+        console.error('Error initializing chart:', error)
       }
     }
-
-    loadHistoricalData()
 
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
+          width: chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800,
         })
       }
     }
 
-    window.addEventListener('resize', handleResize)
+    // Call initializeChart if container is ready
+    if (containerWidth > 0) {
+      initializeChart()
+      window.addEventListener('resize', handleResize)
+    }
 
     return () => {
       window.removeEventListener('resize', handleResize)
