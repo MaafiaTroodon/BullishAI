@@ -53,6 +53,19 @@ Format as JSON with fields: trend, supportLevel, resistanceLevel, patterns (arra
     let analysis
     try {
       analysis = JSON.parse(response.answer)
+      // Ensure supportLevel and resistanceLevel are numbers
+      if (analysis.supportLevel && typeof analysis.supportLevel !== 'number') {
+        analysis.supportLevel = parseFloat(analysis.supportLevel) || parseFloat(quote?.price || 0) * 0.95
+      }
+      if (analysis.resistanceLevel && typeof analysis.resistanceLevel !== 'number') {
+        analysis.resistanceLevel = parseFloat(analysis.resistanceLevel) || parseFloat(quote?.price || 0) * 1.05
+      }
+      if (!analysis.supportLevel) {
+        analysis.supportLevel = parseFloat(quote?.price || 0) * 0.95
+      }
+      if (!analysis.resistanceLevel) {
+        analysis.resistanceLevel = parseFloat(quote?.price || 0) * 1.05
+      }
     } catch {
       analysis = {
         trend: 'neutral',

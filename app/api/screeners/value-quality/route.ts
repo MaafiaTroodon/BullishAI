@@ -14,22 +14,42 @@ export async function GET(req: NextRequest) {
     // Ensure we have some stocks to work with
     let workingQuotes = quotes.quotes || []
     
-    // If no quotes, use fallback symbols
+    // If no quotes, use fallback symbols with proper names
     if (workingQuotes.length === 0) {
-      const fallbackSymbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'JPM', 'V']
-      workingQuotes = fallbackSymbols.map(symbol => ({
-        symbol,
+      const fallbackStocks = [
+        { symbol: 'AAPL', name: 'Apple Inc.' },
+        { symbol: 'MSFT', name: 'Microsoft Corporation' },
+        { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+        { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+        { symbol: 'TSLA', name: 'Tesla Inc.' },
+        { symbol: 'META', name: 'Meta Platforms Inc.' },
+        { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+        { symbol: 'NFLX', name: 'Netflix Inc.' },
+        { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
+        { symbol: 'V', name: 'Visa Inc.' },
+      ]
+      workingQuotes = fallbackStocks.map(stock => ({
+        symbol: stock.symbol,
         data: { price: 100 + Math.random() * 200, dp: (Math.random() - 0.5) * 5 },
-        name: symbol,
+        name: stock.name,
       }))
     }
+    
+    // Ensure all quotes have symbol and name
+    workingQuotes = workingQuotes.map((q: any) => ({
+      ...q,
+      symbol: q.symbol || 'UNKNOWN',
+      name: q.name || q.symbol || 'Unknown Company',
+    }))
     
     // Filter for value + quality (PE < 15, mock ROE > 15%, mock revenue growth > 10%)
     const stocks = workingQuotes
       .map((q: any, idx: number) => {
-        // Handle both formats
+        // Handle both formats - ensure we get symbol and name
+        const symbol = q.symbol || 'UNKNOWN'
         const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
-        const name = q.name || q.symbol
+        // Try to get name from multiple possible locations
+        const name = q.name || q.data?.name || q.companyName || symbol
         const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
         
         // Generate consistent mock data based on symbol to ensure we get results
@@ -47,8 +67,8 @@ export async function GET(req: NextRequest) {
         const revenueGrowth = 10 + random3 * 10
         
         return {
-          symbol: q.symbol,
-          name,
+          symbol: symbol,
+          name: name || symbol, // Ensure name is never empty
           pe,
           roe,
           revenue_growth: revenueGrowth,

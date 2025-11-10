@@ -124,13 +124,13 @@ export default function TechnicalPage() {
                   <div>
                     <div className="text-sm text-slate-400 mb-2">Support Level</div>
                     <div className="text-xl font-semibold text-green-400">
-                      ${data.analysis.supportLevel?.toFixed(2)}
+                      ${typeof data.analysis.supportLevel === 'number' ? data.analysis.supportLevel.toFixed(2) : (parseFloat(data.analysis.supportLevel) || 0).toFixed(2)}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-2">Resistance Level</div>
                     <div className="text-xl font-semibold text-red-400">
-                      ${data.analysis.resistanceLevel?.toFixed(2)}
+                      ${typeof data.analysis.resistanceLevel === 'number' ? data.analysis.resistanceLevel.toFixed(2) : (parseFloat(data.analysis.resistanceLevel) || 0).toFixed(2)}
                     </div>
                   </div>
                 </div>
