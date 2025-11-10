@@ -116,9 +116,15 @@ export function PortfolioSummary() {
   useEffect(() => {
     let cancelled = false
     async function enrich() {
-      if (!items || items.length === 0) { setEnriched([]); return }
+      if (!Array.isArray(items) || items.length === 0) { 
+        setEnriched([]); 
+        return 
+      }
       // If items already have currentPrice from API, use them
-      if (items[0]?.currentPrice != null) { setEnriched(items); return }
+      if (items[0]?.currentPrice != null) { 
+        setEnriched(items); 
+        return 
+      }
       try {
         const out: any[] = []
         await Promise.all(items.map(async (p: any) => {
