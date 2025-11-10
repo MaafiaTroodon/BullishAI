@@ -222,12 +222,15 @@ export default function WatchlistPage() {
                       const isStarred = starredItems.includes(symbol)
 
                       return (
-                        <Reveal key={symbol} variant="fade" delay={idx * 0.03} once={false}>
                         <tr
+                          key={symbol}
                           onClick={() => setSelectedSymbol(symbol)}
                           className={`border-b border-slate-700 hover:bg-slate-700/50 cursor-pointer transition ${
                             isSelected ? 'bg-blue-600/10' : ''
                           }`}
+                          style={{
+                            animation: `fadeIn 0.5s ease-out ${idx * 0.03}s both`,
+                          }}
                         >
                           <td className="p-5">
                             <div className="flex items-center gap-3">
@@ -311,7 +314,6 @@ export default function WatchlistPage() {
                             </div>
                           </td>
                         </tr>
-                        </Reveal>
                       )
                     })}
                   </tbody>
