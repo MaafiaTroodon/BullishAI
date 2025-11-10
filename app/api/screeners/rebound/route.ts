@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { routeAIQuery, RAGContext } from '@/lib/ai-router'
 
 export async function GET(req: NextRequest) {
   try {
@@ -6,7 +7,7 @@ export async function GET(req: NextRequest) {
     const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
     const popular = await popularRes.json().catch(() => ({ stocks: [] }))
 
-    const symbols = popular.stocks?.slice(0, 50).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL'
+    const symbols = popular.stocks?.slice(0, 50).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL,AMZN,TSLA,META,NVDA'
     
     const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
     const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
