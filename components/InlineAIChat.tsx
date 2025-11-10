@@ -15,6 +15,7 @@ interface Message {
     price?: number
     change?: number
     changePct?: number
+    modelBadge?: string
   }
 }
 
@@ -185,6 +186,9 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         text: answer,
         sender: 'bot',
         timestamp: new Date(),
+        data: {
+          modelBadge: data.modelBadge || data.model || 'AI',
+        },
       }
 
       setMessages((prev) => [...prev, botMessage])
