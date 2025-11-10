@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Send, Sparkles, TrendingUp, TrendingDown, X } from 'lucide-react'
-import { AIInsightsToolbar } from './AIInsightsToolbar'
+// Removed AIInsightsToolbar - everything is conversational now
 
 interface Message {
   id: string
@@ -116,12 +116,15 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     }
     setIsTyping(true)
 
-    // Call API for intelligent response
+    // Call new conversational chat API
     try {
-      const response = await fetch('/api/ai', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, sessionId: 'inline-home' }),
+        body: JSON.stringify({ 
+          query,
+          symbol: focusSymbol,
+        }),
       })
 
       // Check content type before parsing JSON
@@ -231,18 +234,10 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           </div>
         </div>
       ) : (
-        /* Expanded State - Full Chat Interface with Toolbar */
-        <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col" style={{ height: '800px', maxHeight: '90vh' }}>
-          {/* AI Insights Toolbar */}
-          <div className="flex-1 min-h-0 border-b border-slate-700 overflow-hidden">
-            <AIInsightsToolbar symbol={focusSymbol} onCardSelect={(card, data) => {
-              // Optionally send card data to chat
-              console.log('Card selected:', card.id, data)
-            }} />
-          </div>
-          
-          {/* Chat Interface */}
-          <div className="flex flex-col" style={{ height: '400px' }}>
+        /* Expanded State - Full Conversational Chat Interface */
+        <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col" style={{ height: '700px', maxHeight: '90vh' }}>
+          {/* Chat Interface - Full Height */}
+          <div className="flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/50 backdrop-blur flex-shrink-0">
             <div className="flex items-center gap-3">
