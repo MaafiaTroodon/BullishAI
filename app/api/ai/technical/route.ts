@@ -20,19 +20,33 @@ export async function GET(req: NextRequest) {
     const currentPrice = parseFloat(quote?.price || 0)
 
     // Format chart data to OHLC format
-    // Chart API returns: { data: [{ timestamp, open, high, low, close }] }
-    // OHLC API returns: { candles: [{ time, open, high, low, close, volume }] }
+    // Chart API returns: { data: Candle[] } where Candle = { t, o, h, l, c, v }
+    // Also handle: { data: [{ timestamp, open, high, low, close, volume }] }
     let ohlcData: Array<{ open: number; high: number; low: number; close: number; volume: number }> = []
     
     if (chart?.data && Array.isArray(chart.data) && chart.data.length > 0) {
       // Use chart.data directly (from /api/chart)
-      ohlcData = chart.data.map((c: any) => ({
-        open: parseFloat(c.open || c.o || 0),
-        high: parseFloat(c.high || c.h || 0),
-        low: parseFloat(c.low || c.l || 0),
-        close: parseFloat(c.close || c.c || 0),
-        volume: parseFloat(c.volume || c.v || 1000000), // Default volume if missing
-      })).filter((c: any) => c.close > 0 && c.high >= c.low)
+      // Handle both formats: { t, o, h, l, c, v } and { timestamp, open, high, low, close, volume }
+      ohlcData = chart.data.map((c: any) => {
+        // Try short format first (t, o, h, l, c, v)
+        if (c.t !== undefined || c.o !== undefined) {
+          return {
+            open: parseFloat(c.o || 0),
+            high: parseFloat(c.h || 0),
+            low: parseFloat(c.l || 0),
+            close: parseFloat(c.c || 0),
+            volume: parseFloat(c.v || 1000000),
+          }
+        }
+        // Try long format (timestamp, open, high, low, close, volume)
+        return {
+          open: parseFloat(c.open || 0),
+          high: parseFloat(c.high || 0),
+          low: parseFloat(c.low || 0),
+          close: parseFloat(c.close || 0),
+          volume: parseFloat(c.volume || 1000000),
+        }
+      }).filter((c: any) => c.close > 0 && c.high >= c.low && c.low <= c.high)
     } else {
       // Try OHLC API as fallback
       try {
