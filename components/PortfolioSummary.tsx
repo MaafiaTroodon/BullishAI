@@ -155,9 +155,12 @@ export function PortfolioSummary() {
             })
           }
         }))
-        if (!cancelled) setEnriched(out)
-      } catch {
-        if (!cancelled) setEnriched(items)
+        if (!cancelled) setEnriched(Array.isArray(out) ? out : [])
+      } catch (error) {
+        // On error, fall back to items if available
+        if (!cancelled) {
+          setEnriched(Array.isArray(items) ? items : [])
+        }
       }
     }
     enrich()
