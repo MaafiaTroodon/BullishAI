@@ -38,7 +38,7 @@ export default function TiltedCard({
   gradientTo = 'rgba(147, 51, 234, 0.1)',
   className = ''
 }: TiltedCardProps) {
-  const ref = useRef<HTMLElement>(null)
+  const ref = useRef<HTMLDivElement>(null)
 
   const x = useMotionValue(0)
   const y = useMotionValue(0)
@@ -55,7 +55,7 @@ export default function TiltedCard({
 
   const [lastY, setLastY] = useState<number>(0)
 
-  function handleMouse(e: React.MouseEvent<HTMLElement>) {
+  function handleMouse(e: React.MouseEvent<HTMLDivElement>) {
     if (!ref.current) return
 
     const rect = ref.current.getBoundingClientRect()
@@ -92,7 +92,7 @@ export default function TiltedCard({
   }
 
   return (
-    <figure
+    <div
       ref={ref}
       className={`tilted-card-figure ${className}`}
       style={{
@@ -130,7 +130,7 @@ export default function TiltedCard({
       </motion.div>
 
       {showTooltip && captionText && (
-        <motion.figcaption
+        <motion.div
           className="tilted-card-caption"
           style={{
             x,
@@ -140,9 +140,9 @@ export default function TiltedCard({
           }}
         >
           {captionText}
-        </motion.figcaption>
+        </motion.div>
       )}
-    </figure>
+    </div>
   )
 }
 

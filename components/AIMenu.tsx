@@ -151,24 +151,36 @@ export function AIMenu() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {aiFeatures.map((feature, idx) => {
             const Icon = feature.icon
+            const gradient = gradientColors[feature.color] || gradientColors.blue
             return (
               <Reveal key={feature.id} variant="rise" delay={idx * 0.05}>
-                <Link href={feature.href}>
-                  <div className={`bg-slate-800/50 rounded-xl p-6 border ${colorClasses[feature.color]} transition-all hover:scale-[1.02] cursor-pointer group`}>
-                    <div className="flex items-start gap-4">
-                      <div className={`p-3 rounded-lg ${colorClasses[feature.color]} flex-shrink-0`}>
-                        <Icon className="w-6 h-6" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition">
-                          {feature.title}
-                        </h3>
-                        <p className="text-sm text-slate-400 leading-relaxed">
-                          {feature.description}
-                        </p>
+                <Link href={feature.href} className="block h-full">
+                  <TiltedCard
+                    containerHeight="100%"
+                    scaleOnHover={1.05}
+                    rotateAmplitude={12}
+                    showMobileWarning={false}
+                    showTooltip={false}
+                    gradientFrom={gradient.from}
+                    gradientTo={gradient.to}
+                    className="h-full"
+                  >
+                    <div className={`bg-slate-800/50 rounded-xl p-6 border ${colorClasses[feature.color]} cursor-pointer group h-full`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`p-3 rounded-lg ${colorClasses[feature.color]} flex-shrink-0`}>
+                          <Icon className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition">
+                            {feature.title}
+                          </h3>
+                          <p className="text-sm text-slate-400 leading-relaxed">
+                            {feature.description}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </TiltedCard>
                 </Link>
               </Reveal>
             )
