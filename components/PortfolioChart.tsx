@@ -188,7 +188,7 @@ export function PortfolioChart() {
     }
     
     // Map timeseries data directly - use portfolio (TPV) from mark-to-market snapshots
-    return timeseriesData.series.map((p: any) => ({
+    let mappedPoints = timeseriesData.series.map((p: any) => ({
       t: p.t,
       value: p.portfolio || p.portfolioAbs || 0, // Use portfolio (TPV) from snapshots
       costBasis: p.costBasis || p.costBasisAbs || 0,
@@ -198,7 +198,16 @@ export function PortfolioChart() {
       overallReturn$: p.overallReturn$ || 0,
       overallReturnPct: p.overallReturnPct || 0
     }))
-  }, [timeseriesData])
+    
+    // Filter to last 1 hour if chartRange is '1h'
+    if (chartRange === '1h') {
+      const now = Date.now()
+      const oneHourAgo = now - (60 * 60 * 1000) // 1 hour in milliseconds
+      mappedPoints = mappedPoints.filter((p: any) => p.t >= oneHourAgo)
+    }
+    
+    return mappedPoints
+  }, [timeseriesData, chartRange])
 
   // Calculate portfolio return from cost basis to determine color (matches PortfolioSummary)
   // Use overall return percentage: (portfolioValue - costBasis) / costBasis * 100
@@ -244,12 +253,15 @@ export function PortfolioChart() {
 
   const formatXAxis = (t: number) => {
     const date = new Date(t)
+    // Use ET timezone to match tooltip
+    const options: Intl.DateTimeFormatOptions = { timeZone: 'America/New_York' }
+    
     if (chartRange === '1h' || chartRange === '1d') {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      return date.toLocaleTimeString('en-US', { ...options, hour: 'numeric', minute: '2-digit' })
     } else if (chartRange === '3d' || chartRange === '1week') {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
+      return date.toLocaleDateString('en-US', { ...options, month: 'short', day: 'numeric', hour: 'numeric' })
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return date.toLocaleDateString('en-US', { ...options, month: 'short', day: 'numeric' })
     }
   }
 
@@ -341,9 +353,11 @@ export function PortfolioChart() {
                   const data = payload[0]?.payload
                   const timestamp = label || data?.t
                   const date = new Date(timestamp)
-                  const etDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-                  const dayName = etDate.toLocaleDateString('en-US', { weekday: 'short' })
-                  const dateStr = etDate.toLocaleString('en-US', { 
+                  // Use ET timezone to match x-axis
+                  const etOptions: Intl.DateTimeFormatOptions = { timeZone: 'America/New_York' }
+                  const dayName = date.toLocaleDateString('en-US', { ...etOptions, weekday: 'short' })
+                  const dateStr = date.toLocaleString('en-US', { 
+                    ...etOptions,
                     month: 'short', 
                     day: 'numeric', 
                     year: 'numeric',
