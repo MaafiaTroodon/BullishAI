@@ -125,6 +125,13 @@ export default function Home() {
               >
                 Launch Dashboard →
               </Link>
+              <Link
+                href="/ai"
+                className="inline-block bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-4 rounded-lg text-base font-semibold hover:from-purple-700 hover:to-purple-800 transition shadow-lg hover:shadow-xl hover-card"
+              >
+                <Brain className="inline-block w-5 h-5 mr-2" />
+                AI
+              </Link>
               {!isLoggedIn && (
                 <Link
                   href="/auth/signup"
