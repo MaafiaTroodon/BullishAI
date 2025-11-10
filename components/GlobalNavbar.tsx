@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, Calendar, Newspaper, History, Wallet } from 'lucide-react'
 import { DevStatus } from './DevStatus'
@@ -10,18 +10,65 @@ import { authClient } from '@/lib/auth-client'
 
 export function GlobalNavbar() {
   const router = useRouter()
+  const pathname = usePathname()
   const [searchQuery, setSearchQuery] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const { data: session, isLoading: sessionLoading } = authClient.useSession()
-  const { data: wallet, mutate: mutateWallet } = useSWR('/api/wallet', (url)=>fetch(url).then(r=>r.json()), { refreshInterval: 10000 })
+  
+  // Store last known balance to prevent $0 flicker during navigation/revalidation
+  const lastBalanceRef = useRef<number | null>(null)
+  
+  // Use SWR with proper caching to prevent $0 flicker during navigation
+  const { data: wallet, mutate: mutateWallet } = useSWR(
+    session?.user ? '/api/wallet' : null, // Only fetch when user is logged in
+    async (url) => {
+      const res = await fetch(url, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Failed to fetch wallet')
+      return res.json()
+    },
+    {
+      refreshInterval: 10000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      // Dedupe requests within 2 seconds to prevent duplicate fetches
+      dedupingInterval: 2000,
+      // Revalidate on mount and when pathname changes (route navigation)
+      revalidateOnMount: true,
+      // Don't show error retry to prevent flicker
+      shouldRetryOnError: false,
+    }
+  )
+  
+  // Update last known balance when wallet data changes
   useEffect(() => {
-    function onWalletUpd() { mutateWallet() }
+    if (wallet?.balance !== undefined && wallet.balance !== null) {
+      lastBalanceRef.current = wallet.balance
+    }
+  }, [wallet?.balance])
+  
+  // Revalidate wallet on route change to ensure fresh data
+  useEffect(() => {
+    if (session?.user) {
+      mutateWallet()
+    }
+  }, [pathname, session?.user, mutateWallet])
+  
+  useEffect(() => {
+    function onWalletUpd() { 
+      mutateWallet() 
+    }
     window.addEventListener('walletUpdated', onWalletUpd as any)
     return () => window.removeEventListener('walletUpdated', onWalletUpd as any)
   }, [mutateWallet])
+  
+  // Get the display balance - use last known value to prevent $0 flicker
+  // Only show $0 if we've never fetched a balance (new user)
+  const displayBalance = wallet?.balance !== undefined && wallet.balance !== null
+    ? wallet.balance
+    : (lastBalanceRef.current !== null ? lastBalanceRef.current : 0)
 
   // Handle search
   const handleSearchChange = async (value: string) => {
@@ -228,7 +275,7 @@ export function GlobalNavbar() {
               {/* Wallet balance pill */}
               <Link href="/wallet" className="hidden lg:flex items-center bg-slate-800 border border-slate-700 rounded-full px-3 py-1 text-slate-200 font-semibold hover:bg-slate-700 transition">
                 <span className="text-slate-400 mr-2">Wallet</span>
-                <span>${(wallet?.balance ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                <span>${displayBalance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
               </Link>
               {sessionLoading ? (
                 <div className="w-8 h-8 rounded-full bg-slate-700 animate-pulse" />

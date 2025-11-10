@@ -25,7 +25,11 @@ export function PortfolioChart() {
   const { data: pf, mutate: mutatePf } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { 
     refreshInterval: portfolioRefreshInterval,
     revalidateOnFocus: true,
-    revalidateOnReconnect: true
+    revalidateOnReconnect: true,
+    // Dedupe requests to prevent duplicate fetches during navigation
+    dedupingInterval: 2000,
+    // Revalidate on mount to ensure fresh data on route changes
+    revalidateOnMount: true,
   })
   const [localItems, setLocalItems] = useState<any[]>([])
   

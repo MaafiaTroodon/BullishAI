@@ -1,40 +1,52 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { showToast } from '@/components/Toast'
+import useSWR from 'swr'
+
+const walletFetcher = async (url: string) => {
+  const res = await fetch(url, { cache: 'no-store' })
+  if (!res.ok) throw new Error('Failed to fetch wallet')
+  return res.json()
+}
 
 export default function WalletPage() {
-  const [balance, setBalance] = useState<number>(0)
   const [amount, setAmount] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const [previewAction, setPreviewAction] = useState<'deposit'|'withdraw'>('deposit')
-
-  async function refresh() {
-    try {
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
-      const r = await fetch(`${baseUrl}/api/wallet`, { cache: 'no-store' })
-      if (!r.ok) {
-        console.error('Wallet fetch failed:', r.status, r.statusText)
-        return
-      }
-      const j = await r.json()
-      setBalance(j.balance || 0)
-      // Don't dispatch event here - only dispatch after actual transactions
-    } catch (err) {
-      console.error('Error refreshing wallet:', err)
-      // Don't show error toast on initial load, only on user actions
+  
+  // Store last known balance to prevent $0 flicker
+  const lastBalanceRef = useRef<number | null>(null)
+  
+  // Use SWR for wallet data with proper caching
+  const { data: wallet, mutate: mutateWallet } = useSWR('/api/wallet', walletFetcher, {
+    refreshInterval: 10000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 2000,
+    revalidateOnMount: true,
+  })
+  
+  // Update last known balance when wallet data changes
+  useEffect(() => {
+    if (wallet?.balance !== undefined && wallet.balance !== null) {
+      lastBalanceRef.current = wallet.balance
     }
-  }
-
-  useEffect(()=>{ 
-    refresh()
+  }, [wallet?.balance])
+  
+  // Get display balance - use last known value to prevent $0 flicker
+  const balance = wallet?.balance !== undefined && wallet.balance !== null
+    ? wallet.balance
+    : (lastBalanceRef.current !== null ? lastBalanceRef.current : 0)
+  
+  useEffect(() => {
     // Listen for wallet updates from other pages/components
     const handleUpdate = () => {
-      refresh()
+      mutateWallet()
     }
     window.addEventListener('walletUpdated', handleUpdate)
     return () => window.removeEventListener('walletUpdated', handleUpdate)
-  }, [])
+  }, [mutateWallet])
 
   async function act(action: 'deposit'|'withdraw') {
     const numAmount = parseFloat(amount) || 0
@@ -90,9 +102,8 @@ export default function WalletPage() {
       
       const j = await r.json()
       
-      // Server is source of truth - update balance from response
-      const newBalance = j.balance || 0
-      setBalance(newBalance)
+      // Server is source of truth - revalidate SWR cache to get updated balance
+      mutateWallet()
       
       // Save transaction to localStorage for persistence
       if (j.transaction) {
