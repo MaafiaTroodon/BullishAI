@@ -18,6 +18,9 @@ export function PortfolioChart() {
   
   const [chartRange, setChartRange] = useState('1d') // Default to 1D
   
+  // Get user's local timezone from browser
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  
   // Get market session for dynamic refresh interval
   const marketSession = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
   const portfolioRefreshInterval = getRefreshInterval(marketSession.session)
@@ -253,8 +256,8 @@ export function PortfolioChart() {
 
   const formatXAxis = (t: number) => {
     const date = new Date(t)
-    // Use ET timezone to match tooltip
-    const options: Intl.DateTimeFormatOptions = { timeZone: 'America/New_York' }
+    // Use user's local timezone
+    const options: Intl.DateTimeFormatOptions = { timeZone: userTimezone }
     
     if (chartRange === '1h' || chartRange === '1d') {
       return date.toLocaleTimeString('en-US', { ...options, hour: 'numeric', minute: '2-digit' })
@@ -353,18 +356,25 @@ export function PortfolioChart() {
                   const data = payload[0]?.payload
                   const timestamp = label || data?.t
                   const date = new Date(timestamp)
-                  // Use ET timezone to match x-axis
-                  const etOptions: Intl.DateTimeFormatOptions = { timeZone: 'America/New_York' }
-                  const dayName = date.toLocaleDateString('en-US', { ...etOptions, weekday: 'short' })
+                  // Use user's local timezone to match x-axis
+                  const localOptions: Intl.DateTimeFormatOptions = { timeZone: userTimezone }
+                  const dayName = date.toLocaleDateString('en-US', { ...localOptions, weekday: 'short' })
+                  
+                  // Get timezone abbreviation (e.g., AST, EST, PST)
+                  const timeZoneName = new Intl.DateTimeFormat('en-US', { 
+                    ...localOptions,
+                    timeZoneName: 'short' 
+                  }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value || ''
+                  
                   const dateStr = date.toLocaleString('en-US', { 
-                    ...etOptions,
+                    ...localOptions,
                     month: 'short', 
                     day: 'numeric', 
                     year: 'numeric',
                     hour: 'numeric',
                     minute: '2-digit',
                     hour12: true
-                  }) + ' ET'
+                  }) + (timeZoneName ? ` ${timeZoneName}` : '')
                   
                   const portfolioValue = data?.value || 0
                   const costBasis = data?.costBasis || 0
