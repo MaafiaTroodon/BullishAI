@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
         
         // Generate consistent mock data based on symbol to ensure we get results
         // Use a seed based on symbol to make it deterministic
-        const seed = q.symbol.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
+        const seed = (symbol || 'UNKNOWN').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
         const random1 = (seed % 100) / 100
         const random2 = ((seed * 2) % 100) / 100
         const random3 = ((seed * 3) % 100) / 100

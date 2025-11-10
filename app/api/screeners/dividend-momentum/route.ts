@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
         const name = q.name || q.data?.name || q.companyName || symbol
         
         // Generate consistent mock data based on symbol
-        const seed = q.symbol.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
+        const seed = (symbol || 'UNKNOWN').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
         const random1 = (seed % 100) / 100
         const random2 = ((seed * 2) % 100) / 100
         
