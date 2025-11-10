@@ -37,6 +37,8 @@ export function GlobalNavbar() {
       dedupingInterval: 2000,
       // Revalidate on mount and when pathname changes (route navigation)
       revalidateOnMount: true,
+      // Keep previous data during revalidation to prevent $0 flicker
+      keepPreviousData: true,
       // Don't show error retry to prevent flicker
       shouldRetryOnError: false,
     }
