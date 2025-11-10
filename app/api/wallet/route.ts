@@ -42,9 +42,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
     const body = await req.json()
     const { action, amount } = body || {}
-    const userId = getUserId()
     
     // Ensure wallet is initialized from cookie before processing
     try {
