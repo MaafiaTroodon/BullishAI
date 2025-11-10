@@ -14,6 +14,7 @@ import {
   Activity
 } from 'lucide-react'
 import { Reveal } from './anim/Reveal'
+import TiltedCard from './TiltedCard'
 
 const aiFeatures = [
   {
@@ -118,6 +119,20 @@ const colorClasses: Record<string, string> = {
   red: 'bg-red-500/10 text-red-400 border-red-500/20 hover:border-red-500/40',
   cyan: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/40',
   teal: 'bg-teal-500/10 text-teal-400 border-teal-500/20 hover:border-teal-500/40',
+}
+
+const gradientColors: Record<string, { from: string; to: string }> = {
+  blue: { from: 'rgba(59, 130, 246, 0.3)', to: 'rgba(99, 102, 241, 0.3)' },
+  purple: { from: 'rgba(147, 51, 234, 0.3)', to: 'rgba(168, 85, 247, 0.3)' },
+  green: { from: 'rgba(34, 197, 94, 0.3)', to: 'rgba(74, 222, 128, 0.3)' },
+  yellow: { from: 'rgba(234, 179, 8, 0.3)', to: 'rgba(250, 204, 21, 0.3)' },
+  pink: { from: 'rgba(236, 72, 153, 0.3)', to: 'rgba(244, 114, 182, 0.3)' },
+  indigo: { from: 'rgba(99, 102, 241, 0.3)', to: 'rgba(129, 140, 248, 0.3)' },
+  emerald: { from: 'rgba(16, 185, 129, 0.3)', to: 'rgba(52, 211, 153, 0.3)' },
+  orange: { from: 'rgba(249, 115, 22, 0.3)', to: 'rgba(251, 146, 60, 0.3)' },
+  red: { from: 'rgba(239, 68, 68, 0.3)', to: 'rgba(248, 113, 113, 0.3)' },
+  cyan: { from: 'rgba(6, 182, 212, 0.3)', to: 'rgba(34, 211, 238, 0.3)' },
+  teal: { from: 'rgba(20, 184, 166, 0.3)', to: 'rgba(45, 212, 191, 0.3)' },
 }
 
 export function AIMenu() {
