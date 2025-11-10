@@ -106,34 +106,40 @@ export default function Home() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20" data-anim="fade-up" data-anim-once="true" data-anim-stagger="60">
+      <section className="relative max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">
         {/* Static gradient background replacing LiquidEther */}
         <div className="absolute inset-0 -z-10 pointer-events-none bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
-        <div className="text-center" data-anim="fade-up" data-anim-delay="50">
-          <HeadlineRotator className="mb-6" />
-          <p className="text-xl md:text-2xl text-slate-300 mb-8 max-w-3xl mx-auto">
-            Track your portfolio in real-time with AI-driven analysis, automated alerts, 
-            and intelligent market insights powered by Groq's Llama-3.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center" data-anim="fade-up" data-anim-delay="120">
-            <Link
-              href="/dashboard"
-              className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition shadow-lg hover:shadow-xl hover-card"
-            >
-              Launch Dashboard →
-            </Link>
-            {!isLoggedIn && (
+        <div className="text-center">
+          <Reveal variant="rise" delay={0}>
+            <HeadlineRotator className="mb-6" />
+          </Reveal>
+          <Reveal variant="fade" delay={0.1}>
+            <p className="text-xl md:text-2xl text-slate-300 mb-8 max-w-3xl mx-auto">
+              Track your portfolio in real-time with AI-driven analysis, automated alerts, 
+              and intelligent market insights powered by Groq's Llama-3.
+            </p>
+          </Reveal>
+          <Reveal variant="scale" delay={0.2}>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link
-                href="/auth/signup"
-                className="inline-block bg-slate-800 border border-slate-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-slate-700 transition hover-card"
+                href="/dashboard"
+                className="inline-block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition shadow-lg hover:shadow-xl hover-card"
               >
-                Get Started Free
+                Launch Dashboard →
               </Link>
-            )}
-          </div>
+              {!isLoggedIn && (
+                <Link
+                  href="/auth/signup"
+                  className="inline-block bg-slate-800 border border-slate-700 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-slate-700 transition hover-card"
+                >
+                  Get Started Free
+                </Link>
+              )}
+            </div>
+          </Reveal>
           
           {/* Trust Indicators */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
+          <StaggerGrid staggerDelay={0.05} variant="rise" className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
             <div className="text-center">
               <div className="text-3xl font-bold text-white mb-2">100%</div>
               <div className="text-sm text-slate-400">Free Forever</div>
@@ -150,27 +156,33 @@ export default function Home() {
               <div className="text-3xl font-bold text-white mb-2">Secure</div>
               <div className="text-sm text-slate-400">& Private</div>
             </div>
-          </div>
+          </StaggerGrid>
         </div>
       </section>
 
       {/* AI Chat Section */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
-        <InlineAIChat isLoggedIn={isLoggedIn} focusSymbol={focusSymbol} />
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Reveal variant="fade">
+          <InlineAIChat isLoggedIn={isLoggedIn} focusSymbol={focusSymbol} />
+        </Reveal>
       </section>
 
       {/* Stock Heatmap */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
-        <h2 className="text-3xl font-bold text-white mb-6 text-center">Market Heatmap</h2>
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-          <TradingViewHeatmap />
-        </div>
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Reveal variant="slide-left">
+          <h2 className="text-3xl font-bold text-white mb-6 text-center">Market Heatmap</h2>
+        </Reveal>
+        <Reveal variant="fade" delay={0.1}>
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+            <TradingViewHeatmap />
+          </div>
+        </Reveal>
       </section>
 
       {/* Popular Today Stocks */}
-      <div data-anim="fade-up" data-anim-stagger="40">
+      <Reveal variant="fade">
         <PopularToday />
-      </div>
+      </Reveal>
 
       {/* Live Market Preview */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12" data-anim="fade-up">
