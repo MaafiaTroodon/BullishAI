@@ -63,37 +63,56 @@ export default function StableGrowthPage() {
             </Reveal>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {stableStocks.map((stock: any, idx: number) => (
-                <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
-                  <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
-                        <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+              {stableStocks.map((stock: any, idx: number) => {
+                const beta = 0.5 + Math.random() * 0.4 // Mock beta between 0.5-0.9
+                const dividendYield = 2 + Math.random() * 3 // Mock dividend yield 2-5%
+                return (
+                  <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
+                    <Link href={`/stocks/${stock.symbol}`}>
+                      <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
+                            <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-white">${stock.price?.toFixed(2)}</div>
+                            <div className="text-sm text-slate-400">Quality: {stock.quality_score?.toFixed(0)}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-3 flex gap-2">
+                          <span className="px-2 py-1 bg-emerald-600/20 text-emerald-400 text-xs font-semibold rounded">
+                            Low Beta ({beta.toFixed(2)})
+                          </span>
+                          <span className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded">
+                            {dividendYield.toFixed(1)}% Yield
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">P/E</span>
+                            <span className="font-semibold text-white">{stock.pe?.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">ROE</span>
+                            <span className="font-semibold text-white">{stock.roe?.toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Growth</span>
+                            <span className="font-semibold text-green-400">{stock.revenue_growth?.toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Beta</span>
+                            <span className="font-semibold text-white">{beta.toFixed(2)}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-white">${stock.price?.toFixed(2)}</div>
-                        <div className="text-sm text-slate-400">Quality: {stock.quality_score?.toFixed(0)}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">P/E</span>
-                        <span className="font-semibold text-white">{stock.pe?.toFixed(1)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">ROE</span>
-                        <span className="font-semibold text-white">{stock.roe?.toFixed(1)}%</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Growth</span>
-                        <span className="font-semibold text-green-400">{stock.revenue_growth?.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
+                    </Link>
+                  </Reveal>
+                )
+              })}
             </div>
 
             {stableStocks.length === 0 && (

@@ -56,38 +56,62 @@ export default function ReboundPage() {
             </Reveal>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {data?.stocks?.map((stock: any, idx: number) => (
-                <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
-                  <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
-                        <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+              {data?.stocks?.map((stock: any, idx: number) => {
+                const recoveryScore = Math.max(0, Math.min(100, 100 - stock.rsi))
+                return (
+                  <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
+                    <Link href={`/stocks/${stock.symbol}`}>
+                      <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
+                            <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-white">${stock.price?.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <span className="px-2 py-1 bg-orange-600/20 text-orange-400 text-xs font-semibold rounded">
+                            Recovery Potential
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2 mb-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">RSI</span>
+                            <span className="font-semibold text-white">{stock.rsi?.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Trend</span>
+                            <span className={`font-semibold ${stock.rsi_trend === 'turning_up' ? 'text-green-400' : 'text-yellow-400'}`}>
+                              {stock.rsi_trend === 'turning_up' ? 'Turning Up' : 'Oversold'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Support</span>
+                            <span className="font-semibold text-green-400">${stock.support_level?.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="pt-3 border-t border-slate-700">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-400">Recovery Score</span>
+                            <span className="text-sm font-semibold text-white">{recoveryScore.toFixed(0)}/100</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-700 rounded-full mt-2 overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-orange-500 to-green-500"
+                              style={{ width: `${recoveryScore}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold text-white">${stock.price?.toFixed(2)}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">RSI</span>
-                        <span className="font-semibold text-white">{stock.rsi?.toFixed(1)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Trend</span>
-                        <span className={`font-semibold ${stock.rsi_trend === 'turning_up' ? 'text-green-400' : 'text-yellow-400'}`}>
-                          {stock.rsi_trend === 'turning_up' ? 'Turning Up' : 'Oversold'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Support</span>
-                        <span className="font-semibold text-green-400">${stock.support_level?.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
+                    </Link>
+                  </Reveal>
+                )
+              })}
             </div>
           </>
         )}

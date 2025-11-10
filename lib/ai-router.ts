@@ -123,13 +123,15 @@ Always include a one-line risk note at the end.
 ${SAFETY_DISCLAIMER}`
 
   const ragContext = formatRAGContext(context)
-  const fullPrompt = `${ragContext}\n\nUser Question: ${query}`
+  // When using json_object format, the prompt must contain the word "json"
+  const jsonHint = jsonSchema ? '\n\nIMPORTANT: Respond in valid JSON format only.' : ''
+  const fullPrompt = `${ragContext}${jsonHint}\n\nUser Question: ${query}`
   
   try {
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: systemPrompt || defaultSystemPrompt },
+        { role: 'system', content: (systemPrompt || defaultSystemPrompt) + (jsonSchema ? ' Respond in valid JSON format only.' : '') },
         { role: 'user', content: fullPrompt },
       ],
       temperature: 0.2,

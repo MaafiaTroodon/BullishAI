@@ -33,11 +33,11 @@ export async function GET(req: NextRequest) {
     })
 
     const queries: Record<string, string> = {
-      'value-quality': 'Which high-quality stocks offer the best value this week? Screen for value metrics (P/E, P/B) combined with quality factors (ROE, earnings growth). Return top 5-10 stocks.',
-      'momentum': 'Which five stocks have the strongest short-term momentum? Screen for price momentum, volume trends, and recent breakouts. Return top 5.',
-      'undervalued': 'Which undervalued stocks are poised for a rebound? Screen for oversold conditions, mean reversion signals, and fundamental value. Return top 5-10 stocks.',
-      'strongest': 'Which stocks are the strongest and most worth watching today? Screen for relative strength, volume leaders, and positive price action. Return top 5-10.',
-      'stable-growth': 'Which stocks are stable growth picks suitable for long-term holding? Screen for low beta, consistent EPS growth, and dividend history. Return top 5-10.',
+      'value-quality': 'Which high-quality stocks offer the best value this week? Screen for value metrics (P/E, P/B) combined with quality factors (ROE, earnings growth). Return top 5-10 stocks in JSON format.',
+      'momentum': 'Which five stocks have the strongest short-term momentum? Screen for price momentum, volume trends, and recent breakouts. Return top 5 in JSON format.',
+      'undervalued': 'Which undervalued stocks are poised for a rebound? Screen for oversold conditions, mean reversion signals, and fundamental value. Return top 5-10 stocks in JSON format.',
+      'strongest': 'Which stocks are the strongest and most worth watching today? Screen for relative strength, volume leaders, and positive price action. Return top 5-10 in JSON format.',
+      'stable-growth': 'Which stocks are stable growth picks suitable for long-term holding? Screen for low beta, consistent EPS growth, and dividend history. Return top 5-10 in JSON format.',
     }
 
     const query = queries[type] || queries['value-quality']
