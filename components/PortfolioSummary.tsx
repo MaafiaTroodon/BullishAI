@@ -168,16 +168,28 @@ export function PortfolioSummary() {
     let realizedPnl = 0
     let holdingCount = 0
 
+    // Ensure enrichedItems is an array before iterating
+    if (!Array.isArray(enrichedItems)) {
+      return {
+        totalValue: 0,
+        totalCost: 0,
+        totalReturn: 0,
+        totalReturnPercent: 0,
+        holdingCount: 0,
+        isPositive: true
+      }
+    }
+
     enrichedItems.forEach((p: any) => {
-      if (p.totalShares > 0) {
+      if (p && typeof p === 'object' && (p.totalShares || 0) > 0) {
         holdingCount++
         // Current value (mark-to-market positions only)
         const value = p.totalValue || (p.currentPrice ? p.currentPrice * p.totalShares : 0)
-        totalValue += value
+        totalValue += value || 0
         
         // Realized P/L
         if (p.realizedPnl) {
-          realizedPnl += p.realizedPnl
+          realizedPnl += p.realizedPnl || 0
         }
       }
     })
@@ -185,8 +197,8 @@ export function PortfolioSummary() {
     // Cost Basis = sum of (avgPrice * totalShares) for all open positions
     // This is the money invested that's still tied to open positions
     enrichedItems.forEach((p: any) => {
-      if (p.totalShares > 0) {
-        const cost = p.totalCost || (p.avgPrice * p.totalShares) || 0
+      if (p && typeof p === 'object' && (p.totalShares || 0) > 0) {
+        const cost = p.totalCost || (p.avgPrice ? p.avgPrice * p.totalShares : 0) || 0
         totalCost += cost
       }
     })
