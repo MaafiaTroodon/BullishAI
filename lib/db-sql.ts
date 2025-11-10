@@ -148,21 +148,21 @@ export async function savePositionToDB(
     if (position.totalShares <= 0) {
       // Delete position if shares are 0
       await client.query(
-        'DELETE FROM positions WHERE portfolio_id = $1 AND symbol = $2',
+        'DELETE FROM positions WHERE "portfolioId" = $1 AND symbol = $2',
         [portfolioId, position.symbol]
       )
     } else {
-      // Upsert position
+      // Upsert position (use camelCase column names)
       await client.query(
-        `INSERT INTO positions (id, portfolio_id, symbol, total_shares, avg_price, total_cost, realized_pnl, created_at, updated_at)
+        `INSERT INTO positions (id, "portfolioId", symbol, "totalShares", "avgPrice", "totalCost", "realizedPnl", "createdAt", "updatedAt")
          VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())
-         ON CONFLICT (portfolio_id, symbol)
+         ON CONFLICT ("portfolioId", symbol)
          DO UPDATE SET
-           total_shares = EXCLUDED.total_shares,
-           avg_price = EXCLUDED.avg_price,
-           total_cost = EXCLUDED.total_cost,
-           realized_pnl = EXCLUDED.realized_pnl,
-           updated_at = NOW()`,
+           "totalShares" = EXCLUDED."totalShares",
+           "avgPrice" = EXCLUDED."avgPrice",
+           "totalCost" = EXCLUDED."totalCost",
+           "realizedPnl" = EXCLUDED."realizedPnl",
+           "updatedAt" = NOW()`,
         [
           portfolioId,
           position.symbol,
