@@ -18,9 +18,23 @@ import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from 
 // Dynamic import for lightweight-charts to ensure it only loads client-side
 let chartsModule: any = null
 const getChartsModule = async () => {
-  if (chartsModule) return chartsModule
-  chartsModule = await import('lightweight-charts')
-  return chartsModule
+  if (chartsModule) {
+    console.log('Using cached charts module')
+    return chartsModule
+  }
+  console.log('Loading lightweight-charts module...')
+  try {
+    chartsModule = await import('lightweight-charts')
+    console.log('Charts module loaded:', {
+      hasCreateChart: typeof chartsModule.createChart === 'function',
+      hasColorType: !!chartsModule.ColorType,
+      keys: Object.keys(chartsModule).slice(0, 10)
+    })
+    return chartsModule
+  } catch (error) {
+    console.error('Error loading lightweight-charts:', error)
+    throw error
+  }
 }
 
 export function PortfolioChartFast() {
@@ -36,6 +50,7 @@ export function PortfolioChartFast() {
   const pointsRef = useRef<Array<{ time: number; value: number }>>([])
   const rafPendingRef = useRef(false)
   const [chartInitialized, setChartInitialized] = useState(false)
+  const [showFallback, setShowFallback] = useState(false)
 
   // Fetch portfolio data
   const { data: pf } = useSWR(
@@ -420,6 +435,17 @@ export function PortfolioChartFast() {
     }
   }, [pf?.totals?.tpv])
 
+  // Fallback: Show simple message if chart fails to load after timeout
+  useEffect(() => {
+    if (!session?.user) return
+    const timer = setTimeout(() => {
+      if (!chartInitialized) {
+        setShowFallback(true)
+      }
+    }, 5000) // Show fallback after 5 seconds
+    return () => clearTimeout(timer)
+  }, [chartInitialized, session?.user])
+
   if (!session?.user) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
@@ -429,17 +455,6 @@ export function PortfolioChartFast() {
       </div>
     )
   }
-
-  // Fallback: Show simple message if chart fails to load after timeout
-  const [showFallback, setShowFallback] = useState(false)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!chartInitialized) {
-        setShowFallback(true)
-      }
-    }, 5000) // Show fallback after 5 seconds
-    return () => clearTimeout(timer)
-  }, [chartInitialized])
 
   return (
     <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
