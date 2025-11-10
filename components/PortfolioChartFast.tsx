@@ -145,13 +145,34 @@ export function PortfolioChartFast() {
   useEffect(() => {
     if (!chartContainerRef.current || chartRef.current) return
 
+    let mounted = true
     const container = chartContainerRef.current
     
     function initializeChart() {
-      if (!chartContainerRef.current || chartRef.current) return
+      if (!mounted || !chartContainerRef.current || chartRef.current) return
       
+      const container = chartContainerRef.current
+      const containerWidth = container.clientWidth || container.offsetWidth
+      
+      // Ensure container has valid dimensions
+      if (!containerWidth || containerWidth === 0) {
+        // Retry after a short delay
+        setTimeout(() => {
+          if (mounted && chartContainerRef.current && !chartRef.current) {
+            initializeChart()
+          }
+        }, 100)
+        return
+      }
+
       try {
-        const chart = createChart(chartContainerRef.current, {
+        // Verify createChart is available
+        if (typeof createChart !== 'function') {
+          console.error('createChart is not a function. Lightweight Charts may not be loaded.')
+          return
+        }
+
+        const chart = createChart(container, {
           layout: {
             background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
             textColor: '#94a3b8', // slate-400
@@ -160,7 +181,7 @@ export function PortfolioChartFast() {
             vertLines: { color: '#334155' }, // slate-700
             horzLines: { color: '#334155' },
           },
-          width: chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800,
+          width: containerWidth,
           height: 400,
           timeScale: {
             timeVisible: true,
@@ -168,8 +189,15 @@ export function PortfolioChartFast() {
           },
         })
 
-        if (!chart || typeof chart.addLineSeries !== 'function') {
-          console.error('Chart initialization failed: addLineSeries not available', chart)
+        if (!chart) {
+          console.error('Chart creation returned null/undefined')
+          return
+        }
+
+        // Verify addLineSeries exists
+        if (typeof chart.addLineSeries !== 'function') {
+          console.error('Chart object does not have addLineSeries method', chart)
+          chart.remove()
           return
         }
 
@@ -183,6 +211,11 @@ export function PortfolioChartFast() {
           },
         })
 
+        if (!mounted) {
+          chart.remove()
+          return
+        }
+
         chartRef.current = chart
         seriesRef.current = series
 
@@ -194,7 +227,7 @@ export function PortfolioChartFast() {
             })
             const data = await response.json()
             
-            if (data?.series && Array.isArray(data.series)) {
+            if (data?.series && Array.isArray(data.series) && seriesRef.current) {
               const historicalPoints: LineData[] = data.series
                 .map((p: any) => ({
                   time: Math.floor((p.t || Date.now()) / 1000),
@@ -203,9 +236,9 @@ export function PortfolioChartFast() {
                 .filter((p: LineData) => p.value > 0)
                 .sort((a: LineData, b: LineData) => (a.time as number) - (b.time as number))
 
-              if (historicalPoints.length > 0) {
+              if (historicalPoints.length > 0 && seriesRef.current) {
                 pointsRef.current = historicalPoints
-                series.setData(historicalPoints)
+                seriesRef.current.setData(historicalPoints)
               }
             }
           } catch (error) {
@@ -222,36 +255,39 @@ export function PortfolioChartFast() {
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth || 800,
-        })
-      }
-    }
-
-    // Ensure container has dimensions
-    const containerWidth = container.clientWidth || container.offsetWidth || 800
-    if (containerWidth === 0) {
-      // Wait for next frame if container isn't ready
-      requestAnimationFrame(() => {
-        if (!chartContainerRef.current || chartRef.current) return
-        initializeChart()
-        window.addEventListener('resize', handleResize)
-      })
-      return () => {
-        window.removeEventListener('resize', handleResize)
-        if (chartRef.current) {
-          chartRef.current.remove()
-          chartRef.current = null
-          seriesRef.current = null
+        const width = chartContainerRef.current.clientWidth || chartContainerRef.current.offsetWidth
+        if (width > 0) {
+          chartRef.current.applyOptions({ width })
         }
       }
     }
 
-    // Call initializeChart if container is ready
-    initializeChart()
+    // Try to initialize immediately, or wait for container to be ready
+    const containerWidth = container.clientWidth || container.offsetWidth
+    if (containerWidth > 0) {
+      initializeChart()
+    } else {
+      // Wait for container to be ready
+      const checkReady = setInterval(() => {
+        if (!mounted) {
+          clearInterval(checkReady)
+          return
+        }
+        const width = chartContainerRef.current?.clientWidth || chartContainerRef.current?.offsetWidth
+        if (width > 0 && !chartRef.current) {
+          clearInterval(checkReady)
+          initializeChart()
+        }
+      }, 50)
+
+      // Cleanup interval after 5 seconds
+      setTimeout(() => clearInterval(checkReady), 5000)
+    }
+
     window.addEventListener('resize', handleResize)
 
     return () => {
+      mounted = false
       window.removeEventListener('resize', handleResize)
       if (chartRef.current) {
         chartRef.current.remove()
