@@ -2,6 +2,7 @@
 
 import useSWR from 'swr'
 import { useEffect, useMemo, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
@@ -9,6 +10,7 @@ import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 
 export function PortfolioChart() {
   const userId = useUserId()
+  const pathname = usePathname()
   const positionsStorageKey = getUserStorageKey('bullish_pf_positions', userId)
   const transactionsStorageKey = getUserStorageKey('bullish_transactions', userId)
   const walletTxStorageKey = getUserStorageKey('bullish_wallet_transactions', userId)
@@ -31,6 +33,13 @@ export function PortfolioChart() {
     // Revalidate on mount to ensure fresh data on route changes
     revalidateOnMount: true,
   })
+  
+  // Revalidate portfolio data on route change to ensure consistency
+  useEffect(() => {
+    if (userId) {
+      mutatePf()
+    }
+  }, [pathname, userId, mutatePf])
   const [localItems, setLocalItems] = useState<any[]>([])
   
   // Map internal ranges to API ranges (consistent mapping) - REMOVED 1H
