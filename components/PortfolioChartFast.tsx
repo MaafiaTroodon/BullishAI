@@ -15,20 +15,8 @@ import { authClient } from '@/lib/auth-client'
 import { useFastPricePolling } from '@/hooks/useFastPricePolling'
 import { createHoldingsMap, calculateMarkToMarketDelta, SnapshotThrottle } from '@/lib/portfolio-mark-to-market-fast'
 
-// Dynamic import for lightweight-charts to avoid SSR issues
-let lightweightCharts: any = null
-const loadLightweightCharts = async () => {
-  if (lightweightCharts) return lightweightCharts
-  try {
-    const module = await import('lightweight-charts')
-    // Handle both default and named exports
-    lightweightCharts = module.default || module
-    return lightweightCharts
-  } catch (error) {
-    console.error('Failed to load lightweight-charts:', error)
-    return null
-  }
-}
+// Import lightweight-charts - it's client-side only due to 'use client'
+import { createChart, ColorType } from 'lightweight-charts'
 
 export function PortfolioChartFast() {
   const userId = useUserId()
@@ -196,53 +184,67 @@ export function PortfolioChartFast() {
       }
 
       try {
-        // Load lightweight-charts dynamically
-        const chartsLib = await loadLightweightCharts()
-        if (!chartsLib) {
-          console.error('Failed to load lightweight-charts library')
+        // Verify createChart is available (should be since we're client-side)
+        if (typeof createChart !== 'function') {
+          console.error('createChart is not a function. Check if lightweight-charts is installed.')
           return
         }
 
-        // Try different ways to access createChart
-        const createChart = chartsLib.createChart || chartsLib.default?.createChart
-        const ColorType = chartsLib.ColorType || chartsLib.default?.ColorType
-
-        if (!createChart || typeof createChart !== 'function') {
-          console.error('createChart is not available. Library structure:', Object.keys(chartsLib))
+        // Verify container is a valid DOM element
+        if (!container || !(container instanceof HTMLElement)) {
+          console.error('Container is not a valid HTMLElement', container)
           return
         }
 
-        if (!ColorType) {
-          console.error('ColorType is not available')
+        // Ensure container is visible and has dimensions
+        if (containerWidth < 100 || container.offsetHeight < 100) {
+          console.error('Container dimensions too small:', { width: containerWidth, height: container.offsetHeight })
           return
         }
 
-        const chart = createChart(container, {
-          layout: {
-            background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
-            textColor: '#94a3b8', // slate-400
-          },
-          grid: {
-            vertLines: { color: '#334155' }, // slate-700
-            horzLines: { color: '#334155' },
-          },
-          width: containerWidth,
-          height: 400,
-          timeScale: {
-            timeVisible: true,
-            secondsVisible: false,
-          },
-        })
+        let chart
+        try {
+          chart = createChart(container, {
+            layout: {
+              background: { type: ColorType.Solid, color: '#1e293b' }, // slate-800
+              textColor: '#94a3b8', // slate-400
+            },
+            grid: {
+              vertLines: { color: '#334155' }, // slate-700
+              horzLines: { color: '#334155' },
+            },
+            width: containerWidth,
+            height: 400,
+            timeScale: {
+              timeVisible: true,
+              secondsVisible: false,
+            },
+          })
+        } catch (createError) {
+          console.error('Error calling createChart:', createError)
+          return
+        }
 
         if (!chart) {
           console.error('Chart creation returned null/undefined')
           return
         }
 
+        // Verify chart object has expected methods
+        if (typeof chart !== 'object' || Object.keys(chart).length === 0) {
+          console.error('Chart object is empty or invalid:', chart, 'Type:', typeof chart)
+          if (chart && typeof chart.remove === 'function') {
+            chart.remove()
+          }
+          return
+        }
+
         // Verify addLineSeries exists
         if (typeof chart.addLineSeries !== 'function') {
-          console.error('Chart object does not have addLineSeries method', chart)
-          chart.remove()
+          console.error('Chart object does not have addLineSeries method. Available methods:', Object.keys(chart))
+          if (chart && typeof chart.remove === 'function') {
+            chart.remove()
+          }
           return
         }
 
