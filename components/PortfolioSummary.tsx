@@ -192,7 +192,8 @@ export function PortfolioSummary() {
     }
   }, [JSON.stringify(enrichedItems), timeseriesData])
 
-  if (isLoading && enrichedItems.length === 0) {
+  // Only show loading if we truly have no data (not just revalidating)
+  if (isLoading && !data && enrichedItems.length === 0 && localItems.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="animate-pulse">
@@ -203,7 +204,10 @@ export function PortfolioSummary() {
     )
   }
 
-  if (metrics.holdingCount === 0) {
+  // Check if we have any positions (from API or localStorage)
+  const hasPositions = enrichedItems.length > 0 || (data?.items && data.items.length > 0) || localItems.length > 0
+  
+  if (metrics.holdingCount === 0 && !hasPositions) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="text-white text-2xl font-bold mb-2">$0.00</div>
