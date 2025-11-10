@@ -56,7 +56,9 @@ export async function searchKnowledgeBase(
   query: string,
   limit: number = 5
 ): Promise<QAData[]> {
-  const kb = await loadKnowledgeBase()
+  // Ensure knowledge base is loaded
+  await loadKnowledgeBase()
+  const kb = knowledgeBase || []
   if (kb.length === 0) return []
 
   const queryLower = query.toLowerCase()
