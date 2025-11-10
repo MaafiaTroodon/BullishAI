@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listTransactions, listPositions } from '@/lib/portfolio'
 import { getUserId } from '@/lib/auth-server'
+import { getPortfolioTimeSeries, calculateMarkToMarket } from '@/lib/portfolio-mark-to-market'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
