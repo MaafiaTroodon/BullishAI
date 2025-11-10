@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,19 +8,18 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  image     String?
-  emailVerified Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  watchlists Watchlist[]
-  alerts     Alert[]
-  sessions   Session[]
-  accounts   Account[]
-  
+  id            String      @id @default(cuid())
+  email         String      @unique
+  name          String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  emailVerified Boolean     @default(false)
+  image         String?
+  accounts      Account[]
+  alerts        Alert[]
+  sessions      Session[]
+  watchlists    Watchlist[]
+
   @@map("users")
 }
 
@@ -36,29 +32,27 @@ model Session {
   userAgent String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@map("sessions")
 }
 
 model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  accountId         String
-  providerId        String
-  accessToken       String? @db.Text
-  refreshToken      String? @db.Text
-  idToken           String? @db.Text
-  accessTokenExpiresAt DateTime?
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
-  scope             String?
-  password          String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([providerId, accountId])
   @@map("accounts")
 }
@@ -70,21 +64,20 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  
+
   @@unique([identifier, value])
   @@map("verifications")
 }
 
 model Watchlist {
-  id        String         @id @default(cuid())
+  id        String          @id @default(cuid())
   name      String
   userId    String
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
   items     WatchlistItem[]
-  
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("watchlists")
 }
 
@@ -93,9 +86,8 @@ model WatchlistItem {
   symbol      String
   watchlistId String
   createdAt   DateTime  @default(now())
-  
   watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
-  
+
   @@unique([watchlistId, symbol])
   @@map("watchlist_items")
 }
@@ -104,15 +96,13 @@ model Alert {
   id        String   @id @default(cuid())
   userId    String
   symbol    String
-  type      String   // "above" | "below" | "pct_move"
+  type      String
   value     Float
   active    Boolean  @default(true)
   notified  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@map("alerts")
 }
-

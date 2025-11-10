@@ -9,3 +9,6 @@ export const authClient = createAuthClient({
   basePath: "/api/auth",
 })
 
+// Type helper for session
+export type Session = Awaited<ReturnType<typeof authClient.getSession>>
+

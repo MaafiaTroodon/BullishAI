@@ -27,7 +27,7 @@ function SignInContent() {
       
       console.log('Sign in result:', result)
       
-      if (result.error) {
+      if (result?.error) {
         setError(result.error.message || 'Failed to sign in')
         setLoading(false)
         return

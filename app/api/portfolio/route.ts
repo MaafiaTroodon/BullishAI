@@ -14,10 +14,13 @@ export async function GET(req: NextRequest) {
   const enrich = url.searchParams.get('enrich') === '1'
   const includeTransactions = url.searchParams.get('transactions') === '1'
   
-  // Restore wallet from cookie if in-memory is empty
+  // User-specific cookie name to prevent cross-user data sharing
+  const cookieName = `bullish_wallet_${userId}`
+  
+  // Restore wallet from user-specific cookie if in-memory is empty
   let bal = getWalletBalance(userId)
   try {
-    const cookieBal = req.cookies.get('bullish_wallet')?.value
+    const cookieBal = req.cookies.get(cookieName)?.value
     if (cookieBal) {
       const parsed = Number(cookieBal)
       if (!Number.isNaN(parsed) && parsed > 0) {
@@ -38,7 +41,7 @@ export async function GET(req: NextRequest) {
   
   if (!enrich || items.length === 0) {
     const res = NextResponse.json(response)
-    try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+    try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
     return res
   }
 
@@ -97,7 +100,7 @@ export async function GET(req: NextRequest) {
       'Content-Type': 'application/json',
     }
   })
-  try { res.cookies.set('bullish_wallet', String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+  try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
   return res
 }
 
@@ -139,9 +142,12 @@ export async function POST(req: NextRequest) {
 
     // Process single trade
     if (body && body.symbol) {
-      // Restore wallet from cookie before processing trade
+      // User-specific cookie name to prevent cross-user data sharing
+      const cookieName = `bullish_wallet_${userId}`
+      
+      // Restore wallet from user-specific cookie before processing trade
       try {
-        const cookieBal = req.cookies.get('bullish_wallet')?.value
+        const cookieBal = req.cookies.get(cookieName)?.value
         if (cookieBal) {
           const parsed = Number(cookieBal)
           if (!Number.isNaN(parsed) && parsed > 0) {
@@ -159,8 +165,8 @@ export async function POST(req: NextRequest) {
           transaction: result.transaction,
           wallet: { balance: updatedBal, cap: 1_000_000 } 
         })
-        // Persist wallet balance to cookie after trade
-        try { res.cookies.set('bullish_wallet', String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+        // Persist wallet balance to user-specific cookie after trade
+        try { res.cookies.set(cookieName, String(updatedBal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
         // Trigger wallet update event
         try { 
           res.headers.set('X-Wallet-Updated', 'true')

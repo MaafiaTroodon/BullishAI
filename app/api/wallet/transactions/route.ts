@@ -16,10 +16,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
     
-    // Try to restore wallet from cookie if in-memory is empty
+    // User-specific cookie name to prevent cross-user data sharing
+    const cookieName = `bullish_wallet_${userId}`
+    
+    // Try to restore wallet from user-specific cookie if in-memory is empty
     let balance = getWalletBalance(userId)
     try {
-      const cookieBal = req.cookies.get('bullish_wallet')?.value
+      const cookieBal = req.cookies.get(cookieName)?.value
       if (cookieBal) {
         const parsed = Number(cookieBal)
         if (!Number.isNaN(parsed) && parsed >= 0) {

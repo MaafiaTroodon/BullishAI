@@ -16,11 +16,14 @@ export async function GET(req: NextRequest) {
   let balance = getWalletBalance(userId)
   const walletTx = listWalletTransactions(userId)
   
-  // If we don't have a balance in memory, try to restore from cookie
+  // User-specific cookie name to prevent cross-user data sharing
+  const cookieName = `bullish_wallet_${userId}`
+  
+  // If we don't have a balance in memory, try to restore from user-specific cookie
   // This handles the case where the server restarts but cookies persist
   if (balance === 0 && walletTx.length === 0) {
     try {
-      const cookieBal = req.cookies.get('bullish_wallet')?.value
+      const cookieBal = req.cookies.get(cookieName)?.value
       if (cookieBal) {
         const parsed = Number(cookieBal)
         if (!Number.isNaN(parsed) && parsed >= 0) {
@@ -35,8 +38,8 @@ export async function GET(req: NextRequest) {
   balance = Math.max(0, balance)
   
   const res = NextResponse.json({ balance, cap: 1_000_000, transactions: walletTx })
-  // Always persist current balance to cookie
-  try { res.cookies.set('bullish_wallet', String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+  // Always persist current balance to user-specific cookie
+  try { res.cookies.set(cookieName, String(balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
   return res
 }
 
@@ -49,9 +52,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action, amount } = body || {}
     
-    // Ensure wallet is initialized from cookie before processing
+    // User-specific cookie name to prevent cross-user data sharing
+    const cookieName = `bullish_wallet_${userId}`
+    
+    // Ensure wallet is initialized from user-specific cookie before processing
     try {
-      const cookieBal = req.cookies.get('bullish_wallet')?.value
+      const cookieBal = req.cookies.get(cookieName)?.value
       if (cookieBal) {
         const parsed = Number(cookieBal)
         if (!Number.isNaN(parsed) && parsed > 0) {
@@ -86,7 +92,7 @@ export async function POST(req: NextRequest) {
         balance: result.balance, 
         transaction: result.transaction 
       })
-      try { res.cookies.set('bullish_wallet', String(result.balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+      try { res.cookies.set(cookieName, String(result.balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
       return res
     }
     if (action === 'withdraw') {
@@ -95,7 +101,7 @@ export async function POST(req: NextRequest) {
         balance: result.balance, 
         transaction: result.transaction 
       })
-      try { res.cookies.set('bullish_wallet', String(result.balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+      try { res.cookies.set(cookieName, String(result.balance), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
       return res
     }
     return NextResponse.json({ error: 'invalid_action' }, { status: 400 })
