@@ -35,7 +35,13 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [isSubmitting, setSubmitting] = useState(false)
   
   // Fetch portfolio data with SWR for real-time updates
-  const { data: portfolioData, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { refreshInterval: 2000 })
+  const { data: portfolioData, mutate } = useSWR('/api/portfolio?enrich=1', fetcher, { 
+    refreshInterval: 2000,
+    // Keep previous data during revalidation to prevent $0 flicker
+    keepPreviousData: true,
+    // Don't show error retry to prevent flicker
+    shouldRetryOnError: false,
+  })
   const [localItems, setLocalItems] = useState<any[]>([])
   
   useEffect(() => {
