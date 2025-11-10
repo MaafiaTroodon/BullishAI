@@ -227,7 +227,7 @@ export async function saveWalletTransactionToDB(
     await client.query('BEGIN')
 
     try {
-      // Insert wallet transaction (use camelCase column names)
+      // Insert wallet transaction (use camelCase column names, method is lowercase)
       await client.query(
         `INSERT INTO wallet_transactions (id, "portfolioId", action, amount, timestamp, method, "createdAt")
          VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW())`,
