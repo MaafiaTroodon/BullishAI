@@ -14,10 +14,14 @@ export async function GET(req: NextRequest) {
   const enrich = url.searchParams.get('enrich') === '1'
   const includeTransactions = url.searchParams.get('transactions') === '1'
   
+  // Load portfolio from database first (ensures data persists across logouts)
+  const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
+  await ensurePortfolioLoaded(userId)
+  
   // User-specific cookie name to prevent cross-user data sharing
   const cookieName = `bullish_wallet_${userId}`
   
-  // Get current wallet balance from in-memory store
+  // Get current wallet balance from in-memory store (now loaded from DB)
   let bal = getWalletBalance(userId)
   
   // Check if this is a new user (no positions, no transactions)
@@ -28,13 +32,14 @@ export async function GET(req: NextRequest) {
   const isNewUser = items.length === 0 && transactions.length === 0 && walletTransactions.length === 0
   
   // For new users, always start with $0 balance (don't restore from cookie)
-  // Only restore from cookie if user has existing activity
+  // Only restore from cookie if user has existing activity (legacy support)
   if (!isNewUser) {
     try {
       const cookieBal = req.cookies.get(cookieName)?.value
       if (cookieBal) {
         const parsed = Number(cookieBal)
-        if (!Number.isNaN(parsed) && parsed >= 0) {
+        if (!Number.isNaN(parsed) && parsed >= 0 && bal === 0) {
+          // Only restore from cookie if DB balance is 0 (migration scenario)
           initializeWalletFromBalance(userId, parsed)
           bal = parsed
         }

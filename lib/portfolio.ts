@@ -167,7 +167,10 @@ export function listPositions(userId: string): Position[] {
 
 // Merge a client-provided snapshot of positions into the server portfolio store.
 // Existing positions are overwritten by the snapshot for the same symbol.
-export function mergePositions(userId: string, positions: Position[]): void {
+export async function mergePositions(userId: string, positions: Position[]): Promise<void> {
+  // Ensure portfolio is loaded from DB
+  await ensurePortfolioLoaded(userId)
+  
   const pf = getPf(userId)
   for (const p of positions) {
     const s = p.symbol.toUpperCase()
@@ -180,6 +183,12 @@ export function mergePositions(userId: string, positions: Position[]): void {
       realizedPnl: p.realizedPnl ?? 0,
     }
   }
+  
+  // Save all positions to database (non-blocking)
+  const { syncPositionsToDB } = await import('@/lib/portfolio-db')
+  syncPositionsToDB(userId, positions).catch(err => {
+    console.error('Error syncing positions to DB:', err)
+  })
 }
 
 export async function upsertTrade(userId: string, input: TradeInput): Promise<{ position: Position; transaction: Transaction }> {
