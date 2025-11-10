@@ -39,8 +39,14 @@ const SAFETY_DISCLAIMER = '\n\n⚠️ Not financial advice. Past performance doe
 
 /**
  * Route query to appropriate model based on content
+ * Can be overridden by caller
  */
-export function selectModel(query: string, context?: RAGContext): AIModel {
+export function selectModel(query: string, context?: RAGContext, preferredModel?: AIModel): AIModel {
+  // If caller specifies a model, use it
+  if (preferredModel) {
+    return preferredModel
+  }
+  
   const lowerQuery = query.toLowerCase()
   
   // Route to Gemini for PDF/filings/tables
@@ -50,7 +56,6 @@ export function selectModel(query: string, context?: RAGContext): AIModel {
   }
   
   // Route to Local PyTorch for domain-specific finance Q&A (if available)
-  // For now, fallback to Groq until local model is trained
   if (lowerQuery.includes('screening') || lowerQuery.includes('rationale') || 
       lowerQuery.includes('explain') && context?.fundamentals) {
     // Check if local model is available
@@ -249,9 +254,10 @@ export async function routeAIQuery(
   query: string,
   context: RAGContext = {},
   systemPrompt?: string,
-  jsonSchema?: any
+  jsonSchema?: any,
+  preferredModel?: AIModel
 ): Promise<AIResponse> {
-  const model = selectModel(query, context)
+  const model = selectModel(query, context, preferredModel)
   
   try {
     switch (model) {

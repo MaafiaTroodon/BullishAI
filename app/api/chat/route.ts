@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { routeAIQuery, RAGContext } from '@/lib/ai-router'
 import { searchKnowledgeBase, detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-knowledge-base'
+import { findBestMatch, buildKnowledgePrompt, selectBestModel } from '@/lib/ai-knowledge-trainer'
 import { calculateTechnical } from '@/lib/technical-calculator'
 
 /**
@@ -19,8 +20,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 1. Search knowledge base for relevant context
-    const relevantContext = await searchKnowledgeBase(query, 5)
+    // 1. Load and search knowledge base for best matches
+    await loadKnowledgeBase()
+    const kb = await loadKnowledgeBase()
+    const relevantContext = findBestMatch(query, kb, 5)
     
     // 2. Detect section/intent
     const section = detectSection(query)
@@ -106,17 +109,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Build conversational prompt with knowledge base context
-    const kbContext = relevantContext
-      .map(ctx => `Q: ${ctx.question}\nA: ${ctx.answer}`)
-      .join('\n\n')
-
+    // 4. Build enhanced prompt using knowledge base
+    const enhancedPrompt = buildKnowledgePrompt(query, kb, relevantContext)
+    
+    // 5. Select best model based on query and knowledge base
+    const selectedModel = selectBestModel(query, relevantContext, Object.keys(context.prices || {}).length > 0)
+    
+    // 6. Build system prompt with knowledge base examples
     const systemPrompt = `You are BullishAI — a conversational market analyst who chats casually about stocks, trends, and insights. 
 You're friendly, confident, and human-like. Avoid robotic tables or bullet-point spam unless explicitly asked.
 
-${kbContext ? `\nRelevant context from knowledge base:\n${kbContext}\n` : ''}
+${relevantContext.length > 0 ? `\nUse these examples from our knowledge base as style guides:\n${relevantContext.slice(0, 3).map(ctx => `Q: ${ctx.question}\nA: ${ctx.answer}`).join('\n\n')}\n` : ''}
 
 Guidelines:
+- Match the conversational style of the examples above
 - Keep answers concise (1-3 sentences typically)
 - Use natural, conversational language
 - Add emojis sparingly for friendliness
@@ -127,28 +133,56 @@ Guidelines:
 
 Tone: Chatty, confident, helpful, not robotic.`
 
-    const fullQuery = `${query}${section ? ` (Context: ${section})` : ''}`
+    const fullQuery = query
 
-    // 5. Route to appropriate model
+    // 7. Route to appropriate model with enhanced prompt
     let response
     try {
-      response = await routeAIQuery(fullQuery, context, systemPrompt)
+      // Use the selected model
+      response = await routeAIQuery(fullQuery, context, systemPrompt, undefined, selectedModel)
     } catch (error: any) {
       // Handle rate limits gracefully
       if (error.message?.includes('rate limit') || error.message?.includes('429')) {
-        // Fallback to cached response or simpler model
-        const fallbackAnswer = relevantContext.length > 0
-          ? relevantContext[0].answer
-          : "Looks like I hit my request limit — but here's a quick summary from cached data. The market's been active today. Want me to check specific tickers when I'm back online?"
-        
-        return NextResponse.json({
-          answer: fallbackAnswer,
-          model: 'fallback-cached',
-          latency: 0,
-          cached: true,
-        })
+        // Try Gemini as fallback if Groq fails
+        if (selectedModel === 'groq-llama') {
+          try {
+            console.log('Groq rate limited, trying Gemini...')
+            response = await routeAIQuery(fullQuery, context, systemPrompt, undefined, 'gemini')
+          } catch (geminiError) {
+            // Both failed, use knowledge base answer
+            const fallbackAnswer = relevantContext.length > 0
+              ? relevantContext[0].answer
+              : "Looks like I hit my request limit — but here's a quick summary from cached data. The market's been active today. Want me to check specific tickers when I'm back online?"
+            
+            return NextResponse.json({
+              answer: fallbackAnswer,
+              model: 'fallback-cached',
+              modelBadge: 'Cached',
+              latency: 0,
+              cached: true,
+            })
+          }
+        } else {
+          // Try Groq as fallback if other model fails
+          try {
+            response = await routeAIQuery(fullQuery, context, systemPrompt, undefined, 'groq-llama')
+          } catch (fallbackError) {
+            const fallbackAnswer = relevantContext.length > 0
+              ? relevantContext[0].answer
+              : "Looks like I hit my request limit. Want me to check specific tickers when I'm back online?"
+            
+            return NextResponse.json({
+              answer: fallbackAnswer,
+              model: 'fallback-cached',
+              modelBadge: 'Cached',
+              latency: 0,
+              cached: true,
+            })
+          }
+        }
+      } else {
+        throw error
       }
-      throw error
     }
 
     // 6. Format response naturally

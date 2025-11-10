@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Send, Sparkles, TrendingUp, TrendingDown, X } from 'lucide-react'
+import { Send, Sparkles, TrendingUp, TrendingDown, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { chatPresets, getPresetsByCategory, ChatPreset } from '@/lib/chat-presets'
 // Removed AIInsightsToolbar - everything is conversational now
 
@@ -29,7 +29,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
-  const [showPresets, setShowPresets] = useState(true)
+  const [showPresets, setShowPresets] = useState(true) // Always show presets by default, toggle to hide
   const [selectedCategory, setSelectedCategory] = useState<'quick-insights' | 'recommended' | 'technical' | 'all'>('all')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -102,12 +102,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     }
   }, [])
 
-  // Hide presets after first message
-  useEffect(() => {
-    if (messages.length > 1) {
-      setShowPresets(false)
-    }
-  }, [messages.length])
+  // Keep presets visible - they're now static at bottom, no auto-hide
 
   const handlePresetClick = (preset: ChatPreset) => {
     if (!isLoggedIn) {
@@ -115,7 +110,8 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       window.location.href = '/auth/signin'
       return
     }
-    setShowPresets(false)
+    
+    // Don't hide presets - they stay visible
     
     // For technical analysis, include focusSymbol if available
     let question = preset.question
@@ -130,7 +126,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     const messageToSend = typeof customMessage === 'string' ? customMessage : inputValue
     if (!messageToSend.trim() || !isLoggedIn) return
     
-    setShowPresets(false)
+    // Don't hide presets - they stay visible at bottom
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -299,81 +295,6 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/30">
-            {/* Preset Questions - Show when no conversation started */}
-            {showPresets && messages.length <= 1 && (
-              <div className="space-y-4 mb-4">
-                {/* Category Tabs */}
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      selectedCategory === 'all'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    onClick={() => setSelectedCategory('quick-insights')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      selectedCategory === 'quick-insights'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    Quick Insights
-                  </button>
-                  <button
-                    onClick={() => setSelectedCategory('recommended')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      selectedCategory === 'recommended'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    Recommended
-                  </button>
-                  <button
-                    onClick={() => setSelectedCategory('technical')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      selectedCategory === 'technical'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    Technical
-                  </button>
-                </div>
-
-                {/* Preset Buttons */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {(selectedCategory === 'all' 
-                    ? chatPresets 
-                    : getPresetsByCategory(selectedCategory)
-                  ).map((preset) => (
-                    <button
-                      key={preset.id}
-                      onClick={() => handlePresetClick(preset)}
-                      className="text-left p-3 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-blue-500/50 hover:bg-slate-800 transition group"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0">{preset.emoji}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-white group-hover:text-blue-400 transition mb-1">
-                            {preset.title}
-                          </div>
-                          <div className="text-xs text-slate-400 line-clamp-2">
-                            {preset.description}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -458,8 +379,105 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
             <div ref={messagesEndRef} />
           </div>
 
-            {/* Input */}
-            <div className="p-4 border-t border-slate-700 bg-slate-800/50 backdrop-blur flex-shrink-0">
+          {/* Preset Questions - Static at Bottom (like AInvest) */}
+          {showPresets && (
+            <div className="border-t border-slate-700 bg-slate-800/80 backdrop-blur flex-shrink-0">
+              {/* Toggle Header */}
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-300">Recommended Chats</span>
+                  <span className="text-xs text-slate-500">
+                    ({(selectedCategory === 'all' ? chatPresets : getPresetsByCategory(selectedCategory)).length} questions)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Category Tabs - Compact */}
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className={`px-2 py-1 rounded text-xs font-medium transition ${
+                        selectedCategory === 'all'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setSelectedCategory('quick-insights')}
+                      className={`px-2 py-1 rounded text-xs font-medium transition ${
+                        selectedCategory === 'quick-insights'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      Insights
+                    </button>
+                    <button
+                      onClick={() => setSelectedCategory('recommended')}
+                      className={`px-2 py-1 rounded text-xs font-medium transition ${
+                        selectedCategory === 'recommended'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      Picks
+                    </button>
+                    <button
+                      onClick={() => setSelectedCategory('technical')}
+                      className={`px-2 py-1 rounded text-xs font-medium transition ${
+                        selectedCategory === 'technical'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      Technical
+                    </button>
+                  </div>
+                  {/* Toggle Button */}
+                  <button
+                    onClick={() => setShowPresets(!showPresets)}
+                    className="p-1.5 hover:bg-slate-700 rounded transition text-slate-400 hover:text-white"
+                    title={showPresets ? 'Hide presets' : 'Show presets'}
+                  >
+                    {showPresets ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Preset Pills - Horizontal Scroll */}
+              <div className="px-4 py-3 overflow-x-auto">
+                <div className="flex gap-2 min-w-max">
+                  {(selectedCategory === 'all' 
+                    ? chatPresets 
+                    : getPresetsByCategory(selectedCategory)
+                  ).map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => handlePresetClick(preset)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-700/50 border border-slate-600 hover:border-blue-500/50 hover:bg-slate-700 transition whitespace-nowrap group"
+                    >
+                      <span className="text-base">{preset.emoji}</span>
+                      <span className="text-sm font-medium text-white group-hover:text-blue-400 transition">
+                        {preset.title}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Input */}
+          <div className="p-4 border-t border-slate-700 bg-slate-800/50 backdrop-blur flex-shrink-0">
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setShowPresets(!showPresets)}
+                className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 rounded-lg transition"
+              >
+                {showPresets ? 'Hide' : 'Show'} Presets
+              </button>
+            </div>
             <div className="flex gap-3">
               <input
                 ref={inputRef}
@@ -479,7 +497,11 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
                 <Send className="h-5 w-5" />
               </button>
             </div>
-            </div>
+            {/* Disclaimer */}
+            <p className="text-xs text-slate-500 text-center mt-2">
+              Not intended as financial advice
+            </p>
+          </div>
           </div>
         </div>
       )}
