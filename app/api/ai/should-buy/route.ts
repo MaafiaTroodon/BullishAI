@@ -33,13 +33,13 @@ export async function GET(req: NextRequest) {
 
     const query = `Provide a "Should I Buy?" analysis for ${symbol}:
 1. Investment thesis (2-3 sentences)
-2. Entry considerations (price range, timing)
-3. Exit strategy (target price, stop loss)
+2. Entry considerations (price range, timing) - as a STRING, not an object
+3. Exit strategy (target price, stop loss) - as a STRING, not an object
 4. Key risks (3-4 points)
 5. Verdict: Buy/Hold/Sell with confidence level (1-10)
 
 IMPORTANT: This is NOT financial advice. Include strong disclaimers.
-Format as JSON with fields: thesis, entryConsiderations, exitStrategy, risks (array), verdict, confidence, disclaimer`
+Format as JSON with fields: thesis (string), entryConsiderations (string), exitStrategy (string), risks (array of strings), verdict (string), confidence (number), disclaimer (string)`
 
     const jsonSchema = {
       type: 'object',

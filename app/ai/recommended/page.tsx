@@ -69,30 +69,32 @@ export default function RecommendedPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {data?.stocks?.map((stock: any, idx: number) => (
                 <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
-                  <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
-                        <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
-                      </div>
-                      <div className={`text-right ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        <div className="text-lg font-semibold">
-                          {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                  <Link href={`/stocks/${stock.symbol}`}>
+                    <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
+                          <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
                         </div>
-                        <div className="text-sm text-slate-400">${stock.price?.toFixed(2)}</div>
+                        <div className={`text-right ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <div className="text-lg font-semibold">
+                            {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                          </div>
+                          <div className="text-sm text-slate-400">${stock.price?.toFixed(2)}</div>
+                        </div>
                       </div>
+                      
+                      <div className="mb-3">
+                        <span className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded">
+                          {stock.reason || 'Recommended'}
+                        </span>
+                      </div>
+                      
+                      <p className="text-sm text-slate-300 leading-relaxed">
+                        {stock.rationale || 'Strong fundamentals and positive momentum'}
+                      </p>
                     </div>
-                    
-                    <div className="mb-3">
-                      <span className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded">
-                        {stock.reason || 'Recommended'}
-                      </span>
-                    </div>
-                    
-                    <p className="text-sm text-slate-300 leading-relaxed">
-                      {stock.rationale || 'Strong fundamentals and positive momentum'}
-                    </p>
-                  </div>
+                  </Link>
                 </Reveal>
               ))}
             </div>

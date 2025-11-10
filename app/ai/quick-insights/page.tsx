@@ -80,20 +80,18 @@ export default function QuickInsightsPage() {
                     <TrendingUp className="w-5 h-5 text-green-400" />
                     Top Tickers to Watch
                   </h2>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {data.topTickers.map((ticker: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
-                        <div>
-                          <div className="font-semibold text-white">{ticker.symbol}</div>
-                          <div className="text-sm text-slate-400">{ticker.name}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`font-semibold ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {ticker.change >= 0 ? '+' : ''}{ticker.change.toFixed(2)}%
+                      <Link key={idx} href={`/stocks/${ticker.symbol}`}>
+                        <div className="bg-slate-700/30 rounded-lg p-4 border border-slate-600 hover:border-blue-500/50 transition cursor-pointer">
+                          <div className="font-bold text-white text-lg mb-1">{ticker.symbol}</div>
+                          <div className="text-sm text-slate-400 mb-2">{ticker.name || ticker.symbol}</div>
+                          <div className={`font-semibold text-lg ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {ticker.change >= 0 ? '+' : ''}{ticker.change?.toFixed(2)}%
                           </div>
-                          <div className="text-xs text-slate-500">{ticker.reason}</div>
+                          <div className="text-xs text-slate-500 mt-1">{ticker.reason || 'Market index'}</div>
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 </div>

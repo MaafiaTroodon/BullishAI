@@ -146,13 +146,21 @@ export default function ShouldBuyPage() {
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-3">Entry Considerations</h3>
                     <p className="text-slate-300 leading-relaxed text-sm">
-                      {data.analysis.entryConsiderations || 'N/A'}
+                      {typeof data.analysis.entryConsiderations === 'string' 
+                        ? data.analysis.entryConsiderations 
+                        : typeof data.analysis.entryConsiderations === 'object'
+                        ? JSON.stringify(data.analysis.entryConsiderations)
+                        : 'N/A'}
                     </p>
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-3">Exit Strategy</h3>
                     <p className="text-slate-300 leading-relaxed text-sm">
-                      {data.analysis.exitStrategy || 'N/A'}
+                      {typeof data.analysis.exitStrategy === 'string' 
+                        ? data.analysis.exitStrategy 
+                        : typeof data.analysis.exitStrategy === 'object'
+                        ? JSON.stringify(data.analysis.exitStrategy)
+                        : 'N/A'}
                     </p>
                   </div>
                 </div>
