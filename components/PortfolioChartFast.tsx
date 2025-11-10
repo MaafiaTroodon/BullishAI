@@ -286,70 +286,15 @@ export function PortfolioChartFast() {
         // Wait a tick to ensure chart is fully initialized
         await new Promise(resolve => setTimeout(resolve, 0))
         
-        // Try to add line series - the method might be non-enumerable
-        let addLineSeriesMethod = chart.addLineSeries
+        // The chart object has 'addSeries' method, not 'addLineSeries'
+        // We need to use addSeries with line series options
         let series: any = null
         
-        // If not found directly, check prototype chain for non-enumerable methods
-        if (!addLineSeriesMethod || typeof addLineSeriesMethod !== 'function') {
-          const proto = Object.getPrototypeOf(chart)
-          if (proto) {
-            // Get all properties including non-enumerable ones
-            const allProtoProps = Object.getOwnPropertyNames(proto)
-            for (const prop of allProtoProps) {
-              if (prop === 'addLineSeries') {
-                const descriptor = Object.getOwnPropertyDescriptor(proto, prop)
-                if (descriptor && typeof descriptor.value === 'function') {
-                  addLineSeriesMethod = descriptor.value
-                  break
-                } else if (descriptor && typeof descriptor.get === 'function') {
-                  addLineSeriesMethod = descriptor.get.call(chart)
-                  break
-                }
-              }
-            }
-          }
-        }
-        
-        // If still not found, try calling it directly anyway (methods might exist but not be enumerable)
-        if (typeof addLineSeriesMethod !== 'function') {
-          try {
-            // Try direct call - sometimes it works even if typeof says it doesn't
+        try {
+          // Try addLineSeries first (for compatibility)
+          if (typeof chart.addLineSeries === 'function') {
             series = chart.addLineSeries({
               color: '#10b981',
-              lineWidth: 2,
-              priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-            })
-            // If that worked, we're good
-            if (series) {
-              addLineSeriesMethod = chart.addLineSeries // Now we know it exists
-            }
-          } catch (directCallError: any) {
-            // If direct call fails, log detailed info
-            console.error('Direct call to addLineSeries failed:', directCallError?.message || directCallError)
-            const proto = Object.getPrototypeOf(chart)
-            console.error('Chart inspection:', {
-              type: typeof chart,
-              ownKeys: Object.keys(chart),
-              ownPropertyNames: Object.getOwnPropertyNames(chart),
-              prototypeKeys: proto ? Object.keys(proto) : [],
-              prototypePropertyNames: proto ? Object.getOwnPropertyNames(proto) : [],
-              hasAddLineSeries: 'addLineSeries' in chart,
-              chartConstructor: chart.constructor?.name,
-              chartValue: chart
-            })
-            if (chart && typeof chart.remove === 'function') {
-              chart.remove()
-            }
-            return
-          }
-        }
-
-        // Add line series using the method we found (or use the one from direct call)
-        if (!series && addLineSeriesMethod) {
-          try {
-            series = addLineSeriesMethod.call(chart, {
-              color: '#10b981', // emerald-500
               lineWidth: 2,
               priceFormat: {
                 type: 'price',
@@ -357,17 +302,51 @@ export function PortfolioChartFast() {
                 minMove: 0.01,
               },
             })
-          } catch (seriesError) {
-            console.error('Error calling addLineSeries:', seriesError)
-            if (chart && typeof chart.remove === 'function') {
-              chart.remove()
+          } 
+          // If that doesn't work, use addSeries (v5 API)
+          else if (typeof chart.addSeries === 'function') {
+            // In v5, addSeries might need a series type parameter
+            // Try with 'Line' type or just pass the options
+            try {
+              series = chart.addSeries('Line', {
+                color: '#10b981',
+                lineWidth: 2,
+                priceFormat: {
+                  type: 'price',
+                  precision: 2,
+                  minMove: 0.01,
+                },
+              })
+            } catch (e1) {
+              // If that fails, try without type parameter
+              try {
+                series = chart.addSeries({
+                  color: '#10b981',
+                  lineWidth: 2,
+                  priceFormat: {
+                    type: 'price',
+                    precision: 2,
+                    minMove: 0.01,
+                  },
+                })
+              } catch (e2) {
+                console.error('Both addSeries attempts failed:', e1, e2)
+                throw e2
+              }
             }
-            return
+          } else {
+            throw new Error('Neither addLineSeries nor addSeries found on chart object')
           }
+        } catch (seriesError: any) {
+          console.error('Error creating line series:', seriesError?.message || seriesError)
+          if (chart && typeof chart.remove === 'function') {
+            chart.remove()
+          }
+          return
         }
         
         if (!series) {
-          console.error('Failed to create series')
+          console.error('Failed to create series - method returned null/undefined')
           if (chart && typeof chart.remove === 'function') {
             chart.remove()
           }
