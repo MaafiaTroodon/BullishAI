@@ -15,6 +15,7 @@ import useSWR from 'swr'
 import { Reveal } from '@/components/anim/Reveal'
 import { StaggerGrid } from '@/components/anim/StaggerGrid'
 import { ParallaxImage } from '@/components/anim/ParallaxImage'
+import { Footer } from '@/components/Footer'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -366,14 +367,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800 py-12">
-        <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center text-slate-500">
-            <p>Built with Next.js, Prisma, Groq AI, and Inngest</p>
-            <p className="mt-2">© 2024 BullishAI. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
