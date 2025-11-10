@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Only available in development
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0

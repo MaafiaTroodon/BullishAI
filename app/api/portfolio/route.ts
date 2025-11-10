@@ -57,8 +57,7 @@ export async function GET(req: NextRequest) {
   
   // Include transaction history if requested
   if (includeTransactions) {
-    const { listTransactions } = await import('@/lib/portfolio')
-    response.transactions = listTransactions(userId)
+    response.transactions = transactions
   }
   
   if (!enrich || items.length === 0) {
