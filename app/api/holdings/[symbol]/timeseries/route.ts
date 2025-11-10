@@ -47,7 +47,10 @@ function forwardFillPrices(prices: Array<{t: number, c: number}>, timestamps: nu
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = getUserId()
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
     const url = new URL(req.url)
     // Extract symbol from pathname: /api/holdings/MSFT/timeseries -> MSFT
     const pathParts = url.pathname.split('/')
