@@ -10,10 +10,12 @@ export function DevStatus() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return
 
-    fetch('/api/_debug')
+    // Only fetch in development, and handle 404 gracefully
+    const controller = new AbortController()
+    fetch('/api/_debug', { signal: controller.signal })
       .then(r => {
         if (!r.ok) {
-          // API doesn't exist, don't show status
+          // API doesn't exist or not available, don't show status
           setShow(false)
           return null
         }
@@ -28,10 +30,17 @@ export function DevStatus() {
           Object.values(data.providers || {}).some(v => v === 'fail')
         setShow(hasIssues)
       })
-      .catch(() => {
-        // Silently fail - don't show status if API doesn't exist
-        setShow(false)
+      .catch((err) => {
+        // Silently fail - don't show status if API doesn't exist or request was aborted
+        if (err.name !== 'AbortError') {
+          // Only log non-abort errors
+          setShow(false)
+        }
       })
+    
+    return () => {
+      controller.abort()
+    }
   }, [])
 
   if (!show || !status) return null
