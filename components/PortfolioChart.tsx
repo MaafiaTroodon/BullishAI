@@ -5,8 +5,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
+import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 
 export function PortfolioChart() {
+  const userId = useUserId()
+  const positionsStorageKey = getUserStorageKey('bullish_pf_positions', userId)
+  const transactionsStorageKey = getUserStorageKey('bullish_transactions', userId)
+  const walletTxStorageKey = getUserStorageKey('bullish_wallet_transactions', userId)
+  
   const [chartRange, setChartRange] = useState('1d') // Default to 1D
   
   // Get market session for dynamic refresh interval
@@ -65,27 +71,44 @@ export function PortfolioChart() {
   }, [mutateTimeseries])
   
   useEffect(() => {
+    if (!positionsStorageKey) {
+      setLocalItems([])
+      return
+    }
+    
     try {
-      const raw = localStorage.getItem('bullish_demo_pf_positions')
+      const raw = localStorage.getItem(positionsStorageKey)
       if (raw) setLocalItems(Object.values(JSON.parse(raw)))
+      else setLocalItems([])
       function onUpd(){
-        const r = localStorage.getItem('bullish_demo_pf_positions')
+        if (!positionsStorageKey) {
+          setLocalItems([])
+          return
+        }
+        const r = localStorage.getItem(positionsStorageKey)
         if (r) setLocalItems(Object.values(JSON.parse(r)))
+        else setLocalItems([])
         mutatePf()
         mutateTimeseries()
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
       return () => window.removeEventListener('portfolioUpdated', onUpd as any)
-    } catch {}
-  }, [mutatePf, mutateTimeseries])
+    } catch {
+      setLocalItems([])
+    }
+  }, [mutatePf, mutateTimeseries, positionsStorageKey])
   
   // Sync transactions on mount
   useEffect(() => {
+    if (!userId || !transactionsStorageKey || !walletTxStorageKey || !positionsStorageKey) {
+      return
+    }
+    
     async function syncData() {
       try {
-        const txRaw = localStorage.getItem('bullish_demo_transactions')
-        const walletTxRaw = localStorage.getItem('bullish_wallet_transactions')
-        const positionsRaw = localStorage.getItem('bullish_demo_pf_positions')
+        const txRaw = localStorage.getItem(transactionsStorageKey)
+        const walletTxRaw = localStorage.getItem(walletTxStorageKey)
+        const positionsRaw = localStorage.getItem(positionsStorageKey)
         
         const syncData: any = {}
         if (txRaw) {
@@ -117,7 +140,7 @@ export function PortfolioChart() {
       } catch {}
     }
     syncData()
-  }, [mutatePf, mutateTimeseries])
+  }, [mutatePf, mutateTimeseries, userId, transactionsStorageKey, walletTxStorageKey, positionsStorageKey])
   
   // Use timeseries data from API as single source of truth (no patching)
   // The API already calculates portfolio value from positions + current quotes

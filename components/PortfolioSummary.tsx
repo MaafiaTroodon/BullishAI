@@ -6,10 +6,14 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { MarketSessionBadge } from './MarketSessionBadge'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
+import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 
 const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.json())
 
 export function PortfolioSummary() {
+  const userId = useUserId()
+  const storageKey = getUserStorageKey('bullish_pf_positions', userId)
+  
   // Get market session for dynamic refresh interval
   const session = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
   const refreshInterval = getRefreshInterval(session.session)
@@ -28,21 +32,35 @@ export function PortfolioSummary() {
   const { data: timeseriesData } = useSWR('/api/portfolio/timeseries?range=ALL&gran=1d', safeJsonFetcher, { refreshInterval: 30000 })
   
   useEffect(() => {
+    if (!storageKey) {
+      setLocalItems([])
+      return
+    }
+    
     try {
-      const raw = localStorage.getItem('bullish_demo_pf_positions')
+      const raw = localStorage.getItem(storageKey)
       if (raw) {
         const map = JSON.parse(raw)
         setLocalItems(Object.values(map))
+      } else {
+        setLocalItems([])
       }
       function onUpd() {
-        const r = localStorage.getItem('bullish_demo_pf_positions')
+        if (!storageKey) {
+          setLocalItems([])
+          return
+        }
+        const r = localStorage.getItem(storageKey)
         if (r) setLocalItems(Object.values(JSON.parse(r)))
+        else setLocalItems([])
         mutate() // Invalidate SWR cache
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
       return () => window.removeEventListener('portfolioUpdated', onUpd as any)
-    } catch {}
-  }, [mutate])
+    } catch {
+      setLocalItems([])
+    }
+  }, [mutate, storageKey])
 
   // Enrich local items if API data is not available
   const [enriched, setEnriched] = useState<any[]>([])
@@ -155,7 +173,7 @@ export function PortfolioSummary() {
     return (
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="text-white text-2xl font-bold mb-2">$0.00</div>
-        <div className="text-slate-400 text-sm">No positions yet</div>
+        <div className="text-slate-400 text-sm">No open positions</div>
       </div>
     )
   }

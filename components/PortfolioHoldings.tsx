@@ -5,14 +5,23 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { safeJsonFetcher } from '@/lib/safeFetch'
 import TradingViewSingleTicker from './TradingViewSingleTicker'
+import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 
 export function PortfolioHoldings() {
   const router = useRouter()
+  const userId = useUserId()
+  const storageKey = getUserStorageKey('bullish_pf_positions', userId)
   const { data, isLoading, error, mutate } = useSWR('/api/portfolio?enrich=1', safeJsonFetcher, { refreshInterval: 2000 })
   const [localItems, setLocalItems] = useState<any[]>([])
+  
   useEffect(() => {
+    if (!storageKey) {
+      setLocalItems([])
+      return
+    }
+    
     try {
-      const raw = localStorage.getItem('bullish_demo_pf_positions')
+      const raw = localStorage.getItem(storageKey)
       if (raw) {
         const map = JSON.parse(raw)
         // Clean up zero-share positions immediately
@@ -22,11 +31,17 @@ export function PortfolioHoldings() {
             cleaned[sym] = pos
           }
         }
-        localStorage.setItem('bullish_demo_pf_positions', JSON.stringify(cleaned))
+        localStorage.setItem(storageKey, JSON.stringify(cleaned))
         setLocalItems(Object.values(cleaned))
+      } else {
+        setLocalItems([])
       }
       function onUpd() {
-        const r = localStorage.getItem('bullish_demo_pf_positions')
+        if (!storageKey) {
+          setLocalItems([])
+          return
+        }
+        const r = localStorage.getItem(storageKey)
         if (r) {
           const map = JSON.parse(r)
           // Clean up zero-share positions from localStorage
@@ -36,7 +51,7 @@ export function PortfolioHoldings() {
               cleaned[sym] = pos
             }
           }
-          localStorage.setItem('bullish_demo_pf_positions', JSON.stringify(cleaned))
+          localStorage.setItem(storageKey, JSON.stringify(cleaned))
           setLocalItems(Object.values(cleaned))
         } else {
           setLocalItems([])
@@ -45,8 +60,10 @@ export function PortfolioHoldings() {
       }
       window.addEventListener('portfolioUpdated', onUpd as any)
       return () => window.removeEventListener('portfolioUpdated', onUpd as any)
-    } catch {}
-  }, [mutate])
+    } catch {
+      setLocalItems([])
+    }
+  }, [mutate, storageKey])
   const [enriched, setEnriched] = useState<any[]>([])
   const items = (data?.items && data.items.length>0) ? data.items : localItems
   

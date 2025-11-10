@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { showToast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
+import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 
 type Props = {
   symbol: string
@@ -23,6 +24,10 @@ const fetcher = async (url: string) => {
 
 export function DemoTradeBox({ symbol, price }: Props) {
   const router = useRouter()
+  const userId = useUserId()
+  const positionsStorageKey = getUserStorageKey('bullish_pf_positions', userId)
+  const transactionsStorageKey = getUserStorageKey('bullish_transactions', userId)
+  
   const [mode, setMode] = useState<'buy'|'sell'>('buy')
   const [subType, setSubType] = useState<'market'|'fraction'>('fraction')
   const [orderType, setOrderType] = useState<'dollars'|'shares'>('dollars')
@@ -34,9 +39,14 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [localItems, setLocalItems] = useState<any[]>([])
   
   useEffect(() => {
+    if (!positionsStorageKey) {
+      setLocalItems([])
+      return
+    }
+    
     function loadPositions() {
       try {
-        const raw = localStorage.getItem('bullish_demo_pf_positions')
+        const raw = localStorage.getItem(positionsStorageKey)
         if (raw) {
           const map = JSON.parse(raw)
           const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
@@ -60,7 +70,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
     
     window.addEventListener('portfolioUpdated', onUpd as any)
     return () => window.removeEventListener('portfolioUpdated', onUpd as any)
-  }, [mutate])
+  }, [mutate, positionsStorageKey])
   
   const positions = portfolioData?.items || localItems
   // Filter out zero-share positions and find the matching symbol (case-insensitive)
@@ -126,8 +136,9 @@ export function DemoTradeBox({ symbol, price }: Props) {
         // Update local positions
         mutate() // Refresh SWR cache
         try {
-          const key = 'bullish_demo_pf_positions'
-          const raw = localStorage.getItem(key)
+          if (!positionsStorageKey || !transactionsStorageKey) return
+          
+          const raw = localStorage.getItem(positionsStorageKey)
           const map = raw ? JSON.parse(raw) : {}
           // Always use uppercase symbol as key
           const symbolKey = (j.item.symbol || symbol).toUpperCase()
@@ -138,15 +149,14 @@ export function DemoTradeBox({ symbol, price }: Props) {
             // Ensure symbol is uppercase in the item
             map[symbolKey] = { ...j.item, symbol: symbolKey }
           }
-          localStorage.setItem(key, JSON.stringify(map))
+          localStorage.setItem(positionsStorageKey, JSON.stringify(map))
           // Immediately reload positions
           const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
           setLocalItems(items)
           console.log('[DemoTradeBox] Position updated after trade:', items)
           
           // Persist transaction history - use transaction from server response if available
-          const txKey = 'bullish_demo_transactions'
-          const txRaw = localStorage.getItem(txKey)
+          const txRaw = localStorage.getItem(transactionsStorageKey)
           const transactions = txRaw ? JSON.parse(txRaw) : []
           const transaction = j.transaction || {
             id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -163,7 +173,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
           )
           if (!exists) {
             transactions.push(transaction)
-            localStorage.setItem(txKey, JSON.stringify(transactions))
+            localStorage.setItem(transactionsStorageKey, JSON.stringify(transactions))
           }
           
           window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
@@ -196,23 +206,27 @@ export function DemoTradeBox({ symbol, price }: Props) {
             setMode('buy')
             mutate()
             // Reload positions
-            const raw = localStorage.getItem('bullish_demo_pf_positions')
-            if (raw) {
-              const map = JSON.parse(raw)
-              const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-              setLocalItems(items)
+            if (positionsStorageKey) {
+              const raw = localStorage.getItem(positionsStorageKey)
+              if (raw) {
+                const map = JSON.parse(raw)
+                const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                setLocalItems(items)
+              }
             }
           }} className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}>Buy</button>
           <button onClick={()=>{ 
             setMode('sell')
             mutate()
             // Reload positions when switching to sell
-            const raw = localStorage.getItem('bullish_demo_pf_positions')
-            if (raw) {
-              const map = JSON.parse(raw)
-              const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-              setLocalItems(items)
-              console.log('[DemoTradeBox] Switched to sell mode, reloaded positions:', items)
+            if (positionsStorageKey) {
+              const raw = localStorage.getItem(positionsStorageKey)
+              if (raw) {
+                const map = JSON.parse(raw)
+                const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                setLocalItems(items)
+                console.log('[DemoTradeBox] Switched to sell mode, reloaded positions:', items)
+              }
             }
           }} className={`px-3 py-1 rounded ${mode==='sell'?'bg-red-600 text-white':'text-slate-300'}`}>Sell</button>
         </div>
@@ -229,11 +243,13 @@ export function DemoTradeBox({ symbol, price }: Props) {
                 <button
                   onClick={() => {
                     mutate()
-                    const raw = localStorage.getItem('bullish_demo_pf_positions')
-                    if (raw) {
-                      const map = JSON.parse(raw)
-                      const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-                      setLocalItems(items)
+                    if (positionsStorageKey) {
+                      const raw = localStorage.getItem(positionsStorageKey)
+                      if (raw) {
+                        const map = JSON.parse(raw)
+                        const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                        setLocalItems(items)
+                      }
                     }
                   }}
                   className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"
@@ -269,19 +285,19 @@ export function DemoTradeBox({ symbol, price }: Props) {
                       
                       mutate()
                       try {
-                        const key = 'bullish_demo_pf_positions'
-                        const raw = localStorage.getItem(key)
+                        if (!positionsStorageKey || !transactionsStorageKey) return
+                        
+                        const raw = localStorage.getItem(positionsStorageKey)
                         const map = raw ? JSON.parse(raw) : {}
                         const symbolKey = symbol.toUpperCase()
                         delete map[symbolKey]
-                        localStorage.setItem(key, JSON.stringify(map))
+                        localStorage.setItem(positionsStorageKey, JSON.stringify(map))
                         // Immediately reload positions
                         const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
                         setLocalItems(items)
                         console.log('[DemoTradeBox] Positions after sell all:', items)
                         
-                        const txKey = 'bullish_demo_transactions'
-                        const txRaw = localStorage.getItem(txKey)
+                        const txRaw = localStorage.getItem(transactionsStorageKey)
                         const transactions = txRaw ? JSON.parse(txRaw) : []
                         const transaction = j.transaction || {
                           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -298,7 +314,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         )
                         if (!exists) {
                           transactions.push(transaction)
-                          localStorage.setItem(txKey, JSON.stringify(transactions))
+                          localStorage.setItem(transactionsStorageKey, JSON.stringify(transactions))
                         }
                         
                         window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: symbolKey } }))
@@ -332,12 +348,14 @@ export function DemoTradeBox({ symbol, price }: Props) {
               <button
                 onClick={() => {
                   mutate()
-                  const raw = localStorage.getItem('bullish_demo_pf_positions')
-                  if (raw) {
-                    const map = JSON.parse(raw)
-                    const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
-                    setLocalItems(items)
-                    console.log('[DemoTradeBox] Manual refresh - positions:', items)
+                  if (positionsStorageKey) {
+                    const raw = localStorage.getItem(positionsStorageKey)
+                    if (raw) {
+                      const map = JSON.parse(raw)
+                      const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
+                      setLocalItems(items)
+                      console.log('[DemoTradeBox] Manual refresh - positions:', items)
+                    }
                   }
                 }}
                 className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"
