@@ -22,11 +22,17 @@ export async function GET(req: NextRequest) {
     }
 
     quotes.quotes?.forEach((q: any) => {
-      if (q.symbol && q.price) {
-        context.prices![q.symbol] = {
-          price: parseFloat(q.price) || 0,
-          change: parseFloat(q.change || 0),
-          changePercent: parseFloat(q.changePercent || 0),
+      // Handle both formats: { symbol, data: {...} } and { symbol, price, ... }
+      const symbol = q.symbol
+      const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+      const change = q.data ? parseFloat(q.data.change || 0) : parseFloat(q.change || 0)
+      const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+      
+      if (symbol && price > 0) {
+        context.prices![symbol] = {
+          price,
+          change,
+          changePercent,
           timestamp: Date.now(),
         }
       }

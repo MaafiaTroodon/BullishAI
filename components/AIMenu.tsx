@@ -69,7 +69,7 @@ const aiFeatures = [
     title: 'Best Value Stocks',
     description: 'High-quality stocks offering the best value this week',
     icon: DollarSign,
-    href: '/ai/screener?type=value-quality',
+    href: '/ai/value',
     color: 'emerald',
   },
   {
@@ -77,7 +77,7 @@ const aiFeatures = [
     title: 'Strongest Momentum',
     description: '5 stocks with strongest short-term momentum',
     icon: Activity,
-    href: '/ai/screener?type=momentum',
+    href: '/ai/momentum',
     color: 'orange',
   },
   {
@@ -85,7 +85,7 @@ const aiFeatures = [
     title: 'Undervalued Rebound',
     description: 'Undervalued stocks poised for a rebound',
     icon: Target,
-    href: '/ai/screener?type=undervalued',
+    href: '/ai/rebound',
     color: 'red',
   },
   {
@@ -93,7 +93,7 @@ const aiFeatures = [
     title: 'Strongest Today',
     description: 'Stocks with strongest relative strength and volume',
     icon: Shield,
-    href: '/ai/screener?type=strongest',
+    href: '/ai/strongest-today',
     color: 'cyan',
   },
   {
@@ -101,7 +101,7 @@ const aiFeatures = [
     title: 'Stable Growth Picks',
     description: 'Low beta, consistent EPS stocks for long-term holding',
     icon: TrendingUp,
-    href: '/ai/screener?type=stable-growth',
+    href: '/ai/stable-growth',
     color: 'teal',
   },
 ]
