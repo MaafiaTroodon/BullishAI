@@ -70,7 +70,7 @@ export default function StableGrowthPage() {
                 const beta = 0.5 + Math.random() * 0.4 // Mock beta between 0.5-0.9
                 const dividendYield = 2 + Math.random() * 3 // Mock dividend yield 2-5%
                 return (
-                  <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
+                  <Reveal key={`stable-${stock.symbol || 'stock'}-${idx}`} variant="rise" delay={idx * 0.05}>
                     <Link href={`/stocks/${stock.symbol}`}>
                       <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
                         <div className="flex items-start justify-between mb-4">

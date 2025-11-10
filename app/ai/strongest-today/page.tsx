@@ -57,7 +57,7 @@ export default function StrongestTodayPage() {
 
             <div className="space-y-4">
               {data?.movers?.map((stock: any, idx: number) => (
-                <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
+                <Reveal key={`strongest-${stock.symbol || 'stock'}-${idx}`} variant="rise" delay={idx * 0.05}>
                   <Link href={`/stocks/${stock.symbol}`}>
                     <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer">
                       <div className="flex items-center justify-between">

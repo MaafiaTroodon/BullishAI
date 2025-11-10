@@ -57,9 +57,9 @@ export default function ValuePage() {
             </Reveal>
 
             {data?.stocks && data.stocks.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {data.stocks.map((stock: any, idx: number) => (
-                  <Reveal key={stock.symbol || idx} variant="rise" delay={idx * 0.05}>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {data.stocks.map((stock: any, idx: number) => (
+                        <Reveal key={`value-${stock.symbol || 'stock'}-${idx}`} variant="rise" delay={idx * 0.05}>
                     <Link href={`/stocks/${stock.symbol}`}>
                       <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
                         <div className="flex items-start justify-between mb-4">
