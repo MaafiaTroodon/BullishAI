@@ -82,14 +82,23 @@ export default function QuickInsightsPage() {
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {data.topTickers.map((ticker: any, idx: number) => (
-                      <Link key={idx} href={`/stocks/${ticker.symbol}`}>
-                        <div className="bg-slate-700/30 rounded-lg p-4 border border-slate-600 hover:border-blue-500/50 transition cursor-pointer">
-                          <div className="font-bold text-white text-lg mb-1">{ticker.symbol}</div>
-                          <div className="text-sm text-slate-400 mb-2">{ticker.name || ticker.symbol}</div>
-                          <div className={`font-semibold text-lg ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {ticker.change >= 0 ? '+' : ''}{ticker.change?.toFixed(2)}%
+                      <Link key={`ticker-${ticker.symbol}-${idx}`} href={`/stocks/${ticker.symbol}`}>
+                        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-5 border border-slate-600 hover:border-blue-500/50 transition-all cursor-pointer hover:scale-[1.02] shadow-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                              {idx + 1}
+                            </div>
+                            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${ticker.change >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                              {ticker.change >= 0 ? '↑' : '↓'} {Math.abs(ticker.change || 0).toFixed(2)}%
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-500 mt-1">{ticker.reason || 'Market index'}</div>
+                          <div className="font-bold text-white text-xl mb-1">{ticker.symbol}</div>
+                          <div className="text-sm text-slate-400 mb-3">{ticker.name || ticker.symbol}</div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <div className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded">
+                              {ticker.reason || 'Watch'}
+                            </div>
+                          </div>
                         </div>
                       </Link>
                     ))}
