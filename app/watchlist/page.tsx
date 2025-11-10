@@ -324,8 +324,11 @@ export default function WatchlistPage() {
 
           {/* Mini Chart - Only Selected Stock */}
           <div className="lg:col-span-6">
-            <h2 className="text-xl font-bold text-white mb-4">Selected Stock Chart</h2>
-            <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 h-[400px] overflow-hidden">
+            <Reveal variant="slide-right">
+              <h2 className="text-xl font-bold text-white mb-4">Selected Stock Chart</h2>
+            </Reveal>
+            <Reveal variant="fade" delay={0.1}>
+              <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 h-[400px] overflow-hidden">
               <div className="mb-2">
                 <span className="font-bold text-white">{selectedSymbol}</span>
               </div>
