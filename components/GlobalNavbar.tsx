@@ -379,13 +379,39 @@ export function GlobalNavbar() {
                             }
                           }
                           
-                          // Sign out using better-auth - use the client method which handles everything
+                          // Sign out using better-auth - try both methods
+                          let signOutSuccess = false
+                          
+                          // Method 1: Use authClient.signOut() (preferred)
                           try {
                             const signOutResult = await authClient.signOut()
-                            console.log('Sign out result:', signOutResult)
+                            if (signOutResult && !signOutResult.error) {
+                              signOutSuccess = true
+                              console.log('Sign out successful via client')
+                            }
                           } catch (signOutError: any) {
-                            console.error('Sign out error:', signOutError)
-                            // Continue anyway - we'll clear cookies manually
+                            console.warn('Client signOut failed:', signOutError?.message || signOutError)
+                          }
+                          
+                          // Method 2: Direct API call as fallback
+                          if (!signOutSuccess) {
+                            try {
+                              const response = await fetch(`${window.location.origin}/api/auth/sign-out`, {
+                                method: 'POST',
+                                credentials: 'include',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                              })
+                              if (response.ok) {
+                                signOutSuccess = true
+                                console.log('Sign out successful via API')
+                              } else {
+                                console.warn('Sign out API returned:', response.status, response.statusText)
+                              }
+                            } catch (apiError) {
+                              console.warn('API sign out failed:', apiError)
+                            }
                           }
                           
                           // CRITICAL: Clear all better-auth cookies manually as backup
