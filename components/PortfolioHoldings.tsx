@@ -82,17 +82,33 @@ export function PortfolioHoldings() {
   // This ensures new users see empty state, not data from localStorage
   const items = data?.items !== undefined ? data.items : localItems
   
-  // Filter out zero-share positions immediately
-  const filteredItems = items.filter((p:any) => (p.totalShares || 0) > 0)
+  // Filter out zero-share positions immediately and deduplicate by symbol
+  const filteredItems = items
+    .filter((p:any) => (p.totalShares || 0) > 0)
+    // Deduplicate: keep only the first occurrence of each symbol
+    .reduce((acc: any[], current: any) => {
+      if (!acc.find((item: any) => item.symbol === current.symbol)) {
+        acc.push(current)
+      }
+      return acc
+    }, [])
 
   // Enrich local-only items with live quotes so value/PNL render correctly
   useEffect(() => {
     let cancelled = false
     async function enrich() {
       if (!filteredItems || filteredItems.length === 0) { setEnriched([]); return }
-      // If items already have currentPrice from API, use them (but still filter)
+      // If items already have currentPrice from API, use them (but still filter and deduplicate)
       if (filteredItems[0]?.currentPrice != null) { 
-        setEnriched(filteredItems.filter((p:any)=> (p.totalShares||0) > 0))
+        const deduplicated = filteredItems
+          .filter((p:any)=> (p.totalShares||0) > 0)
+          .reduce((acc: any[], current: any) => {
+            if (!acc.find((item: any) => item.symbol === current.symbol)) {
+              acc.push(current)
+            }
+            return acc
+          }, [])
+        setEnriched(deduplicated)
         return 
       }
       try {
@@ -148,8 +164,9 @@ export function PortfolioHoldings() {
             const base = p.avgPrice * p.totalShares
             const u = totalValue - base
             const up = base>0 ? (u/base)*100 : 0
+            // Use symbol + index for unique key to prevent duplicates
             return (
-              <Reveal key={p.symbol} variant="fade" delay={idx * 0.05}>
+              <Reveal key={`${p.symbol}-${idx}-${p.totalShares}`} variant="fade" delay={idx * 0.05}>
               <div className="bg-slate-700/30 rounded-lg p-5 hover-card">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6 flex-1">
