@@ -6,12 +6,21 @@ import Link from 'next/link'
 import { Star, ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react'
 import useSWR from 'swr'
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`)
+  }
+  return res.json()
+}
 
 export default function RecommendedPage() {
   const { data, error, isLoading } = useSWR('/api/ai/recommended', fetcher, {
     refreshInterval: 300000, // 5 minutes
   })
+
+  const recommendations = data?.data || []
+  const meta = data?.meta
 
   return (
     <div className="min-h-screen bg-slate-900 py-12">
@@ -42,10 +51,12 @@ export default function RecommendedPage() {
               ))}
             </div>
           </Reveal>
-        ) : error || data?.error ? (
+        ) : error || data?.success === false ? (
           <Reveal variant="fade">
             <div className="bg-red-900/20 border border-red-700 rounded-xl p-6">
-              <p className="text-red-400">Error: {error?.message || data?.error || 'Failed to load recommendations'}</p>
+              <p className="text-red-400">
+                Error: {error?.message || data?.error?.message || 'Failed to load recommendations'}
+              </p>
             </div>
           </Reveal>
         ) : (
@@ -53,22 +64,22 @@ export default function RecommendedPage() {
             <Reveal variant="fade" delay={0.1}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 bg-purple-600/20 text-purple-400 text-xs font-semibold rounded-full">
-                    {data?.model || 'groq-llama'}
+                  <span className="px-3 py-1 bg-purple-600/20 text-purple-400 text-xs font-semibold rounded-full uppercase">
+                    {meta?.universe || 'ALL'}
                   </span>
                   <span className="text-slate-500 text-sm">
-                    {data?.latency ? `${data.latency}ms` : ''}
+                    {meta?.asOf ? `As of ${new Date(meta.asOf).toLocaleTimeString()}` : ''}
                   </span>
                 </div>
                 <div className="text-slate-400 text-sm">
-                  {data?.stocks?.length || 0} recommendations
+                  {meta?.count || recommendations.length} recommendations
                 </div>
               </div>
             </Reveal>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {data?.stocks?.map((stock: any, idx: number) => (
-                        <Reveal key={`recommended-${stock.symbol || 'stock'}-${idx}`} variant="rise" delay={idx * 0.05}>
+              {recommendations.map((stock: any, idx: number) => (
+                <Reveal key={`recommended-${stock.symbol || 'stock'}-${idx}`} variant="rise" delay={idx * 0.05}>
                   <Link href={`/stocks/${stock.symbol}`}>
                     <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-blue-500/50 transition cursor-pointer h-full">
                       <div className="flex items-start justify-between mb-4">
@@ -76,22 +87,32 @@ export default function RecommendedPage() {
                           <h3 className="text-xl font-bold text-white">{stock.symbol}</h3>
                           <p className="text-sm text-slate-400">{stock.name || stock.symbol}</p>
                         </div>
-                        <div className={`text-right ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`text-right ${stock.chg1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           <div className="text-lg font-semibold">
-                            {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                            {stock.chg1d >= 0 ? '+' : ''}{stock.chg1d?.toFixed(2)}%
                           </div>
-                          <div className="text-sm text-slate-400">${stock.price?.toFixed(2)}</div>
+                          <div className="text-sm text-slate-400">
+                            ${stock.price?.toFixed(2)} • {stock.exchange}
+                          </div>
                         </div>
                       </div>
                       
-                      <div className="mb-3">
-                        <span className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded">
-                          {stock.reason || 'Recommended'}
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {stock.tags?.slice(0, 3).map((tag: string) => (
+                          <span key={tag} className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded capitalize">
+                            {tag.replace('-', ' ')}
+                          </span>
+                        ))}
+                        <span className="px-2 py-1 bg-slate-700/40 text-slate-300 text-xs font-semibold rounded">
+                          Score {stock.score ?? '--'}
+                        </span>
+                        <span className="px-2 py-1 bg-slate-700/40 text-slate-300 text-xs font-semibold rounded">
+                          Vol⁄30d {stock.volRel30?.toFixed(2)}
                         </span>
                       </div>
                       
                       <p className="text-sm text-slate-300 leading-relaxed">
-                        {stock.rationale || 'Strong fundamentals and positive momentum'}
+                        {stock.summary || 'High conviction signals across technical and flow factors.'}
                       </p>
                     </div>
                   </Link>
@@ -99,7 +120,7 @@ export default function RecommendedPage() {
               ))}
             </div>
 
-            {(!data?.stocks || data.stocks.length === 0) && (
+            {recommendations.length === 0 && (
               <Reveal variant="fade">
                 <div className="bg-slate-800/50 rounded-xl p-8 border border-slate-700 text-center">
                   <p className="text-slate-400">No recommendations available at this time.</p>

@@ -10,6 +10,7 @@ interface Recommendation {
   price: number
   chg1d: number
   volRel30: number
+  summary: string
 }
 
 const DEFAULT_LIMIT = 10
@@ -102,6 +103,7 @@ export async function GET(req: NextRequest) {
             ? Math.min(5, Math.max(0.5, volume / 1_000_000))
             : 1
 
+        const tags = deriveTags(changePct, relVolume, upgradeSymbols.has(symbol))
         return {
           symbol,
           name: m.name || m.companyName || symbol,
@@ -110,7 +112,8 @@ export async function GET(req: NextRequest) {
           chg1d: Number.parseFloat(changePct.toFixed(2)),
           volRel30: Number.parseFloat(relVolume.toFixed(2)),
           score: computeScore(changePct, relVolume, idx),
-          tags: deriveTags(changePct, relVolume, upgradeSymbols.has(symbol)),
+          tags,
+          summary: `${symbol} showing ${tags.join(', ')} with ${changePct.toFixed(2)}% move.`,
         }
       })
       .filter((rec): rec is Recommendation => !!rec && rec.price > 0)
