@@ -34,7 +34,11 @@ export default function StockPage() {
   const [watchlistItems, setWatchlistItems] = useState<string[]>([])
   const [isInWatchlist, setIsInWatchlist] = useState(false)
 
-  const symbol = (params?.symbol as string)?.toUpperCase() || 'AAPL'
+  // Get symbol and normalize for Canadian stocks
+  let symbol = (params?.symbol as string)?.toUpperCase() || 'AAPL'
+  
+  // If symbol is a known Canadian stock without .TO, we'll handle it in the components
+  // But keep the original symbol for API calls (they may need base symbol)
 
   const { data, isLoading, error } = useSWR(`/api/stocks/${symbol}?range=${chartRange}`, fetcher, {
     refreshInterval: 15000,
