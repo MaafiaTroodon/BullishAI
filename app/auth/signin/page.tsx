@@ -53,6 +53,24 @@ function SignInContent() {
     }
   }
 
+  // Show loading while checking session
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    )
+  }
+  
+  // Don't render form if already logged in (redirect will happen)
+  if (session?.user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white">Redirecting...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
