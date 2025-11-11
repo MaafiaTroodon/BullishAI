@@ -7,18 +7,36 @@ export async function GET(req: NextRequest) {
     const market = searchParams.get('market') || 'US'
     const sector = searchParams.get('sector') || 'all'
 
-    // Fetch popular stocks and quotes
-    const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
-    const popular = await popularRes.json().catch(() => ({ stocks: [] }))
+    // Fetch top movers for real-time recommendations
+    const [popularRes, moversRes] = await Promise.all([
+      fetch(`${req.nextUrl.origin}/api/popular-stocks`).catch(() => null),
+      fetch(`${req.nextUrl.origin}/api/market/top-movers?limit=20`).catch(() => null),
+    ])
 
-    const symbols = popular.stocks?.slice(0, 20).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL,AMZN,TSLA'
+    const popular = popularRes ? await popularRes.json().catch(() => ({ stocks: [] })) : { stocks: [] }
+    const movers = moversRes ? await moversRes.json().catch(() => ({ movers: [] })) : { movers: [] }
+
+    // Use top movers if available, otherwise use popular stocks
+    const stockList = movers.movers?.length > 0 
+      ? movers.movers.map((m: any) => m.symbol).filter(Boolean)
+      : popular.stocks?.slice(0, 20).map((s: any) => s.symbol).filter(Boolean) || ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'AMD']
+    
+    const symbols = stockList.join(',')
     
     const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
     const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
+    
+    // Also fetch news for context
+    const newsRes = await fetch(`${req.nextUrl.origin}/api/news/movers?limit=10`).catch(() => null)
+    const news = newsRes ? await newsRes.json().catch(() => ({ items: [] })) : { items: [] }
 
     const context: RAGContext = {
       prices: {},
-      news: [],
+      news: news.items || [],
+      marketData: {
+        session: 'REG',
+        indices: {},
+      },
     }
 
     quotes.quotes?.forEach((q: any) => {

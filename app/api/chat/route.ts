@@ -10,8 +10,13 @@ import { calculateTechnical } from '@/lib/technical-calculator'
  * Routes to appropriate models (Groq/Gemini for text, PyTorch for numbers)
  */
 export async function POST(req: NextRequest) {
+  let query = ''
+  let symbol = ''
+  
   try {
-    const { query, symbol } = await req.json()
+    const body = await req.json()
+    query = body.query || ''
+    symbol = body.symbol || ''
 
     if (!query || typeof query !== 'string') {
       return NextResponse.json(
@@ -20,9 +25,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 1. Load and search knowledge base for best matches
-    const kb = await loadKnowledgeBase()
-    const relevantContext = findBestMatch(query, kb, 5)
+    // 1. Load and search knowledge base for best matches (always do this first)
+    let kb: any[] = []
+    let relevantContext: any[] = []
+    
+    try {
+      kb = await loadKnowledgeBase()
+      relevantContext = findBestMatch(query, kb, 5)
+    } catch (kbError) {
+      console.error('Failed to load knowledge base:', kbError)
+      // Continue without KB, but will use empty array
+    }
     
     // 2. Detect section/intent
     const section = detectSection(query)
@@ -108,13 +121,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Build enhanced prompt using knowledge base
+    // 4. If we have a knowledge base match, use it directly (faster, more reliable)
+    // This ensures users always get answers even if AI is down
+    if (relevantContext.length > 0) {
+      const bestMatch = relevantContext[0]
+      console.log('Found knowledge base match for query:', query, 'Answer:', bestMatch.answer.substring(0, 50))
+      
+      // Use KB answer directly (we'll enhance with AI if needed, but KB is reliable)
+      let answer = bestMatch.answer
+      
+      // Enhance with real-time data if available
+      if (Object.keys(context.prices || {}).length > 0) {
+        const priceInfo = Object.entries(context.prices || {})
+          .slice(0, 3)
+          .map(([sym, data]: [string, any]) => `${sym}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`)
+          .join(', ')
+        if (priceInfo) {
+          answer += ` Current prices: ${priceInfo}.`
+        }
+      }
+      
+      // Add follow-up
+      if (!answer.includes('?')) {
+        answer += ' Want me to check more details?'
+      }
+      
+      // Return KB answer immediately (no need to wait for AI)
+      return NextResponse.json({
+        answer,
+        model: 'knowledge-base',
+        modelBadge: 'Knowledge Base',
+        latency: 0,
+        cached: true,
+        section: section || undefined,
+        tickers: tickers.length > 0 ? tickers : undefined,
+      })
+    }
+    
+    // 5. Build enhanced prompt using knowledge base
     const enhancedPrompt = buildKnowledgePrompt(query, kb, relevantContext)
     
-    // 5. Select best model based on query and knowledge base
+    // 6. Select best model based on query and knowledge base
     const selectedModel = selectBestModel(query, relevantContext, Object.keys(context.prices || {}).length > 0)
     
-    // 6. Build system prompt with knowledge base examples
+    // 7. Build system prompt with knowledge base examples
     const systemPrompt = `You are BullishAI — a conversational market analyst who chats casually about stocks, trends, and insights. 
 You're friendly, confident, and human-like. Avoid robotic tables or bullet-point spam unless explicitly asked.
 
@@ -134,13 +184,47 @@ Tone: Chatty, confident, helpful, not robotic.`
 
     const fullQuery = query
 
-    // 7. Route to appropriate model with enhanced prompt
+    // 8. Route to appropriate model with enhanced prompt
     let response
     try {
       // Use the selected model
       response = await routeAIQuery(fullQuery, context, systemPrompt, undefined, selectedModel)
     } catch (error: any) {
-      // Handle rate limits gracefully
+      console.error('AI model error:', error.message || error)
+      console.error('Error stack:', error.stack)
+      
+      // Always try knowledge base first as fallback (before trying other models)
+      if (relevantContext.length > 0) {
+        console.log('Using knowledge base fallback, found', relevantContext.length, 'matches')
+        const fallbackAnswer = relevantContext[0].answer
+        return NextResponse.json({
+          answer: fallbackAnswer,
+          model: 'knowledge-base',
+          modelBadge: 'Knowledge Base',
+          latency: 0,
+          cached: true,
+        })
+      }
+      
+      // If no KB match, try to reload KB and search again
+      try {
+        const kbRetry = await loadKnowledgeBase()
+        const retryMatches = findBestMatch(query, kbRetry, 3)
+        if (retryMatches.length > 0) {
+          console.log('Retry KB search found', retryMatches.length, 'matches')
+          return NextResponse.json({
+            answer: retryMatches[0].answer,
+            model: 'knowledge-base',
+            modelBadge: 'Knowledge Base',
+            latency: 0,
+            cached: true,
+          })
+        }
+      } catch (kbRetryError) {
+        console.error('KB retry failed:', kbRetryError)
+      }
+      
+      // Handle rate limits gracefully - try alternative model
       if (error.message?.includes('rate limit') || error.message?.includes('429')) {
         // Try Gemini as fallback if Groq fails
         if (selectedModel === 'groq-llama') {
@@ -180,7 +264,18 @@ Tone: Chatty, confident, helpful, not robotic.`
           }
         }
       } else {
-        throw error
+        // For any other error, use knowledge base
+        const fallbackAnswer = relevantContext.length > 0
+          ? relevantContext[0].answer
+          : "I'm having trouble connecting to the AI right now, but based on my knowledge base: The market's been active today. Want me to check specific tickers?"
+        
+        return NextResponse.json({
+          answer: fallbackAnswer,
+          model: 'knowledge-base',
+          modelBadge: 'Knowledge Base',
+          latency: 0,
+          cached: true,
+        })
       }
     }
 
@@ -231,10 +326,32 @@ Tone: Chatty, confident, helpful, not robotic.`
   } catch (error: any) {
     console.error('Chat API error:', error)
     
-    // Never show raw errors to users
+    // Try to use knowledge base as fallback even on errors
+    try {
+      const kb = await loadKnowledgeBase().catch(() => [])
+      if (kb.length > 0 && query) {
+        const relevantContext = findBestMatch(query, kb, 3)
+        
+        if (relevantContext.length > 0) {
+          const fallbackAnswer = relevantContext[0].answer
+          return NextResponse.json({
+            answer: fallbackAnswer,
+            model: 'knowledge-base',
+            modelBadge: 'Knowledge Base',
+            latency: 0,
+            cached: true,
+          })
+        }
+      }
+    } catch (kbError) {
+      console.error('Knowledge base fallback also failed:', kbError)
+    }
+    
+    // Final fallback - never show raw errors to users
     return NextResponse.json({
       answer: "Sorry, I'm having a bit of trouble right now. Can you try rephrasing that? Or ask me about something else — I'm great with stock prices, market trends, and quick insights!",
       model: 'error-fallback',
+      modelBadge: 'Error',
       latency: 0,
     })
   }

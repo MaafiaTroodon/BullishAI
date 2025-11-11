@@ -22,7 +22,7 @@ export async function getStockInsight(symbol: string, data: any, prompt: string)
     const context = JSON.stringify(data, null, 2)
     
     const response = await groq.chat.completions.create({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         {
@@ -50,7 +50,7 @@ export async function getWatchlistInsight(prompt: string, watchlistData: any[]):
     const context = JSON.stringify(watchlistData, null, 2)
     
     const response = await groq.chat.completions.create({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         {
