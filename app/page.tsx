@@ -208,22 +208,53 @@ export default function Home() {
         <Reveal variant="slide-left">
           <h2 className="text-3xl font-bold text-white mb-6 text-center">Live Market Preview</h2>
         </Reveal>
-          {/* Top Stocks */}
-          <StaggerGrid staggerDelay={0.04} variant="scale" className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            {TOP_STOCKS.map((symbol) => (
-              <button
-                key={symbol}
-                onClick={() => setSelectedSymbol(symbol)}
-                className={`p-4 rounded-lg border transition hover-card ${
-                  selectedSymbol === symbol
+        
+        {/* Exchange Selector Buttons */}
+        <Reveal variant="fade" delay={0.02}>
+          <div className="flex justify-center gap-4 mb-6">
+            <button
+              onClick={() => setSelectedExchange('USA')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg border transition hover-card ${
+                selectedExchange === 'USA'
+                  ? 'bg-blue-600 border-blue-500 text-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-blue-500/50'
+              }`}
+            >
+              <span className="text-2xl">🇺🇸</span>
+              <span className="font-semibold">USA / NYSE</span>
+            </button>
+            <button
+              onClick={() => setSelectedExchange('CAN')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg border transition hover-card ${
+                selectedExchange === 'CAN'
+                  ? 'bg-red-600 border-red-500 text-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-red-500/50'
+              }`}
+            >
+              <span className="text-2xl">🇨🇦</span>
+              <span className="font-semibold">CAN / TSX</span>
+            </button>
+          </div>
+        </Reveal>
+        
+        {/* Top Stocks */}
+        <StaggerGrid staggerDelay={0.04} variant="scale" className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          {currentStocks.map((symbol) => (
+            <button
+              key={symbol}
+              onClick={() => setSelectedSymbol(symbol)}
+              className={`p-4 rounded-lg border transition hover-card ${
+                selectedSymbol === symbol
+                  ? selectedExchange === 'USA'
                     ? 'bg-blue-600 border-blue-500'
-                    : 'bg-slate-800 border-slate-700 hover:border-blue-500/50'
-                }`}
-              >
-                <div className="text-white font-bold">{symbol}</div>
-              </button>
-            ))}
-          </StaggerGrid>
+                    : 'bg-red-600 border-red-500'
+                  : 'bg-slate-800 border-slate-700 hover:border-blue-500/50'
+              }`}
+            >
+              <div className="text-white font-bold">{symbol}</div>
+            </button>
+          ))}
+        </StaggerGrid>
 
           {/* Chart and Top Stories Side by Side */}
           <StaggerGrid staggerDelay={0.06} variant="fade" className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
