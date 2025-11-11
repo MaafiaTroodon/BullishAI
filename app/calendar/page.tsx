@@ -44,6 +44,19 @@ function CalendarPageContent() {
     safeJsonFetcher,
     { refreshInterval: 15 * 60 * 1000 } // 15 min cache
   )
+  
+  // Map earnings data to items format
+  const earningsItems = useMemo(() => {
+    if (!earningsData || !earningsData.items) return []
+    return earningsData.items.map((e: any) => ({
+      symbol: e.symbol,
+      company: e.company || e.name,
+      date: e.date,
+      time: e.time,
+      estimate: e.estimate || e.estimated_eps,
+      actual: e.actual || e.epsActual,
+    }))
+  }, [earningsData])
 
   // Fetch dividends data
   const { data: dividendsData, isLoading: isLoadingDividends, error: dividendsError } = useSWR(
@@ -55,7 +68,12 @@ function CalendarPageContent() {
   const isLoading = activeTab === 'earnings' ? isLoadingEarnings : isLoadingDividends
   const error = activeTab === 'earnings' ? earningsError : dividendsError
   const data = activeTab === 'earnings' ? earningsData : dividendsData
-  const rawItems = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data])
+  const rawItems = useMemo(() => {
+    if (activeTab === 'earnings') {
+      return earningsItems
+    }
+    return Array.isArray(data?.items) ? data.items : []
+  }, [activeTab, earningsItems, data])
   const filteredItems = useMemo(() => {
     if (activeTab !== 'dividends') {
       return rawItems
