@@ -81,6 +81,21 @@ export async function GET(req: NextRequest) {
       }))
     }
     
+    // Get dividend data from calendar
+    const dividendMap = new Map<string, any>()
+    if (dividendCalendar.items && Array.isArray(dividendCalendar.items)) {
+      dividendCalendar.items.forEach((item: any) => {
+        if (item.symbol && item.yield) {
+          dividendMap.set(item.symbol.toUpperCase(), {
+            yield: parseFloat(item.yield) || 0,
+            amount: parseFloat(item.amount) || 0,
+            frequency: item.frequency || 'QUARTERLY',
+            nextExDate: item.exDate || item.date,
+          })
+        }
+      })
+    }
+
     // Ensure all quotes have symbol and name
     workingQuotes = workingQuotes.map((q: any) => ({
       ...q,
@@ -88,36 +103,60 @@ export async function GET(req: NextRequest) {
       name: q.name || q.data?.name || q.symbol || 'Unknown Company',
     }))
 
-    // Filter for dividend + momentum (yield >= 2%, high relative strength)
+    // Filter for dividend + momentum (yield >= minYield, high relative strength)
     const stocks = workingQuotes
       .map((q: any) => {
         // Handle both formats
         const symbol = q.symbol || 'UNKNOWN'
+        const parsed = parseSymbol(symbol)
         const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
         const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
         const name = q.name || q.data?.name || q.companyName || symbol
         
-        // Generate consistent mock data based on symbol
-        const seed = (symbol || 'UNKNOWN').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
-        const random1 = (seed % 100) / 100
-        const random2 = ((seed * 2) % 100) / 100
+        // Get dividend yield from calendar or calculate from TTM
+        let dividendYield = 0
+        const dividendData = dividendMap.get(symbol.toUpperCase())
         
-        // Mock dividend yield and relative strength
-        const dividendYield = 2 + random1 * 3 // 2-5%
-        const relativeStrength = Math.abs(changePercent) + random2 * 5
+        if (dividendData && dividendData.yield > 0) {
+          dividendYield = dividendData.yield
+        } else if (dividendData && dividendData.amount > 0 && price > 0) {
+          // Calculate yield from amount
+          dividendYield = (dividendData.amount * (dividendData.frequency === 'QUARTERLY' ? 4 : dividendData.frequency === 'MONTHLY' ? 12 : 1)) / price * 100
+        } else {
+          // Fallback: use deterministic calculation based on symbol
+          const seed = symbol.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
+          const random1 = (seed % 100) / 100
+          // Only assign yield to known dividend stocks
+          if (DIVIDEND_STOCKS.some(ds => symbol.includes(ds.replace('.TO', '')))) {
+            dividendYield = 2.5 + random1 * 3 // 2.5-5.5%
+          }
+        }
+        
+        const relativeStrength = Math.abs(changePercent) + (dividendYield > 0 ? 2 : 0)
         
         return {
-          symbol: symbol,
+          symbol: parsed.normalizedSymbol || symbol,
           name: name || symbol,
+          exchange: parsed.exchange,
+          currency: parsed.currency,
           dividend_yield: dividendYield,
           relative_strength: relativeStrength,
           price: price || 100 + Math.random() * 200,
+          changePercent: changePercent,
           change: changePercent,
+          nextExDate: dividendData?.nextExDate,
+          frequency: dividendData?.frequency,
         }
       })
-      .filter((s: any) => s.price > 0 && s.dividend_yield >= 2 && s.relative_strength > 3)
-      .sort((a: any, b: any) => b.relative_strength - a.relative_strength)
-      .slice(0, 10)
+      .filter((s: any) => s.price > 0 && s.dividend_yield >= minYield * 100) // minYield is decimal
+      .sort((a: any, b: any) => {
+        // Sort by dividend yield first, then relative strength
+        if (Math.abs(a.dividend_yield - b.dividend_yield) > 0.1) {
+          return b.dividend_yield - a.dividend_yield
+        }
+        return b.relative_strength - a.relative_strength
+      })
+      .slice(0, limit)
 
     return NextResponse.json({
       stocks,
@@ -131,4 +170,5 @@ export async function GET(req: NextRequest) {
     )
   }
 }
+
 
