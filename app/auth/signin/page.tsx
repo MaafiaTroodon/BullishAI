@@ -9,10 +9,19 @@ import { authClient } from '@/lib/auth-client'
 function SignInContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: session, isPending: sessionLoading } = authClient.useSession()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!sessionLoading && session?.user) {
+      const next = searchParams.get('next') || '/dashboard'
+      router.replace(next)
+    }
+  }, [session, sessionLoading, router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

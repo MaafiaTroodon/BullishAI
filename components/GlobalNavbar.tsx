@@ -351,16 +351,21 @@ export function GlobalNavbar() {
                       </Link>
                       <button 
                         onClick={async () => {
+                          setUserMenuOpen(false)
+                          
+                          // Clear cached data immediately
+                          lastBalanceRef.current = null
                           try {
-                            setUserMenuOpen(false)
-                            // Clear cached data before logout
-                            lastBalanceRef.current = null
                             globalMutate('/api/wallet', undefined, { revalidate: false })
                             globalMutate('/api/portfolio', undefined, { revalidate: false })
                             globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })
-                            
-                            // Clear localStorage
-                            if (typeof window !== 'undefined') {
+                          } catch (mutateError) {
+                            console.warn('Cache clear error:', mutateError)
+                          }
+                          
+                          // Clear localStorage
+                          if (typeof window !== 'undefined') {
+                            try {
                               localStorage.removeItem('bullish_wallet')
                               localStorage.removeItem('bullish_pf_positions')
                               // Clear all portfolio-related localStorage keys
@@ -369,49 +374,64 @@ export function GlobalNavbar() {
                                   localStorage.removeItem(key)
                                 }
                               })
+                            } catch (storageError) {
+                              console.warn('localStorage clear error:', storageError)
                             }
-                            
-                            // Sign out using better-auth
-                            // Better-auth uses POST to /api/auth/sign-out
-                            try {
-                              // First try the client method
-                              await authClient.signOut()
-                            } catch (signOutError) {
-                              console.error('Sign out error:', signOutError)
-                              // Fallback: direct fetch to better-auth endpoint
-                              try {
-                                const response = await fetch(`${window.location.origin}/api/auth/sign-out`, {
-                                  method: 'POST',
-                                  credentials: 'include',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                  },
-                                })
-                                if (!response.ok) {
-                                  console.warn('Sign out API returned:', response.status)
-                                }
-                              } catch (apiError) {
-                                console.error('API sign out also failed:', apiError)
-                              }
-                            }
-                            
-                            // Clear all cookies manually as backup
-                            if (typeof document !== 'undefined') {
-                              document.cookie.split(";").forEach((c) => {
-                                document.cookie = c
-                                  .replace(/^ +/, "")
-                                  .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
-                              })
-                            }
-                            
-                            // Always redirect to sign-in page
-                            // Use window.location for hard redirect to clear all state
-                            window.location.href = '/auth/signin'
-                          } catch (error) {
-                            console.error('Logout error:', error)
-                            // Force redirect even on error
-                            window.location.href = '/'
                           }
+                          
+                          // Sign out using better-auth
+                          try {
+                            // Call better-auth signOut API
+                            const response = await fetch(`${window.location.origin}/api/auth/sign-out`, {
+                              method: 'POST',
+                              credentials: 'include',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                            })
+                            
+                            // Also try the client method
+                            try {
+                              await authClient.signOut()
+                            } catch (clientError) {
+                              console.warn('Client signOut failed:', clientError)
+                            }
+                          } catch (apiError) {
+                            console.warn('API sign out failed:', apiError)
+                          }
+                          
+                          // CRITICAL: Clear all better-auth cookies manually
+                          if (typeof document !== 'undefined') {
+                            const cookiesToClear = [
+                              'better-auth.session_token',
+                              'better-auth.session_token.sig',
+                              'better-auth.refresh_token',
+                              'better-auth.refresh_token.sig',
+                            ]
+                            
+                            cookiesToClear.forEach(cookieName => {
+                              // Clear for current path
+                              document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+                              // Clear for root domain
+                              document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+                              // Clear without domain (for localhost)
+                              document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=`
+                            })
+                            
+                            // Clear all other cookies as well
+                            document.cookie.split(";").forEach((c) => {
+                              const eqPos = c.indexOf("=")
+                              const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim()
+                              if (name) {
+                                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+                                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+                              }
+                            })
+                          }
+                          
+                          // Force a hard redirect to sign-in page
+                          // This will trigger middleware to check for session
+                          window.location.href = '/auth/signin'
                         }}
                         className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left transition"
                       >
