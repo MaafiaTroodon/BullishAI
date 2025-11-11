@@ -112,12 +112,15 @@ model Portfolio {
   id            String            @id @default(cuid())
   userId        String            @unique
   walletBalance Float             @default(0)
+  currency      String            @default("USD") // User's wallet currency
+  dripEnabled   Boolean           @default(false) // DRIP (Dividend Reinvestment Plan)
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions     Position[]
   trades        Trade[]
   walletTransactions WalletTransaction[]
+  dividendPayouts DividendPayout[]
 
   @@map("portfolios")
 }
@@ -162,6 +165,79 @@ model WalletTransaction {
   method     String?
   createdAt  DateTime  @default(now())
   portfolio  Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-
+  // Dividend fields
+  securityId String?
+  meta       Json?    // Store dividend payout details, FX rates, etc.
+  
   @@map("wallet_transactions")
+}
+
+model Security {
+  id                    String            @id @default(cuid())
+  symbol                String            @unique
+  name                  String?
+  exchange              String            // NYSE, NASDAQ, TSX
+  currency              String            @default("USD") // USD, CAD
+  dividendFreq          String?           // QUARTERLY, MONTHLY, ANNUAL
+  ttmDividendPerShare   Float?
+  lastExDate            DateTime?
+  nextExDate            DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  corporateActions      CorporateAction[]
+  dividendPayouts       DividendPayout[]
+
+  @@map("securities")
+}
+
+model CorporateAction {
+  id            String      @id @default(cuid())
+  securityId    String
+  type          String      // CASH_DIVIDEND, STOCK_SPLIT, etc.
+  exDate        DateTime
+  recordDate    DateTime
+  payDate       DateTime?
+  amountPerShare Float
+  currency      String      @default("USD")
+  status        String      @default("PENDING") // PENDING, PAID, CANCELED
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  security      Security    @relation(fields: [securityId], references: [id], onDelete: Cascade)
+  dividendPayouts DividendPayout[]
+
+  @@map("corporate_actions")
+}
+
+model DividendPayout {
+  id            String            @id @default(cuid())
+  portfolioId   String
+  securityId    String
+  corporateActionId String
+  qtyOnRecord   Float
+  grossAmount   Float
+  withholdTax   Float             @default(0)
+  netAmount     Float
+  currency      String
+  fxRate        Float?            // For currency conversion
+  status        String            @default("PENDING") // PENDING, CREDITED, FAILED
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  portfolio     Portfolio         @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  security      Security          @relation(fields: [securityId], references: [id], onDelete: Cascade)
+  corporateAction CorporateAction @relation(fields: [corporateActionId], references: [id], onDelete: Cascade)
+
+  @@map("dividend_payouts")
+}
+
+model FXRate {
+  id          String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  date         DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([fromCurrency, toCurrency, date])
+  @@map("fx_rates")
 }
