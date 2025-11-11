@@ -1,12 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { parseSymbol } from '@/lib/market-symbol-parser'
+
+// Known dividend stocks (NYSE, NASDAQ, TSX)
+const DIVIDEND_STOCKS = [
+  // US High Yield
+  'T', 'VZ', 'MO', 'PM', 'XOM', 'CVX', 'KO', 'PEP', 'JNJ', 'PG', 'WMT', 'JPM', 'BAC', 'C',
+  // Canadian High Yield
+  'RY.TO', 'TD.TO', 'BNS.TO', 'BMO.TO', 'CM.TO', 'ENB.TO', 'TRP.TO', 'CNQ.TO', 'SU.TO',
+]
 
 export async function GET(req: NextRequest) {
   try {
-    // Fetch popular stocks
-    const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
-    const popular = await popularRes.json().catch(() => ({ stocks: [] }))
+    const { searchParams } = new URL(req.url)
+    const exchange = searchParams.get('exchange') || 'ALL'
+    const minYield = parseFloat(searchParams.get('minYield') || '0.025') // 2.5% default
+    const limit = parseInt(searchParams.get('limit') || '25')
+    
+    // Use dividend stocks list + popular stocks
+    const [popularRes, dividendCalendarRes] = await Promise.all([
+      fetch(`${req.nextUrl.origin}/api/popular-stocks`).catch(() => null),
+      fetch(`${req.nextUrl.origin}/api/calendar/dividends?range=month`).catch(() => null),
+    ])
 
-    const symbols = popular.stocks?.slice(0, 50).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL'
+    const popular = popularRes ? await popularRes.json().catch(() => ({ stocks: [] })) : { stocks: [] }
+    const dividendCalendar = dividendCalendarRes ? await dividendCalendarRes.json().catch(() => ({ items: [] })) : { items: [] }
+
+    // Build symbol list: dividend stocks + popular stocks with dividends
+    let symbolList = [...DIVIDEND_STOCKS]
+    
+    // Add symbols from dividend calendar
+    if (dividendCalendar.items && Array.isArray(dividendCalendar.items)) {
+      const calendarSymbols = dividendCalendar.items
+        .slice(0, 30)
+        .map((item: any) => item.symbol)
+        .filter(Boolean)
+      symbolList = [...new Set([...symbolList, ...calendarSymbols])]
+    }
+    
+    // Add popular stocks
+    if (popular.stocks && Array.isArray(popular.stocks)) {
+      const popularSymbols = popular.stocks
+        .slice(0, 20)
+        .map((s: any) => s.symbol)
+        .filter(Boolean)
+      symbolList = [...new Set([...symbolList, ...popularSymbols])]
+    }
+    
+    // Filter by exchange if specified
+    if (exchange !== 'ALL') {
+      symbolList = symbolList.filter(sym => {
+        const parsed = parseSymbol(sym)
+        return parsed.exchange === exchange
+      })
+    }
+    
+    const symbols = symbolList.slice(0, 50).join(',')
     
     const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
     const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
