@@ -68,7 +68,6 @@ function TradingViewAdvancedChart({
     if (!container.current) return
     
     // Normalize symbol for TradingView using centralized function
-    const { normalizeTradingViewSymbol } = require('@/lib/tradingview')
     const { tvSymbol: normalizedSymbol } = normalizeTradingViewSymbol(symbol)
     
     script.innerHTML = JSON.stringify({
