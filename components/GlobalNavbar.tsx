@@ -350,121 +350,74 @@ export function GlobalNavbar() {
                         Settings
                       </Link>
                       <button 
-                        onClick={async () => {
+                        onClick={() => {
                           setUserMenuOpen(false)
                           
-                          // Clear cached data immediately
-                          lastBalanceRef.current = null
-                          try {
-                            globalMutate('/api/wallet', undefined, { revalidate: false })
-                            globalMutate('/api/portfolio', undefined, { revalidate: false })
-                            globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })
-                          } catch (mutateError) {
-                            console.warn('Cache clear error:', mutateError)
-                          }
+                          // NUCLEAR LOGOUT - Clear everything and force full page reload
                           
-                          // Clear localStorage
-                          if (typeof window !== 'undefined') {
-                            try {
-                              localStorage.removeItem('bullish_wallet')
-                              localStorage.removeItem('bullish_pf_positions')
-                              // Clear all portfolio-related localStorage keys
-                              Object.keys(localStorage).forEach(key => {
-                                if (key.includes('bullish_pf') || key.includes('bullish_wallet')) {
-                                  localStorage.removeItem(key)
-                                }
-                              })
-                            } catch (storageError) {
-                              console.warn('localStorage clear error:', storageError)
-                            }
-                          }
-                          
-                          // Sign out using better-auth - try both methods
-                          let signOutSuccess = false
-                          
-                          // Method 1: Use authClient.signOut() (preferred)
-                          try {
-                            const signOutResult = await authClient.signOut()
-                            if (signOutResult && !signOutResult.error) {
-                              signOutSuccess = true
-                              console.log('Sign out successful via client')
-                            }
-                          } catch (signOutError: any) {
-                            console.warn('Client signOut failed:', signOutError?.message || signOutError)
-                          }
-                          
-                          // Method 2: Direct API call as fallback
-                          if (!signOutSuccess) {
-                            try {
-                              const response = await fetch(`${window.location.origin}/api/auth/sign-out`, {
-                                method: 'POST',
-                                credentials: 'include',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                },
-                              })
-                              if (response.ok) {
-                                signOutSuccess = true
-                                console.log('Sign out successful via API')
-                              } else {
-                                console.warn('Sign out API returned:', response.status, response.statusText)
-                              }
-                            } catch (apiError) {
-                              console.warn('API sign out failed:', apiError)
-                            }
-                          }
-                          
-                          // CRITICAL: Clear all better-auth cookies manually as backup
-                          if (typeof document !== 'undefined') {
-                            const cookiesToClear = [
-                              'better-auth.session_token',
-                              'better-auth.session_token.sig',
-                              'better-auth.refresh_token',
-                              'better-auth.refresh_token.sig',
-                            ]
+                          // Function to clear a cookie (multiple methods)
+                          const clearCookie = (name: string) => {
+                            const hostname = window.location.hostname
+                            const paths = ['/', '/dashboard', '/auth']
                             
-                            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                            
-                            cookiesToClear.forEach(cookieName => {
-                              // Clear for current path (works for all domains)
-                              document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-                              
-                              // For localhost, don't set domain
-                              if (!isLocalhost) {
-                                // Clear for root domain
-                                document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
-                                // Clear for parent domain (e.g., .example.com)
-                                const parts = window.location.hostname.split('.')
-                                if (parts.length > 2) {
-                                  const parentDomain = '.' + parts.slice(-2).join('.')
-                                  document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${parentDomain}`
-                                }
-                              }
+                            paths.forEach(path => {
+                              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path}`
+                              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path};domain=${hostname}`
+                              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path};domain=.${hostname}`
                             })
                             
-                            // Clear all other cookies as well
-                            const allCookies = document.cookie.split(";")
-                            allCookies.forEach((c) => {
-                              const eqPos = c.indexOf("=")
-                              const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim()
-                              if (name) {
-                                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-                                if (!isLocalhost) {
-                                  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
-                                }
-                              }
-                            })
-                            
-                            console.log('Cookies cleared. Remaining cookies:', document.cookie)
+                            // For localhost, try without domain
+                            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                              paths.forEach(path => {
+                                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=${path}`
+                              })
+                            }
                           }
                           
-                          // Longer delay to ensure cookies are cleared and session is invalidated
-                          await new Promise(resolve => setTimeout(resolve, 300))
+                          // Clear all better-auth cookies explicitly
+                          const authCookies = [
+                            'better-auth.session_token',
+                            'better-auth.session_token.sig',
+                            'better-auth.refresh_token',
+                            'better-auth.refresh_token.sig',
+                          ]
                           
-                          // Force a hard redirect to sign-in page
-                          // This will trigger middleware to check for session
-                          // Use replace instead of href to prevent back button issues
-                          window.location.replace('/auth/signin')
+                          authCookies.forEach(cookie => clearCookie(cookie))
+                          
+                          // Clear ALL cookies
+                          document.cookie.split(";").forEach(cookie => {
+                            const eqPos = cookie.indexOf("=")
+                            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+                            if (name && name.trim()) {
+                              clearCookie(name)
+                            }
+                          })
+                          
+                          // Clear all storage
+                          try {
+                            localStorage.clear()
+                            sessionStorage.clear()
+                          } catch (e) {
+                            // Ignore
+                          }
+                          
+                          // Clear SWR cache
+                          try {
+                            globalMutate(() => true, undefined, { revalidate: false })
+                          } catch (e) {
+                            // Ignore
+                          }
+                          
+                          // Call sign-out API (fire and forget)
+                          fetch(`${window.location.origin}/api/auth/sign-out`, {
+                            method: 'POST',
+                            credentials: 'include',
+                          }).catch(() => {})
+                          
+                          // FORCE full page reload with replace (prevents back button)
+                          // Add cache-busting parameter to ensure fresh load
+                          const timestamp = Date.now()
+                          window.location.replace(`/auth/signin?logout=${timestamp}`)
                         }}
                         className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left transition"
                       >

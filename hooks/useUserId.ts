@@ -15,14 +15,15 @@ export function useUserId(): string | null {
       try {
         const session = await authClient.getSession()
         setUserId(session?.user?.id || null)
-      } catch {
+      } catch (error) {
+        // Silently fail - user is not logged in
         setUserId(null)
       }
     }
     fetchUserId()
     
-    // Listen for auth changes
-    const interval = setInterval(fetchUserId, 1000)
+    // Listen for auth changes - reduce polling to every 5 seconds to avoid excessive requests
+    const interval = setInterval(fetchUserId, 5000)
     return () => clearInterval(interval)
   }, [])
 

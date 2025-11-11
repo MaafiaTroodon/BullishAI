@@ -13,7 +13,7 @@ export const auth = betterAuth({
     requireEmailVerification: false, // Set to true in production
   },
   secret: process.env.BETTER_AUTH_SECRET || "change-me-in-production",
-  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3003",
   basePath: "/api/auth",
 })
 
