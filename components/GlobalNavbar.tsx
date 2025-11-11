@@ -423,13 +423,23 @@ export function GlobalNavbar() {
                               'better-auth.refresh_token.sig',
                             ]
                             
+                            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                            
                             cookiesToClear.forEach(cookieName => {
-                              // Clear for current path
+                              // Clear for current path (works for all domains)
                               document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-                              // Clear for root domain
-                              document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
-                              // Clear without domain (for localhost)
-                              document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=`
+                              
+                              // For localhost, don't set domain
+                              if (!isLocalhost) {
+                                // Clear for root domain
+                                document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+                                // Clear for parent domain (e.g., .example.com)
+                                const parts = window.location.hostname.split('.')
+                                if (parts.length > 2) {
+                                  const parentDomain = '.' + parts.slice(-2).join('.')
+                                  document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${parentDomain}`
+                                }
+                              }
                             })
                             
                             // Clear all other cookies as well
@@ -439,17 +449,22 @@ export function GlobalNavbar() {
                               const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim()
                               if (name) {
                                 document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-                                document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+                                if (!isLocalhost) {
+                                  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+                                }
                               }
                             })
+                            
+                            console.log('Cookies cleared. Remaining cookies:', document.cookie)
                           }
                           
-                          // Small delay to ensure cookies are cleared
-                          await new Promise(resolve => setTimeout(resolve, 100))
+                          // Longer delay to ensure cookies are cleared and session is invalidated
+                          await new Promise(resolve => setTimeout(resolve, 300))
                           
                           // Force a hard redirect to sign-in page
                           // This will trigger middleware to check for session
-                          window.location.href = '/auth/signin'
+                          // Use replace instead of href to prevent back button issues
+                          window.location.replace('/auth/signin')
                         }}
                         className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left transition"
                       >
