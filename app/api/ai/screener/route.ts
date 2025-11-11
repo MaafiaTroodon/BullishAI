@@ -8,25 +8,45 @@ export async function GET(req: NextRequest) {
     const market = searchParams.get('market') || 'US'
     const sector = searchParams.get('sector') || 'all'
 
-    // Fetch popular stocks
-    const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
-    const popular = await popularRes.json().catch(() => ({ stocks: [] }))
+    // Fetch top movers and popular stocks for real-time screening
+    const [popularRes, moversRes] = await Promise.all([
+      fetch(`${req.nextUrl.origin}/api/popular-stocks`).catch(() => null),
+      fetch(`${req.nextUrl.origin}/api/market/top-movers?limit=50`).catch(() => null),
+    ])
 
-    const symbols = popular.stocks?.slice(0, 50).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL,AMZN,TSLA,META,NVDA'
+    const popular = popularRes ? await popularRes.json().catch(() => ({ stocks: [] })) : { stocks: [] }
+    const movers = moversRes ? await moversRes.json().catch(() => ({ movers: [] })) : { movers: [] }
+
+    // Use top movers if available, otherwise use popular stocks
+    const stockList = movers.movers?.length > 0 
+      ? movers.movers.map((m: any) => m.symbol).filter(Boolean)
+      : popular.stocks?.slice(0, 50).map((s: any) => s.symbol).filter(Boolean) || ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'AMD', 'INTC', 'NFLX']
+    
+    const symbols = stockList.join(',')
     
     const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
     const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
 
     const context: RAGContext = {
       prices: {},
+      marketData: {
+        session: 'REG',
+        indices: {},
+      },
     }
 
     quotes.quotes?.forEach((q: any) => {
-      if (q.symbol && q.price) {
-        context.prices![q.symbol] = {
-          price: parseFloat(q.price) || 0,
-          change: parseFloat(q.change || 0),
-          changePercent: parseFloat(q.changePercent || 0),
+      // Handle both formats: { symbol, data: {...} } and { symbol, price, ... }
+      const symbol = q.symbol
+      const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+      const change = q.data ? parseFloat(q.data.change || 0) : parseFloat(q.change || 0)
+      const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+      
+      if (symbol && price > 0) {
+        context.prices![symbol] = {
+          price,
+          change,
+          changePercent,
           timestamp: Date.now(),
         }
       }
