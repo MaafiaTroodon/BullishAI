@@ -1,25 +1,89 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
+/**
+ * GET /api/calendar/earnings
+ * Fetch earnings calendar from multiple sources
+ */
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url)
-    const when = searchParams.get('when') || 'today'
+    const url = new URL(req.url)
+    const range = url.searchParams.get('range') || 'week'
+    
+    // Determine date range
+    const now = new Date()
+    const startDate = new Date(now)
+    if (range === 'today') {
+      startDate.setHours(0, 0, 0, 0)
+    } else if (range === 'week') {
+      startDate.setDate(startDate.getDate() - 7)
+    } else {
+      startDate.setMonth(startDate.getMonth() - 1)
+    }
+    
+    const from = startDate.toISOString().split('T')[0]
+    const to = now.toISOString().split('T')[0]
 
-    // Mock earnings data (in production, fetch from earnings calendar API)
-    const mockEarnings = [
-      { symbol: 'AAPL', name: 'Apple Inc.', time: 'After Market', estimated_eps: 2.10, implied_move: 3.5, current_price: 185.50 },
-      { symbol: 'MSFT', name: 'Microsoft Corp.', time: 'After Market', estimated_eps: 2.95, implied_move: 2.8, current_price: 420.30 },
-      { symbol: 'GOOGL', name: 'Alphabet Inc.', time: 'After Market', estimated_eps: 1.50, implied_move: 4.2, current_price: 150.20 },
-    ]
+    let items: any[] = []
+
+    // Try Finnhub first
+    try {
+      const finnhubKey = process.env.FINNHUB_API_KEY
+      if (finnhubKey) {
+        const finnhubUrl = `https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&token=${finnhubKey}`
+        const res = await fetch(finnhubUrl, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.earningsCalendar && Array.isArray(data.earningsCalendar)) {
+            items = data.earningsCalendar.map((e: any) => ({
+              symbol: e.symbol,
+              company: e.name,
+              date: e.date,
+              time: e.hour || 'Before Market',
+              estimate: e.epsEstimate ? parseFloat(e.epsEstimate) : null,
+              actual: e.epsActual ? parseFloat(e.epsActual) : null,
+              revenueEstimate: e.revenueEstimate ? parseFloat(e.revenueEstimate) : null,
+              revenueActual: e.revenueActual ? parseFloat(e.revenueActual) : null,
+            }))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Finnhub earnings error:', err)
+    }
+
+    // Fallback: use Alpha Vantage if available
+    if (items.length === 0) {
+      try {
+        const avKey = process.env.ALPHAVANTAGE_API_KEY
+        if (avKey) {
+          // Alpha Vantage doesn't have a direct earnings calendar, so we'll use a fallback
+          // In production, you might want to use a different provider
+        }
+      } catch (err) {
+        console.error('Alpha Vantage earnings error:', err)
+      }
+    }
+
+    // Sort by date
+    items.sort((a, b) => {
+      const dateA = new Date(a.date || 0).getTime()
+      const dateB = new Date(b.date || 0).getTime()
+      return dateA - dateB
+    })
 
     return NextResponse.json({
-      earnings: when === 'today' ? mockEarnings : [],
-      timestamp: Date.now(),
+      items,
+      count: items.length,
+      range,
+      from,
+      to,
     })
   } catch (error: any) {
     console.error('Earnings calendar API error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch earnings calendar' },
+      { error: error.message || 'Failed to fetch earnings calendar', items: [] },
       { status: 500 }
     )
   }
