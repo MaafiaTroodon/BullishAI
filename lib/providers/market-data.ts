@@ -189,7 +189,9 @@ function cacheKeyForQuote(symbol: string) {
 }
 
 export async function getQuoteWithFallback(symbolInput: string): Promise<QuoteResult> {
-  const symbol = symbolInput.toUpperCase()
+  // Normalize symbol (handle TSX .TO format)
+  let symbol = symbolInput.toUpperCase()
+  // Keep .TO suffix for TSX stocks (Yahoo Finance format)
   const cacheKey = cacheKeyForQuote(symbol)
   const cached = getFromCache<QuoteResult>(cacheKey)
   if (cached && !cached.isStale) {
