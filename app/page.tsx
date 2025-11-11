@@ -29,15 +29,29 @@ const fetcher = async (url: string) => {
   return res.json()
 }
 
-const TOP_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+const CANADIAN_STOCKS = ['CLS.TO', 'BMO.TO', 'TD.TO', 'DOL.TO', 'L.TO'] // Celestica, BMO, TD, Dollarama, Loblaw
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedExchange, setSelectedExchange] = useState<'USA' | 'CAN'>('USA')
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusSymbol, setFocusSymbol] = useState<string | undefined>(undefined)
+  
+  // Get current stock list based on exchange
+  const currentStocks = selectedExchange === 'USA' ? US_STOCKS : CANADIAN_STOCKS
+  
+  // Update selected symbol when exchange changes
+  useEffect(() => {
+    if (selectedExchange === 'USA') {
+      setSelectedSymbol('AAPL')
+    } else {
+      setSelectedSymbol('CLS.TO')
+    }
+  }, [selectedExchange])
   
   // Use actual auth session instead of localStorage
   const { data: session } = authClient.useSession()
