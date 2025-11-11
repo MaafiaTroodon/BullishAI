@@ -16,14 +16,24 @@ import { Reveal } from '@/components/anim/Reveal'
 import { StaggerGrid } from '@/components/anim/StaggerGrid'
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url)
-  const ct = res.headers.get('content-type') || ''
-  if (!ct.includes('application/json')) {
-    const text = await res.text()
-    console.error('Non-JSON response:', text.substring(0, 200))
-    throw new Error('Invalid response format')
+  try {
+    const res = await fetch(url)
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      // If it's an error page, return null instead of throwing
+      if (res.status >= 400) {
+        console.warn(`API error for ${url}: ${res.status}`)
+        return null
+      }
+      const text = await res.text()
+      console.error('Non-JSON response:', text.substring(0, 200))
+      return null
+    }
+    return res.json()
+  } catch (error) {
+    console.error(`Fetch error for ${url}:`, error)
+    return null
   }
-  return res.json()
 }
 const DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX']
 
