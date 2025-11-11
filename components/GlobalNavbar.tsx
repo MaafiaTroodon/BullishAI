@@ -379,28 +379,16 @@ export function GlobalNavbar() {
                             }
                           }
                           
-                          // Sign out using better-auth
+                          // Sign out using better-auth - use the client method which handles everything
                           try {
-                            // Call better-auth signOut API
-                            const response = await fetch(`${window.location.origin}/api/auth/sign-out`, {
-                              method: 'POST',
-                              credentials: 'include',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                            })
-                            
-                            // Also try the client method
-                            try {
-                              await authClient.signOut()
-                            } catch (clientError) {
-                              console.warn('Client signOut failed:', clientError)
-                            }
-                          } catch (apiError) {
-                            console.warn('API sign out failed:', apiError)
+                            const signOutResult = await authClient.signOut()
+                            console.log('Sign out result:', signOutResult)
+                          } catch (signOutError: any) {
+                            console.error('Sign out error:', signOutError)
+                            // Continue anyway - we'll clear cookies manually
                           }
                           
-                          // CRITICAL: Clear all better-auth cookies manually
+                          // CRITICAL: Clear all better-auth cookies manually as backup
                           if (typeof document !== 'undefined') {
                             const cookiesToClear = [
                               'better-auth.session_token',
@@ -419,7 +407,8 @@ export function GlobalNavbar() {
                             })
                             
                             // Clear all other cookies as well
-                            document.cookie.split(";").forEach((c) => {
+                            const allCookies = document.cookie.split(";")
+                            allCookies.forEach((c) => {
                               const eqPos = c.indexOf("=")
                               const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim()
                               if (name) {
@@ -428,6 +417,9 @@ export function GlobalNavbar() {
                               }
                             })
                           }
+                          
+                          // Small delay to ensure cookies are cleared
+                          await new Promise(resolve => setTimeout(resolve, 100))
                           
                           // Force a hard redirect to sign-in page
                           // This will trigger middleware to check for session
