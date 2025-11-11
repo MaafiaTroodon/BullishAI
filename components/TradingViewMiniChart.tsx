@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, memo, useState } from 'react'
+import { normalizeTradingViewSymbol } from '@/lib/tradingview'
 
 interface TradingViewMiniChartProps {
   symbol: string
@@ -40,8 +41,8 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
   const [isVisible, setIsVisible] = useState(false)
   const [currentSymbol, setCurrentSymbol] = useState(symbol)
 
-  // Detect exchange if not provided
-  const detectedExchange = exchange || EXCHANGE_MAP[symbol.toUpperCase()] || 'NASDAQ'
+  // Normalize symbol using centralized function
+  const { exchange: detectedExchange, tvSymbol: normalizedSymbol } = normalizeTradingViewSymbol(symbol)
 
   // Update current symbol when prop changes
   useEffect(() => {
@@ -95,8 +96,9 @@ function TradingViewMiniChart({ symbol, exchange, width = '100%', height = '100%
       
       // Ensure valid settings - TradingView requires specific format
       // Use 1D range to show daily performance (reflects actual stock movement)
+      const { tvSymbol } = normalizeTradingViewSymbol(currentSymbol)
       const widgetConfig = {
-        symbol: `${detectedExchange}:${currentSymbol.toUpperCase()}`,
+        symbol: tvSymbol,
         chartOnly: false,
         dateRange: '1D', // Changed from 12M to 1D to show daily performance
         noTimeScale: false,
