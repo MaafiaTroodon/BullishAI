@@ -371,29 +371,42 @@ export function GlobalNavbar() {
                               })
                             }
                             
-                            // Sign out using better-auth - use fetch directly to ensure it works
+                            // Sign out using better-auth
+                            // Better-auth uses POST to /api/auth/sign-out
                             try {
-                              // Try better-auth signOut first
-                              const signOutResult = await authClient.signOut()
-                              console.log('Sign out result:', signOutResult)
+                              // First try the client method
+                              await authClient.signOut()
                             } catch (signOutError) {
                               console.error('Sign out error:', signOutError)
-                              // Try direct API call as fallback
+                              // Fallback: direct fetch to better-auth endpoint
                               try {
-                                await fetch('/api/auth/sign-out', {
+                                const response = await fetch(`${window.location.origin}/api/auth/sign-out`, {
                                   method: 'POST',
                                   credentials: 'include',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
                                 })
+                                if (!response.ok) {
+                                  console.warn('Sign out API returned:', response.status)
+                                }
                               } catch (apiError) {
                                 console.error('API sign out also failed:', apiError)
                               }
                             }
                             
-                            // Always redirect, even if signOut fails
+                            // Clear all cookies manually as backup
+                            if (typeof document !== 'undefined') {
+                              document.cookie.split(";").forEach((c) => {
+                                document.cookie = c
+                                  .replace(/^ +/, "")
+                                  .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
+                              })
+                            }
+                            
+                            // Always redirect to sign-in page
                             // Use window.location for hard redirect to clear all state
-                            setTimeout(() => {
-                              window.location.href = '/auth/signin'
-                            }, 100)
+                            window.location.href = '/auth/signin'
                           } catch (error) {
                             console.error('Logout error:', error)
                             // Force redirect even on error
