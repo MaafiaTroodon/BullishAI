@@ -127,7 +127,14 @@ export function PortfolioHoldings() {
             out.push({ ...p, currentPrice: null, totalValue: 0, unrealizedPnl: 0, unrealizedPnlPct: 0 })
           }
         }))
-        if (!cancelled) setEnriched(out)
+        // Deduplicate enriched array by symbol before setting state
+        const deduplicated = out.reduce((acc: any[], current: any) => {
+          if (!acc.find((item: any) => item.symbol === current.symbol)) {
+            acc.push(current)
+          }
+          return acc
+        }, [])
+        if (!cancelled) setEnriched(deduplicated)
       } catch {
         if (!cancelled) setEnriched(filteredItems)
       }
@@ -164,9 +171,9 @@ export function PortfolioHoldings() {
             const base = p.avgPrice * p.totalShares
             const u = totalValue - base
             const up = base>0 ? (u/base)*100 : 0
-            // Use symbol + index for unique key to prevent duplicates
+            // Use symbol as key since we've deduplicated - each symbol appears only once
             return (
-              <Reveal key={`${p.symbol}-${idx}-${p.totalShares}`} variant="fade" delay={idx * 0.05}>
+              <Reveal key={`holding-${p.symbol}`} variant="fade" delay={idx * 0.05}>
               <div className="bg-slate-700/30 rounded-lg p-5 hover-card">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-6 flex-1">

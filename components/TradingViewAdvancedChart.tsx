@@ -98,13 +98,21 @@ function TradingViewAdvancedChart({
     // Guard: ensure container still exists before appending
     if (!container.current) return
     
-    container.current.appendChild(script)
+    // Add script to container with error handling
+    try {
+      container.current.appendChild(script)
+    } catch (error) {
+      console.error('Error appending TradingView script:', error)
+      return
+    }
 
     // Hide copyright elements that TradingView injects
     const hideCopyright = () => {
       if (!container.current) return
       try {
-        const copyrightElements = container.current.querySelectorAll('.tradingview-widget-copyright')
+        const widgetContainer = container.current.querySelector('.tradingview-widget-container__widget')
+        if (!widgetContainer) return
+        const copyrightElements = widgetContainer.querySelectorAll('.tradingview-widget-copyright')
         copyrightElements.forEach((el) => {
           if (el && el instanceof HTMLElement) {
             el.style.display = 'none'

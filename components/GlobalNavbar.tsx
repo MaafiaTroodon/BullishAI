@@ -351,14 +351,41 @@ export function GlobalNavbar() {
                       </Link>
                       <button 
                         onClick={async () => {
-                          setUserMenuOpen(false)
-                          // Clear cached data before logout
-                          lastBalanceRef.current = null
-                          globalMutate('/api/wallet', undefined, { revalidate: false })
-                          globalMutate('/api/portfolio', undefined, { revalidate: false })
-                          globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })
-                          await authClient.signOut()
-                          router.push('/')
+                          try {
+                            setUserMenuOpen(false)
+                            // Clear cached data before logout
+                            lastBalanceRef.current = null
+                            globalMutate('/api/wallet', undefined, { revalidate: false })
+                            globalMutate('/api/portfolio', undefined, { revalidate: false })
+                            globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })
+                            
+                            // Clear localStorage
+                            if (typeof window !== 'undefined') {
+                              localStorage.removeItem('bullish_wallet')
+                              localStorage.removeItem('bullish_pf_positions')
+                              // Clear all portfolio-related localStorage keys
+                              Object.keys(localStorage).forEach(key => {
+                                if (key.includes('bullish_pf') || key.includes('bullish_wallet')) {
+                                  localStorage.removeItem(key)
+                                }
+                              })
+                            }
+                            
+                            // Sign out using better-auth
+                            try {
+                              await authClient.signOut()
+                            } catch (signOutError) {
+                              console.error('Sign out error:', signOutError)
+                              // Continue with redirect even if signOut fails
+                            }
+                            
+                            // Force redirect to home page
+                            window.location.href = '/'
+                          } catch (error) {
+                            console.error('Logout error:', error)
+                            // Force redirect even on error
+                            window.location.href = '/'
+                          }
                         }}
                         className="w-full flex items-center gap-2 px-4 py-2 text-slate-300 hover:bg-slate-700 rounded-b-lg text-left transition"
                       >

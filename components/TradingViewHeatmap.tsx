@@ -9,7 +9,15 @@ export function TradingViewHeatmap() {
     if (!container.current) return
 
     const currentContainer = container.current
+    let isMounted = true
+    
+    // Clear previous content
     currentContainer.innerHTML = ''
+    
+    // Ensure widget container exists
+    const widgetDiv = document.createElement('div')
+    widgetDiv.className = 'tradingview-widget-container__widget'
+    currentContainer.appendChild(widgetDiv)
 
     const script = document.createElement('script')
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js'
@@ -33,15 +41,38 @@ export function TradingViewHeatmap() {
       height: 600
     })
     
-    currentContainer.appendChild(script)
+    // Add error handler
+    script.onerror = () => {
+      if (isMounted) {
+        console.error('TradingView heatmap widget failed to load')
+      }
+    }
+    
+    // Small delay to ensure widget container is ready
+    const timeoutId = setTimeout(() => {
+      if (isMounted && currentContainer && widgetDiv) {
+        try {
+          widgetDiv.appendChild(script)
+        } catch (error) {
+          console.error('Error appending TradingView heatmap script:', error)
+        }
+      }
+    }, 100)
 
     // Hide copyright elements that TradingView injects
     const hideCopyright = () => {
-      if (currentContainer) {
-        const copyrightElements = currentContainer.querySelectorAll('.tradingview-widget-copyright')
+      if (!isMounted || !currentContainer) return
+      try {
+        const widgetContainer = currentContainer.querySelector('.tradingview-widget-container__widget')
+        if (!widgetContainer) return
+        const copyrightElements = widgetContainer.querySelectorAll('.tradingview-widget-copyright')
         copyrightElements.forEach((el) => {
-          ;(el as HTMLElement).style.display = 'none'
+          if (el && el instanceof HTMLElement) {
+            el.style.display = 'none'
+          }
         })
+      } catch (err) {
+        // Silently ignore querySelector errors
       }
     }
 
@@ -53,8 +84,16 @@ export function TradingViewHeatmap() {
     }
 
     return () => {
+      isMounted = false
+      clearTimeout(timeoutId)
       observer.disconnect()
-      currentContainer.innerHTML = ''
+      if (currentContainer) {
+        try {
+          currentContainer.innerHTML = ''
+        } catch (err) {
+          // Ignore cleanup errors
+        }
+      }
     }
   }, [])
 
