@@ -6,16 +6,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const symbol = searchParams.get('symbol')?.toUpperCase() || 'AAPL'
 
-    // Fetch comprehensive data
-    const [quoteRes, newsRes, financialsRes] = await Promise.all([
-      fetch(`${req.nextUrl.origin}/api/quote?symbol=${symbol}`),
-      fetch(`${req.nextUrl.origin}/api/news?symbol=${symbol}`),
-      fetch(`${req.nextUrl.origin}/api/stocks?symbol=${symbol}`).catch(() => null),
+    // Fetch comprehensive data from live APIs
+    const [quoteRes, newsRes, stockRes] = await Promise.all([
+      fetch(`${req.nextUrl.origin}/api/quote?symbol=${symbol}`).catch(() => null),
+      fetch(`${req.nextUrl.origin}/api/news?symbol=${symbol}`).catch(() => null),
+      fetch(`${req.nextUrl.origin}/api/stocks/${symbol}`).catch(() => null),
     ])
 
-    const quote = await quoteRes.json().catch(() => null)
-    const news = await newsRes.json().catch(() => null)
-    const financials = financialsRes ? await financialsRes.json().catch(() => null) : null
+    const quote = quoteRes ? await quoteRes.json().catch(() => null) : null
+    const news = newsRes ? await newsRes.json().catch(() => null) : null
+    const stockData = stockRes ? await stockRes.json().catch(() => null) : null
 
     const context: RAGContext = {
       symbol,
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
         },
       } : undefined,
       news: news?.items?.slice(0, 5) || [],
-      fundamentals: financials || undefined,
+      fundamentals: stockData || undefined,
     }
 
     const query = `Provide a "Should I Buy?" analysis for ${symbol}:

@@ -89,14 +89,19 @@ export async function GET(req: NextRequest) {
       const parsed = JSON.parse(response.answer)
       stocks = parsed.stocks || []
     } catch {
-      // Fallback: use top movers
-      stocks = quotes.quotes?.slice(0, 10).map((q: any) => ({
-        symbol: q.symbol,
-        price: parseFloat(q.price || 0),
-        changePercent: parseFloat(q.changePercent || 0),
-        rationale: 'Screened based on market data',
-        metrics: {},
-      })) || []
+      // Fallback: use top movers with proper data format
+      stocks = quotes.quotes?.slice(0, 10).map((q: any) => {
+        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
+        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
+        
+        return {
+          symbol: q.symbol,
+          price,
+          changePercent,
+          rationale: 'Screened based on current market data',
+          metrics: {},
+        }
+      }).filter((s: any) => s.price > 0) || []
     }
 
     return NextResponse.json({
