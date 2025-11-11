@@ -33,11 +33,17 @@ export async function GET(request: NextRequest) {
 
     try {
       const quote = await getQuoteWithFallback(validation.data.symbol)
+      
+      // Validate quote data before returning
+      if (!quote || typeof quote.price !== 'number' || isNaN(quote.price)) {
+        throw new Error('Invalid quote data received')
+      }
+      
       return NextResponse.json({
         symbol: validation.data.symbol,
         price: quote.price,
-        change: quote.change,
-        changePercent: quote.changePct,
+        change: quote.change || 0,
+        changePercent: quote.changePct || 0,
         high: quote.high,
         low: quote.low,
         open: quote.open,
@@ -50,10 +56,17 @@ export async function GET(request: NextRequest) {
         stale: !!quote.stale,
       })
     } catch (error: any) {
-      console.error('Quote fetch failed:', error?.message || error)
+      console.error(`Quote fetch failed for ${validation.data.symbol}:`, error?.message || error)
 
+      // Return a more informative error response
       return NextResponse.json(
-        { error: 'quote_unavailable', message: error?.message || 'Failed to fetch quote', symbol: validation.data.symbol },
+        { 
+          error: 'quote_unavailable', 
+          message: error?.message || 'Failed to fetch quote from all providers', 
+          symbol: validation.data.symbol,
+          // Include fallback data if available
+          data: null
+        },
         { status: 502 }
       )
     }
