@@ -371,16 +371,29 @@ export function GlobalNavbar() {
                               })
                             }
                             
-                            // Sign out using better-auth
+                            // Sign out using better-auth - use fetch directly to ensure it works
                             try {
-                              await authClient.signOut()
+                              // Try better-auth signOut first
+                              const signOutResult = await authClient.signOut()
+                              console.log('Sign out result:', signOutResult)
                             } catch (signOutError) {
                               console.error('Sign out error:', signOutError)
-                              // Continue with redirect even if signOut fails
+                              // Try direct API call as fallback
+                              try {
+                                await fetch('/api/auth/sign-out', {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                })
+                              } catch (apiError) {
+                                console.error('API sign out also failed:', apiError)
+                              }
                             }
                             
-                            // Force redirect to home page
-                            window.location.href = '/'
+                            // Always redirect, even if signOut fails
+                            // Use window.location for hard redirect to clear all state
+                            setTimeout(() => {
+                              window.location.href = '/auth/signin'
+                            }, 100)
                           } catch (error) {
                             console.error('Logout error:', error)
                             // Force redirect even on error
