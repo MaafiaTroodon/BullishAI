@@ -90,14 +90,19 @@ export default function Home() {
     }
   }
 
+  // Normalize symbol for API calls (remove .TO for quote API, but keep for display)
+  const apiSymbol = selectedSymbol.includes('.TO') 
+    ? selectedSymbol.replace('.TO', '') 
+    : selectedSymbol
+
   const { data: topQuotes } = useSWR(
-    `/api/quote?symbol=${selectedSymbol}`,
+    `/api/quote?symbol=${apiSymbol}`,
     fetcher,
     { refreshInterval: 15000 }
   )
 
   const { data: chartData } = useSWR(
-    `/api/chart?symbol=${selectedSymbol}&range=1d`,
+    `/api/chart?symbol=${apiSymbol}&range=1d`,
     fetcher
   )
 

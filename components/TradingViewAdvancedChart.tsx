@@ -66,6 +66,24 @@ function TradingViewAdvancedChart({
     // Guard: ensure container still exists before setting innerHTML
     if (!container.current) return
     
+    // Normalize symbol for TradingView
+    // TSX stocks need TSX: prefix, US stocks can use exchange prefix or just symbol
+    let normalizedSymbol = symbol
+    if (symbol.includes('.TO')) {
+      // Canadian TSX stock - TradingView format: TSX:SYMBOL
+      const baseSymbol = symbol.replace('.TO', '')
+      normalizedSymbol = `TSX:${baseSymbol}`
+    } else if (symbol.length <= 5 && !symbol.includes(':')) {
+      // US stock - try to detect exchange or use default
+      // TradingView can auto-detect, but we can be explicit
+      const nasdaqStocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'AMD', 'INTC']
+      if (nasdaqStocks.includes(symbol)) {
+        normalizedSymbol = `NASDAQ:${symbol}`
+      } else {
+        normalizedSymbol = `NYSE:${symbol}`
+      }
+    }
+    
     script.innerHTML = JSON.stringify({
       allow_symbol_change: allowSymbolChange,
       calendar,
@@ -79,7 +97,7 @@ function TradingViewAdvancedChart({
       locale,
       save_image: saveImage,
       style,
-      symbol: `${symbol}`,
+      symbol: normalizedSymbol,
       theme,
       timezone,
       backgroundColor,
