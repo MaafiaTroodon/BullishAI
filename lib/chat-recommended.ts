@@ -156,23 +156,35 @@ export async function handleRecommendedQuery(params: {
         },
       }
 
-      const gainersText = movers.gainers
-        .slice(0, followUp ? Math.min(10, movers.gainers.length) : 5)
-        .map(
-          (g) =>
-            `${g.symbol}: $${g.price.toFixed(2)} (${g.changePercent >= 0 ? '+' : ''}${g.changePercent.toFixed(2)}%)${
-              g.sector ? ` • ${g.sector}` : ''
-            }`,
-        )
+      const gainersSample = movers.gainers.slice(0, followUp ? Math.min(12, movers.gainers.length) : 5)
+      const losersSample = movers.losers.slice(0, followUp ? Math.min(12, movers.losers.length) : 5)
+
+      const gainersText = gainersSample
+        .map((g, idx) => {
+          const volLine =
+            followUp && g.volume
+              ? ` • Vol ${Math.round(g.volume).toLocaleString()}${
+                  g.avgVolume ? ` (avg ${Math.round(g.avgVolume).toLocaleString()})` : ''
+                }`
+              : ''
+          const sectorLine = g.sector ? ` • ${g.sector}` : ''
+          return `${idx + 1}. ${g.symbol}: $${g.price.toFixed(2)} (${g.changePercent >= 0 ? '+' : ''}${g.changePercent.toFixed(
+            2,
+          )}%)${sectorLine}${volLine}`
+        })
         .join('\n')
-      const losersText = movers.losers
-        .slice(0, followUp ? Math.min(10, movers.losers.length) : 5)
-        .map(
-          (l) =>
-            `${l.symbol}: $${l.price.toFixed(2)} (${l.changePercent.toFixed(2)}%)${
-              l.sector ? ` • ${l.sector}` : ''
-            }`,
-        )
+
+      const losersText = losersSample
+        .map((l, idx) => {
+          const volLine =
+            followUp && l.volume
+              ? ` • Vol ${Math.round(l.volume).toLocaleString()}${
+                  l.avgVolume ? ` (avg ${Math.round(l.avgVolume).toLocaleString()})` : ''
+                }`
+              : ''
+          const sectorLine = l.sector ? ` • ${l.sector}` : ''
+          return `${idx + 1}. ${l.symbol}: $${l.price.toFixed(2)} (${l.changePercent.toFixed(2)}%)${sectorLine}${volLine}`
+        })
         .join('\n')
 
       const liveDataText = `Top gainers:\n${gainersText}\n\nTop losers:\n${losersText}`
@@ -208,13 +220,35 @@ export async function handleRecommendedQuery(params: {
       const leaders = sorted.slice(0, 3)
       const laggards = sorted.slice(-3)
 
-      const summaryLines = [
+      let summaryLines = [
         'Sector leaders:',
         ...leaders.map((s) => `${s.name} (${s.symbol}) +${s.changePercent.toFixed(2)}%`),
         '',
         'Sector laggards:',
         ...laggards.map((s) => `${s.name} (${s.symbol}) ${s.changePercent.toFixed(2)}%`),
       ].join('\n')
+
+      if (followUp) {
+        const movers = await fetchTopMovers(origin, 40)
+        if (movers) {
+          const sectorBuckets: Record<string, string[]> = {}
+          ;[...movers.gainers, ...movers.losers].forEach((stock) => {
+            if (!stock.sector) return
+            if (!sectorBuckets[stock.sector]) sectorBuckets[stock.sector] = []
+            if (sectorBuckets[stock.sector].length < 4) {
+              sectorBuckets[stock.sector].push(stock.symbol)
+            }
+          })
+          const focusSectors = [...leaders, ...laggards]
+          const detailLines = focusSectors
+            .map((sector) => {
+              const sample = sectorBuckets[sector.name] || []
+              return `${sector.name}: ${sample.length > 0 ? sample.join(', ') : 'pulling names from watchlists'}`
+            })
+            .join('\n')
+          summaryLines += `\n\nRepresentative movers:\n${detailLines}`
+        }
+      }
 
       const ragContext: RAGContext = {
         lists: {

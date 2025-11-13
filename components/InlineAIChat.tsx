@@ -31,6 +31,8 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [isTyping, setIsTyping] = useState(false)
   const [showPresets, setShowPresets] = useState(true) // Always show presets by default, toggle to hide
   const [selectedCategory, setSelectedCategory] = useState<'quick-insights' | 'recommended' | 'technical' | 'all'>('all')
+  const [lastPresetId, setLastPresetId] = useState<string | null>(null)
+  const [lastFollowUpContext, setLastFollowUpContext] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -119,24 +121,41 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       question = question.replace(/AAPL|this stock|it/gi, focusSymbol)
     }
     
-    handleSend(question)
+    setLastPresetId(preset.id)
+    setLastFollowUpContext(null)
+    handleSend(question, { presetId: preset.id })
   }
 
-  const handleSend = async (customMessage?: string) => {
-    const messageToSend = typeof customMessage === 'string' ? customMessage : inputValue
-    if (!messageToSend.trim() || !isLoggedIn) return
+  const handleSend = async (customMessage?: string, options?: { presetId?: string }) => {
+    const rawMessage = typeof customMessage === 'string' ? customMessage : inputValue
+    const messageToSend = rawMessage.trim()
+    if (!messageToSend || !isLoggedIn) return
     
     // Don't hide presets - they stay visible at bottom
+    const isAffirmativeFollowUp = /^y(es)?$/i.test(messageToSend) && !!lastFollowUpContext
+    const presetIdToUse = options?.presetId || (isAffirmativeFollowUp ? lastFollowUpContext?.presetId : null)
+
+    if (options?.presetId) {
+      setLastPresetId(options.presetId)
+    } else if (!isAffirmativeFollowUp) {
+      setLastPresetId(null)
+    }
+    if (!isAffirmativeFollowUp && !options?.presetId) {
+      setLastFollowUpContext(null)
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: messageToSend,
+      text: rawMessage,
       sender: 'user',
       timestamp: new Date(),
     }
 
     setMessages((prev) => [...prev, userMessage])
-    const query = messageToSend
+    const effectiveQuery = isAffirmativeFollowUp && lastFollowUpContext?.lastQuestion
+      ? `${lastFollowUpContext.lastQuestion} (user wants more detail)`
+      : messageToSend
+
     if (!customMessage) {
       setInputValue('')
     }
@@ -147,9 +166,12 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          query,
+        body: JSON.stringify({
+          query: effectiveQuery,
           symbol: focusSymbol,
+          presetId: presetIdToUse || undefined,
+          followUp: isAffirmativeFollowUp,
+          previousContext: isAffirmativeFollowUp ? lastFollowUpContext : undefined,
         }),
       })
 
@@ -195,6 +217,17 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       }
 
       setMessages((prev) => [...prev, botMessage])
+      if (data.followUpContext) {
+        setLastFollowUpContext({
+          ...data.followUpContext,
+          lastQuestion: effectiveQuery,
+        })
+        if (data.followUpContext.presetId) {
+          setLastPresetId(data.followUpContext.presetId)
+        }
+      } else {
+        setLastFollowUpContext(null)
+      }
     } catch (error) {
       console.error('Chat API error:', error)
       const errorMessage: Message = {
