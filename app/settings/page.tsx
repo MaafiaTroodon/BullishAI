@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
 import { showToast } from '@/components/Toast'
@@ -52,7 +52,27 @@ export default function Settings() {
     router.push('/')
   }
 
-  if (isLoading) {
+  // Add timeout for loading - don't block forever
+  const [loadingTimeout, setLoadingTimeout] = useState(false)
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => setLoadingTimeout(true), 3000)
+      return () => clearTimeout(timer)
+    } else {
+      setLoadingTimeout(false)
+    }
+  }, [isLoading])
+
+  // Redirect if not logged in - use ref to prevent loops
+  const hasRedirected = useRef(false)
+  useEffect(() => {
+    if ((!isLoading || loadingTimeout) && !session?.user && !hasRedirected.current) {
+      hasRedirected.current = true
+      router.replace('/auth/signin?next=/settings')
+    }
+  }, [session?.user, isLoading, loadingTimeout])
+
+  if (isLoading && !loadingTimeout) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -61,8 +81,11 @@ export default function Settings() {
   }
 
   if (!session?.user) {
-    router.push('/auth/signin?next=/settings')
-    return null
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white">Redirecting to sign in...</div>
+      </div>
+    )
   }
 
   return (

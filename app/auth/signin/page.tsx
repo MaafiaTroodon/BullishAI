@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingUp, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
@@ -15,14 +15,29 @@ function SignInContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [loadingTimeout, setLoadingTimeout] = useState(false)
   
-  // Redirect if already logged in
+  // Add timeout for session loading - don't block forever
   useEffect(() => {
-    if (!sessionLoading && session?.user) {
+    if (sessionLoading) {
+      const timer = setTimeout(() => {
+        setLoadingTimeout(true)
+      }, 3000) // After 3 seconds, stop showing loading
+      return () => clearTimeout(timer)
+    } else {
+      setLoadingTimeout(false)
+    }
+  }, [sessionLoading])
+  
+  // Redirect if already logged in - use ref to prevent infinite loops
+  const hasRedirected = useRef(false)
+  useEffect(() => {
+    if ((!sessionLoading || loadingTimeout) && session?.user && !hasRedirected.current) {
+      hasRedirected.current = true
       const next = searchParams.get('next') || '/dashboard'
       router.replace(next)
     }
-  }, [session, sessionLoading, router, searchParams])
+  }, [session?.user, sessionLoading, loadingTimeout]) // Removed searchParams and router from deps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,8 +60,9 @@ function SignInContent() {
       
       // Success - redirect to dashboard or next URL
       const next = searchParams.get('next') || '/dashboard'
-      router.push(next)
-      router.refresh() // Refresh to update session
+      // Use replace instead of push to avoid adding to history
+      // Don't call router.refresh() as it causes reload loops
+      router.replace(next)
     } catch (err: any) {
       console.error('Sign in error:', err)
       setError(err?.message || 'An error occurred. Please try again.')
@@ -54,14 +70,17 @@ function SignInContent() {
     }
   }
 
-  // Show loading while checking session
-  if (sessionLoading) {
+  // Show loading while checking session, but timeout after 3 seconds
+  if (sessionLoading && !loadingTimeout) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
       </div>
     )
   }
+  
+  // If loading timed out, show the form anyway (auth check might be slow)
+  // The form will handle the auth state
   
   // Don't render form if already logged in (redirect will happen)
   if (session?.user) {

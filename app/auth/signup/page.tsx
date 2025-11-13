@@ -49,8 +49,8 @@ export default function SignUp() {
       }
       
       // Success - redirect to dashboard
-      router.push('/dashboard')
-      router.refresh() // Refresh to update session
+      // Use replace instead of push, don't refresh to avoid reload loops
+      router.replace('/dashboard')
     } catch (err: any) {
       console.error('Sign up error:', err)
       setError(err?.message || 'An error occurred. Please try again.')

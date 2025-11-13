@@ -7,8 +7,13 @@ const protectedRoutes = ['/dashboard', '/watchlist', '/alerts', '/settings', '/w
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  // Skip middleware for API routes (except auth)
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
+  // Skip middleware for API routes completely - let them handle their own auth
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
+  
+  // Skip middleware for static assets
+  if (pathname.startsWith('/_next/') || pathname.startsWith('/favicon')) {
     return NextResponse.next()
   }
   
@@ -28,8 +33,10 @@ export function middleware(request: NextRequest) {
   // Check if route is protected
   const isProtected = protectedRoutes.some(route => pathname.startsWith(route))
   
-  // If accessing protected route without session, redirect to sign-in
-  // But prevent redirect loops by checking the next parameter
+  // TEMPORARILY DISABLE PROTECTED ROUTE REDIRECTS to prevent loops
+  // Let client-side handle auth checks instead
+  // This allows pages to render even if auth is slow/failing
+  /*
   if (isProtected && !hasSession) {
     // Check if we're already being redirected from signin (prevent loops)
     const nextParam = request.nextUrl.searchParams.get('next')
@@ -41,8 +48,8 @@ export function middleware(request: NextRequest) {
       signInUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(signInUrl)
     }
-    // If we're in a loop, just let the page render (it will show signin form)
   }
+  */
   
   return NextResponse.next()
 }
