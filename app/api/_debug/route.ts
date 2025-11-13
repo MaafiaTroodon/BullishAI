@@ -11,12 +11,32 @@ export async function GET(request: NextRequest) {
   // if (process.env.NODE_ENV === 'production') {
   //   return NextResponse.json({ error: 'Not available in production' }, { status: 404 })
   // }
+  // Get auth baseURL (without importing auth to avoid circular deps)
+  function getAuthBaseURL(): string {
+    if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL
+    if (process.env.NEXT_PUBLIC_BETTER_AUTH_URL) return process.env.NEXT_PUBLIC_BETTER_AUTH_URL
+    if (process.env.NETLIFY) {
+      const netlifyUrl = process.env.URL || process.env.DEPLOY_PRIME_URL
+      if (netlifyUrl) {
+        return netlifyUrl.startsWith('http') ? netlifyUrl : `https://${netlifyUrl}`
+      }
+    }
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+    return "http://localhost:3000"
+  }
+
   const env = {
     databaseUrl: !!process.env.DATABASE_URL,
     finnhub: !!process.env.FINNHUB_API_KEY,
     twelvedata: !!process.env.TWELVEDATA_API_KEY,
     alphavantage: !!process.env.ALPHAVANTAGE_API_KEY,
     groq: !!process.env.GROQ_API_KEY,
+    betterAuthUrl: process.env.BETTER_AUTH_URL || 'not set',
+    nextPublicBetterAuthUrl: process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'not set',
+    netlifyUrl: process.env.URL || process.env.DEPLOY_PRIME_URL || 'not set',
+    computedAuthBaseUrl: getAuthBaseURL(),
+    requestOrigin: request.headers.get('origin') || 'no origin header',
+    requestHost: request.headers.get('host') || 'no host header',
   }
 
   const providers = {
