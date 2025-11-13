@@ -127,12 +127,12 @@ export async function GET(req: NextRequest) {
         }
       })
       .filter((rec: Recommendation | null): rec is Recommendation => !!rec && rec.price > 0)
-      .filter((rec) => filterByUniverse(rec.symbol, universe))
-      .filter((rec) => {
+      .filter((rec: Recommendation) => filterByUniverse(rec.symbol, universe))
+      .filter((rec: Recommendation) => {
         if (exchanges.length === 0) return true
         return exchanges.includes(rec.exchange) || exchanges.includes(`X${rec.exchange.slice(0, 1)}${rec.exchange.slice(1)}`)
       })
-      .filter((rec) => {
+      .filter((rec: Recommendation) => {
         if (!queryString) return true
         return rec.symbol.includes(queryString) || rec.name.toUpperCase().includes(queryString)
       })
