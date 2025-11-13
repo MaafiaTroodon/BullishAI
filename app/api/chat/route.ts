@@ -4,7 +4,7 @@ import { detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-kno
 import { findBestMatch } from '@/lib/ai-knowledge-trainer'
 import { getSession } from '@/lib/auth-server'
 import { classifyChatDomain } from '@/lib/chat-domains'
-import { runHybridLLM } from '@/lib/hybrid-llm-router'
+import { runHybridLLM, getModelBadge } from '@/lib/hybrid-llm-router'
 import { handleRecommendedQuery, FollowUpContext, RecommendedType } from '@/lib/chat-recommended'
 import { isRecommendedQuestion } from '@/lib/chat-data-fetchers'
 
@@ -153,10 +153,12 @@ Answer using the rules above.`
           presetId: presetId || previousContext?.presetId || undefined,
         }
 
+        const recommendedBadge = getModelBadge(llmResponse.metadata) || dataSource
+
         return NextResponse.json({
           answer,
           model: llmResponse.model,
-          modelBadge: dataSource,
+          modelBadge: recommendedBadge,
           latency: llmResponse.latency,
           section: section || undefined,
           tickers: tickersFromData.length > 0 ? tickersFromData : undefined,
@@ -356,12 +358,7 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
       answer += `\n\n⚠️ This is for educational purposes only and not financial advice.`
     }
 
-    const modelBadge =
-      llmResponse.metadata?.engine === 'gemini'
-        ? 'Gemini Fallback'
-        : llmResponse.metadata?.engine
-        ? `Hybrid • ${llmResponse.metadata.engine.toUpperCase()}`
-        : llmResponse.model || 'BullishAI Hybrid'
+    const modelBadge = getModelBadge(llmResponse.metadata) || 'Multi-Model Engine'
 
     return NextResponse.json({
       answer,
