@@ -235,12 +235,42 @@ export function PortfolioChart() {
     const min = Math.min(...portfolioValues)
     const max = Math.max(...portfolioValues)
     const currentValue = portfolioValues[portfolioValues.length - 1] // Last value (most recent)
-    const costBasis = points[points.length - 1]?.costBasis || currentValue // Use cost basis if available
+    
+    // Get cost basis from the most recent point, or from portfolio data
+    // Try multiple ways to get cost basis - prioritize the most recent point's costBasis
+    const lastPoint = points[points.length - 1]
+    
+    // Get cost basis - try in order: last point, timeseries totals, portfolio data, current value
+    let costBasis = lastPoint?.costBasis
+    
+    // If not in last point, try to get from timeseries totals
+    if (!costBasis || costBasis <= 0) {
+      costBasis = timeseriesData?.totals?.costBasis
+    }
+    
+    // If still not found, try to get from portfolio data (pf)
+    if ((!costBasis || costBasis <= 0) && pf?.totals?.costBasis) {
+      costBasis = pf.totals.costBasis
+    }
+    
+    // Final fallback: use current value
+    if (!costBasis || costBasis <= 0) {
+      costBasis = currentValue
+    }
     
     // For short timeframes (1H, 1D, 3D), ALWAYS show ±10% around cost basis
     // Don't expand even if old data points are outside this range
     const shortTimeframes = ['1h', '1d', '3d']
     if (shortTimeframes.includes(chartRange)) {
+      // Ensure cost basis is valid and greater than 0
+      if (!costBasis || costBasis <= 0) {
+        // Fallback: use current value if cost basis is invalid
+        const fallbackBasis = currentValue || 100
+        const rangeMin10 = fallbackBasis * 0.9
+        const rangeMax10 = fallbackBasis * 1.1
+        return [Math.max(0, rangeMin10), rangeMax10]
+      }
+      
       // Calculate ±10% range around cost basis - this is fixed, don't expand
       const rangeMin10 = costBasis * 0.9  // -10%
       const rangeMax10 = costBasis * 1.1  // +10%
@@ -254,7 +284,7 @@ export function PortfolioChart() {
     const range = max - min || max || 1
     const padding = range * 0.1 // 10% padding for better visibility
     return [0, max + padding]
-  }, [points, chartRange])
+  }, [points, chartRange, timeseriesData])
 
   const ranges = [
     { label: '1H', value: '1h' },
@@ -342,6 +372,7 @@ export function PortfolioChart() {
             <AreaChart 
               data={points}
               margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+              syncId="portfolio-chart"
             >
               <defs>
                 <linearGradient id="pfColor-up" x1="0" y1="0" x2="0" y2="1">
