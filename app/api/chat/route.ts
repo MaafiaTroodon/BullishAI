@@ -177,12 +177,26 @@ Answer using the rules above.`
           })
         }
 
+        // handleRecommendedQuery should never throw now - it returns conceptual answers
+        // But if it does throw for some reason, provide a helpful conceptual answer
         console.error('Recommended preset handling error:', error)
+        
+        // Provide a conceptual answer based on the query type
+        const conceptualAnswers: Record<string, string> = {
+          'market-summary': "I don't have fresh market data from BullishAI right now, but here's how traders typically assess market health: watch major indices (SPY, QQQ, DIA) for overall direction, check sector rotation for risk-on/risk-off signals, and monitor VIX for volatility. Want me to explain how to read these indicators?",
+          'top-movers': "I don't see standout movers in BullishAI's feed right now. Typically, traders look for stocks moving >3-5% on above-average volume to identify momentum. Want me to explain how to spot unusual activity?",
+          'sectors': "I don't have fresh sector data right now. Traders typically watch sector ETFs (XLK, XLF, XLE, etc.) to identify rotation themes. Leading sectors often indicate risk-on sentiment. Want me to explain sector analysis?",
+          'news': "I don't see fresh headlines right now. Market-moving news typically includes earnings, Fed policy, major company announcements, and sector catalysts. Want me to explain how news affects markets?",
+          'earnings': "I don't see earnings scheduled today. Earnings season runs quarterly, with most companies reporting in weeks following quarter-end. Want me to explain what traders watch during earnings?",
+        }
+        
+        const conceptualAnswer = conceptualAnswers[recommendedType || ''] || 
+          "I don't have fresh data from BullishAI right now, but here's how traders typically approach this: focus on key indicators, watch for catalysts, and manage risk. Want me to explain the concepts behind this analysis?"
+        
         return NextResponse.json({
-          answer:
-            "Live data is temporarily unavailable. Here's a general perspective: markets rotate quickly, so check sectors leading today and keep an eye on upcoming catalysts. Want me to retry in a moment or pivot to another insight?\n\n⚠️ *This is for educational purposes only and not financial advice.*",
-          model: 'bullishai-fallback',
-          modelBadge: 'BullishAI Live Feed (cached)',
+          answer: `${conceptualAnswer}\n\n⚠️ *This is for educational purposes only and not financial advice.*`,
+          model: 'bullishai-conceptual',
+          modelBadge: 'BullishAI Market Education',
           latency: 0,
           section: section || undefined,
         })
