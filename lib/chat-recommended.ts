@@ -1,0 +1,444 @@
+import {
+  fetchEarnings,
+  fetchMarketNews,
+  fetchMarketSummary,
+  fetchRecommendedStocks,
+  fetchSectorLeaders,
+  fetchTopMovers,
+  fetchUnusualVolume,
+  formatET,
+  NewsData,
+  TopMoversData,
+  SectorLeadersData,
+  UnusualVolumeData,
+} from './chat-data-fetchers'
+import { RAGContext } from './ai-router'
+import { ChatDomain } from './chat-domains'
+
+export type RecommendedType =
+  | 'market-summary'
+  | 'top-movers'
+  | 'sectors'
+  | 'news'
+  | 'earnings'
+  | 'unusual-volume'
+  | 'breakouts'
+  | 'value-quality'
+  | 'momentum'
+  | 'rebound'
+  | 'dividend-momentum'
+  | 'technical'
+  | 'upgrades'
+
+export interface FollowUpContext {
+  type: RecommendedType
+  stage: 'summary' | 'expanded' | 'deep-dive'
+  limit: number
+  domain: ChatDomain
+  dataSource?: string
+  timestamp?: string
+  presetId?: string
+  meta?: Record<string, any>
+}
+
+interface RecommendedHandlerResult {
+  ragContext: RAGContext
+  liveDataText: string
+  dataSource: string
+  dataTimestamp: string
+  requiredPhrases: string[]
+  domain: ChatDomain
+  followUpContext: FollowUpContext
+  summaryInstruction: string
+}
+
+const DEFAULT_LIMIT = 10
+const EXPANDED_LIMIT = 25
+const MAX_LIMIT = 60
+
+function humanizeListSymbol(items: string[]): string[] {
+  return items.map((item) => item.toUpperCase())
+}
+
+function extractSymbolsFromTopMovers(data: TopMoversData): string[] {
+  const gainers = data.gainers.map((g) => g.symbol)
+  const losers = data.losers.map((l) => l.symbol)
+  return Array.from(new Set([...gainers, ...losers]))
+}
+
+function extractSymbolsFromNews(data: NewsData | null): string[] {
+  if (!data?.items) return []
+  const symbols: string[] = []
+  data.items.forEach((item) => {
+    if (item.symbols && Array.isArray(item.symbols)) {
+      symbols.push(...item.symbols)
+    }
+    const matches = item.headline?.match(/[A-Z]{1,5}(?:\.[A-Z]{1,3})?/g) || []
+    symbols.push(...matches)
+  })
+  return Array.from(new Set(symbols))
+}
+
+function computeExpandedLimit(previous?: FollowUpContext): number {
+  if (!previous) return EXPANDED_LIMIT
+  const next = Math.min(MAX_LIMIT, Math.round((previous.limit || DEFAULT_LIMIT) * 1.5))
+  return next > previous.limit ? next : Math.min(MAX_LIMIT, previous.limit + 10)
+}
+
+export async function handleRecommendedQuery(params: {
+  type: RecommendedType
+  origin: string
+  followUp?: boolean
+  previousContext?: FollowUpContext | null
+}): Promise<RecommendedHandlerResult> {
+  const { type, origin, followUp = false, previousContext } = params
+
+  switch (type) {
+    case 'market-summary': {
+      const summary = await fetchMarketSummary(origin)
+      if (!summary || summary.indices.length === 0) {
+        throw new Error('Market summary data unavailable')
+      }
+      const indicesText = summary.indices
+        .map(
+          (idx) =>
+            `${idx.symbol}: $${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(
+              2,
+            )}%)`,
+        )
+        .join(', ')
+
+      const ragContext: RAGContext = {
+        marketData: {
+          indices: summary.indices.reduce((acc: Record<string, any>, idx) => {
+            acc[idx.symbol] = {
+              value: idx.price,
+              change: idx.change,
+              changePercent: idx.changePercent,
+            }
+            return acc
+          }, {}),
+          session: 'REG',
+        },
+      }
+
+      return {
+        ragContext,
+        liveDataText: `Market indices snapshot: ${indicesText}`,
+        dataSource: summary.source,
+        dataTimestamp: formatET(summary.timestamp),
+        requiredPhrases: humanizeListSymbol(summary.indices.map((idx) => idx.symbol)),
+        domain: 'market_overview',
+        summaryInstruction:
+          'Summarize overall market tone (risk-on/off), mention at least two indices, and highlight any standout move (e.g., VIX spike).',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit: summary.indices.length,
+          domain: 'market_overview',
+          dataSource: summary.source,
+          timestamp: summary.timestamp,
+        },
+      }
+    }
+
+    case 'top-movers': {
+      const limit = followUp ? computeExpandedLimit(previousContext) : DEFAULT_LIMIT
+      const movers = await fetchTopMovers(origin, limit)
+      if (!movers || (movers.gainers.length === 0 && movers.losers.length === 0)) {
+        throw new Error('Top movers data unavailable')
+      }
+
+      const ragContext: RAGContext = {
+        lists: {
+          gainers: movers.gainers,
+          losers: movers.losers,
+        },
+      }
+
+      const gainersText = movers.gainers
+        .slice(0, followUp ? Math.min(10, movers.gainers.length) : 5)
+        .map(
+          (g) =>
+            `${g.symbol}: $${g.price.toFixed(2)} (${g.changePercent >= 0 ? '+' : ''}${g.changePercent.toFixed(2)}%)${
+              g.sector ? ` • ${g.sector}` : ''
+            }`,
+        )
+        .join('\n')
+      const losersText = movers.losers
+        .slice(0, followUp ? Math.min(10, movers.losers.length) : 5)
+        .map(
+          (l) =>
+            `${l.symbol}: $${l.price.toFixed(2)} (${l.changePercent.toFixed(2)}%)${
+              l.sector ? ` • ${l.sector}` : ''
+            }`,
+        )
+        .join('\n')
+
+      const liveDataText = `Top gainers:\n${gainersText}\n\nTop losers:\n${losersText}`
+
+      return {
+        ragContext,
+        liveDataText,
+        dataSource: movers.source,
+        dataTimestamp: formatET(movers.timestamp),
+        requiredPhrases: extractSymbolsFromTopMovers(movers),
+        domain: 'market_overview',
+        summaryInstruction: followUp
+          ? 'Expand on market breadth. Highlight sector themes, volumes, and volatility clusters. Invite user to drill into sectors or tickers.'
+          : 'Highlight key gainers/losers, mention leading sectors, and note any volatility themes.',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit,
+          domain: 'market_overview',
+          dataSource: movers.source,
+          timestamp: movers.timestamp,
+          meta: { includeVolume: followUp },
+        },
+      }
+    }
+
+    case 'sectors': {
+      const sectors = await fetchSectorLeaders(origin)
+      if (!sectors || sectors.sectors.length === 0) {
+        throw new Error('Sector snapshot unavailable')
+      }
+      const sorted = [...sectors.sectors].sort((a, b) => b.changePercent - a.changePercent)
+      const leaders = sorted.slice(0, 3)
+      const laggards = sorted.slice(-3)
+
+      const summaryLines = [
+        'Sector leaders:',
+        ...leaders.map((s) => `${s.name} (${s.symbol}) +${s.changePercent.toFixed(2)}%`),
+        '',
+        'Sector laggards:',
+        ...laggards.map((s) => `${s.name} (${s.symbol}) ${s.changePercent.toFixed(2)}%`),
+      ].join('\n')
+
+      const ragContext: RAGContext = {
+        lists: {
+          sectors: sectors.sectors,
+        },
+      }
+
+      return {
+        ragContext,
+        liveDataText: summaryLines,
+        dataSource: sectors.source,
+        dataTimestamp: formatET(sectors.timestamp),
+        requiredPhrases: leaders.concat(laggards).map((s) => s.name),
+        domain: 'market_overview',
+        summaryInstruction: followUp
+          ? 'Drill into the leading/lagging sectors by naming representative stocks from each and note rotation themes.'
+          : 'Highlight top 3 sectors leading and bottom 3 lagging, and describe the rotation tone (e.g., defensives vs cyclicals).',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit: sectors.sectors.length,
+          domain: 'market_overview',
+          dataSource: sectors.source,
+          timestamp: sectors.timestamp,
+        },
+      }
+    }
+
+    case 'news': {
+      const limit = followUp ? 10 : 5
+      const news = await fetchMarketNews(origin, limit)
+      if (!news || news.items.length === 0) {
+        throw new Error('Market news unavailable')
+      }
+      const newsLines = news.items
+        .map(
+          (item, idx) =>
+            `${idx + 1}. ${item.headline}${item.source ? ` — ${item.source}` : ''}${
+              item.summary ? ` :: ${item.summary}` : ''
+            }`,
+        )
+        .join('\n')
+
+      const ragContext: RAGContext = {
+        news: news.items,
+      }
+
+      return {
+        ragContext,
+        liveDataText: newsLines,
+        dataSource: news.source,
+        dataTimestamp: formatET(news.timestamp),
+        requiredPhrases: extractSymbolsFromNews(news),
+        domain: 'news_events',
+        summaryInstruction: followUp
+          ? 'Expand the news recap with more headlines, group them by theme (macro, mega-cap, sector), and suggest follow-up checks.'
+          : 'Summarize the top headlines driving today’s market tone. Mention involved tickers and macro themes.',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit,
+          domain: 'news_events',
+          dataSource: news.source,
+          timestamp: news.timestamp,
+        },
+      }
+    }
+
+    case 'earnings': {
+      const earnings = await fetchEarnings(origin, 'today')
+      if (!earnings || earnings.today.length === 0) {
+        throw new Error('Earnings calendar unavailable')
+      }
+
+      const entries = followUp ? earnings.today.slice(0, 12) : earnings.today.slice(0, 6)
+      const lines = entries.map(
+        (e) =>
+          `${e.symbol}${e.name ? ` (${e.name})` : ''}${e.time ? ` • ${e.time}` : ''}${
+            e.estimate ? ` • EPS est $${e.estimate}` : ''
+          }`,
+      )
+
+      const ragContext: RAGContext = {
+        calendar: {
+          earnings: entries,
+        },
+      }
+
+      return {
+        ragContext,
+        liveDataText: `Today's earnings focus:\n${lines.join('\n')}`,
+        dataSource: earnings.source,
+        dataTimestamp: formatET(earnings.timestamp),
+        requiredPhrases: entries.map((e) => e.symbol),
+        domain: 'news_events',
+        summaryInstruction: followUp
+          ? 'Provide more companies, note pre-market vs after-hours splits, and highlight sectors with heavy earnings concentration.'
+          : 'Highlight today’s key earnings, mention times, and remind user about volatility around results.',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit: entries.length,
+          domain: 'news_events',
+          dataSource: earnings.source,
+          timestamp: earnings.timestamp,
+        },
+      }
+    }
+
+    case 'unusual-volume': {
+      const limit = followUp ? computeExpandedLimit(previousContext) : DEFAULT_LIMIT
+      const volumeData = await fetchUnusualVolume(origin, limit)
+      if (!volumeData || volumeData.entries.length === 0) {
+        throw new Error('Unusual volume data unavailable')
+      }
+
+      const entries = volumeData.entries.slice(0, followUp ? 15 : 7)
+      const lines = entries.map(
+        (entry) =>
+          `${entry.symbol}: ${entry.relativeVolume.toFixed(2)}x volume • $${entry.price.toFixed(2)} ${
+            entry.changePercent >= 0 ? '+' : ''
+          }${entry.changePercent.toFixed(2)}% • Vol ${entry.volume.toLocaleString()} (avg ${entry.avgVolume.toLocaleString()})`,
+      )
+
+      const ragContext: RAGContext = {
+        lists: {
+          unusualVolume: entries,
+        },
+      }
+
+      return {
+        ragContext,
+        liveDataText: `Unusual volume movers:\n${lines.join('\n')}`,
+        dataSource: volumeData.source,
+        dataTimestamp: formatET(volumeData.timestamp),
+        requiredPhrases: entries.map((e) => e.symbol),
+        domain: 'market_overview',
+        summaryInstruction: followUp
+          ? 'Expand on relative volume leaders, group by sector, and flag which names have catalysts (earnings, news).'
+          : 'Highlight stocks trading at >1.5x average volume and mention whether the move is tied to gains or pullbacks.',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit,
+          domain: 'market_overview',
+          dataSource: volumeData.source,
+          timestamp: volumeData.timestamp,
+          meta: { includeAvgVolume: true },
+        },
+      }
+    }
+
+    case 'upgrades': {
+      // If we do not have an upgrades endpoint yet, respond according to specification
+      throw new Error('UPGRADES_UNAVAILABLE')
+    }
+
+    case 'breakouts':
+    case 'value-quality':
+    case 'momentum':
+    case 'rebound':
+    case 'dividend-momentum': {
+      const map: Record<string, 'value' | 'momentum' | 'breakout' | 'rebound' | 'dividend'> = {
+        'value-quality': 'value',
+        momentum: 'momentum',
+        breakouts: 'breakout',
+        rebound: 'rebound',
+        'dividend-momentum': 'dividend',
+      }
+      const screenerData = await fetchRecommendedStocks(origin, map[type])
+      if (!screenerData || !screenerData.stocks || screenerData.stocks.length === 0) {
+        throw new Error('Screener data unavailable')
+      }
+
+      const subset = followUp ? screenerData.stocks.slice(0, 12) : screenerData.stocks.slice(0, 6)
+
+      const lines = subset.map((stock: any, index: number) => {
+        const price = stock.price || stock.currentPrice || stock.last || 0
+        const change = stock.changePercent ?? stock.changePct ?? stock.change ?? null
+        const quality = stock.score ?? stock.qualityScore ?? stock.momentumScore ?? null
+        const extraFields: string[] = []
+        if (stock.yield || stock.dividendYield) {
+          extraFields.push(`Yield ${((stock.yield ?? stock.dividendYield) * 100 || 0).toFixed(2)}%`)
+        }
+        if (stock.roe) extraFields.push(`ROE ${stock.roe.toFixed(1)}%`)
+        if (stock.pe) extraFields.push(`P/E ${stock.pe.toFixed(1)}`)
+        if (stock.relativeStrength) extraFields.push(`RS ${stock.relativeStrength}`)
+
+        return `${index + 1}. ${stock.symbol}${stock.name ? ` (${stock.name})` : ''}: $${price.toFixed(2)}${
+          change !== null ? ` (${change >= 0 ? '+' : ''}${Number(change).toFixed(2)}%)` : ''
+        }${quality !== null ? ` • Score ${quality}` : ''}${extraFields.length ? ` • ${extraFields.join(', ')}` : ''}`
+      })
+
+      const ragContext: RAGContext = {
+        lists: {
+          screener: subset,
+        },
+      }
+
+      return {
+        ragContext,
+        liveDataText: `${map[type].toUpperCase()} picks:\n${lines.join('\n')}`,
+        dataSource: screenerData.source,
+        dataTimestamp: formatET(screenerData.timestamp),
+        requiredPhrases: subset.map((stock: any) => stock.symbol),
+        domain: 'market_overview',
+        summaryInstruction: followUp
+          ? 'Provide deeper analysis on these picks: add volume confirmation, multi-timeframe momentum, and invite ticker deep-dives.'
+          : 'List the strongest candidates and mention why they stand out (valuation, momentum, dividend, etc.).',
+        followUpContext: {
+          type,
+          stage: followUp ? 'expanded' : 'summary',
+          limit: subset.length,
+          domain: 'market_overview',
+          dataSource: screenerData.source,
+          timestamp: screenerData.timestamp,
+          meta: { screenerType: map[type] },
+        },
+      }
+    }
+
+    default:
+      throw new Error(`Unsupported recommended type: ${type}`)
+  }
+}
+
+
