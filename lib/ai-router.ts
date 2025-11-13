@@ -244,7 +244,15 @@ ${SAFETY_DISCLAIMER}`
     }
   } catch (error: any) {
     console.error('Gemini API error:', error)
-    throw new Error(`Gemini API failed: ${error.message}`)
+    // Never throw from Gemini - always return a graceful fallback response
+    const latency = Date.now() - startTime
+    return {
+      answer: `I'm having trouble accessing the AI service right now. Here's what I can tell you based on the available context:\n\n${formatRAGContext(context)}\n\nPlease try again in a moment, or contact support if the issue persists.`,
+      model: 'gemini',
+      latency,
+      riskNote: 'Service temporarily unavailable. Please verify information independently.',
+      metadata: { error: error.message, fallback: true }
+    }
   }
 }
 
@@ -328,36 +336,66 @@ export async function routeAIQuery(
         return await callGroq(query, context, systemPrompt, jsonSchema)
     }
   } catch (error: any) {
-    // If Groq fails (rate limit, etc.), fallback to Gemini
+    // If Groq fails (rate limit, etc.), ALWAYS fallback to Gemini
     if (model === 'groq-llama' || (model === 'local-pytorch' && error.message?.includes('Groq'))) {
-      if (error.isRecoverable || error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('429')) {
-        console.warn(`Groq rate limit or error detected, falling back to Gemini:`, error.message)
-        try {
-          return await callGemini(query, context, systemPrompt, jsonSchema)
-        } catch (geminiError: any) {
-          console.error('Gemini fallback also failed:', geminiError)
-          throw new Error(`Both Groq and Gemini failed. Groq: ${error.message}. Gemini: ${geminiError.message}`)
+      // Always fallback to Gemini for any Groq error - Gemini never throws
+      console.warn(`Groq error detected, falling back to Gemini:`, error.message)
+      const geminiResponse = await callGemini(query, context, systemPrompt, jsonSchema)
+      // Add metadata to indicate this was a fallback
+      return {
+        ...geminiResponse,
+        metadata: {
+          ...geminiResponse.metadata,
+          originalModel: 'groq-llama',
+          fallbackReason: error.message,
+          fallback: true
         }
       }
     }
     
-    // For other models, fallback to Groq first, then Gemini
+    // For other models, fallback to Groq first, then always to Gemini (which never throws)
     if (model !== 'groq-llama' && model !== 'gemini') {
       console.warn(`Model ${model} failed, falling back to Groq:`, error)
       try {
         return await callGroq(query, context, systemPrompt, jsonSchema)
       } catch (groqError: any) {
-        // If Groq also fails, try Gemini
-        if (groqError.isRecoverable || groqError.status === 429) {
-          console.warn('Groq fallback failed, trying Gemini:', groqError.message)
-          return await callGemini(query, context, systemPrompt, jsonSchema)
+        // If Groq also fails, always use Gemini as final fallback (never throws)
+        console.warn('Groq fallback failed, using Gemini as final fallback:', groqError.message)
+        const geminiResponse = await callGemini(query, context, systemPrompt, jsonSchema)
+        return {
+          ...geminiResponse,
+          metadata: {
+            ...geminiResponse.metadata,
+            originalModel: model,
+            fallbackReason: `${error.message}; ${groqError.message}`,
+            fallback: true
+          }
         }
-        throw groqError
       }
     }
     
-    // If Gemini fails and we're already on Gemini, or if it's a non-recoverable error
-    throw error
+    // If we're already on Gemini and it "failed", it still returned a response (never throws)
+    // But if somehow we get here, return a graceful fallback
+    if (model === 'gemini') {
+      const latency = Date.now()
+      return {
+        answer: `I encountered an issue processing your request. Based on the available context:\n\n${formatRAGContext(context)}\n\nPlease try rephrasing your question or try again in a moment.`,
+        model: 'gemini',
+        latency: 0,
+        riskNote: 'Service issue encountered. Please verify information independently.',
+        metadata: { error: error.message, fallback: true }
+      }
+    }
+    
+    // Last resort: return a helpful error message instead of throwing
+    const latency = Date.now()
+    return {
+      answer: `I'm experiencing technical difficulties. Here's what I know from the available context:\n\n${formatRAGContext(context)}\n\nError: ${error.message || 'Unknown error'}\n\nPlease try again or contact support.`,
+      model: model || 'unknown',
+      latency: 0,
+      riskNote: 'Service unavailable. Please verify information independently.',
+      metadata: { error: error.message, fallback: true, critical: true }
+    }
   }
 }
 

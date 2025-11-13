@@ -284,7 +284,7 @@ export function PortfolioChart() {
     const range = max - min || max || 1
     const padding = range * 0.1 // 10% padding for better visibility
     return [0, max + padding]
-  }, [points, chartRange, timeseriesData])
+  }, [points, chartRange, timeseriesData, pf])
 
   const ranges = [
     { label: '1H', value: '1h' },
@@ -398,6 +398,8 @@ export function PortfolioChart() {
                 tickFormatter={(v) => `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 style={{ fontSize: '12px' }}
                 domain={yDomain}
+                allowDataOverflow={false}
+                type="number"
               />
               <Tooltip 
                 content={({ active, payload, label }: any) => {
