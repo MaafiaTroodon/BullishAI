@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseSymbol } from '@/lib/market-symbol-parser'
+import { getSession } from '@/lib/auth-server'
 
 interface Recommendation {
   symbol: string
@@ -52,6 +53,15 @@ function filterByUniverse(symbol: string, universe: string): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  // Check authentication
+  const session = await getSession()
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: 'Authentication required. Please log in to use AI features.' },
+      { status: 401 }
+    )
+  }
+
   const { searchParams } = new URL(req.url)
   const limit = normaliseLimit(searchParams.get('limit'))
   const offset = Number.parseInt(searchParams.get('offset') || '0', 10) || 0

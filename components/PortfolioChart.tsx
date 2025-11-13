@@ -225,17 +225,44 @@ export function PortfolioChart() {
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   
   // Calculate Y-axis domain - only portfolio values (no net invested)
+  // For short timeframes (1H, 1D, 3D): show ±10% around cost basis, but expand if actual range exceeds ±10%
+  // For longer timeframes: show from 0 to max value
   const yDomain = useMemo(() => {
     if (points.length === 0) return [0, 100]
     const portfolioValues = points.map((p: { value: number }) => p.value).filter((v: number) => v > 0)
     if (portfolioValues.length === 0) return [0, 100]
+    
     const min = Math.min(...portfolioValues)
     const max = Math.max(...portfolioValues)
+    const currentValue = portfolioValues[portfolioValues.length - 1] // Last value (most recent)
+    const costBasis = points[points.length - 1]?.costBasis || currentValue // Use cost basis if available
+    
+    // For short timeframes (1H, 1D, 3D), show ±10% around cost basis, but expand if needed
+    const shortTimeframes = ['1h', '1d', '3d']
+    if (shortTimeframes.includes(chartRange)) {
+      // Calculate ±10% range around cost basis
+      const rangeMin10 = costBasis * 0.9  // -10%
+      const rangeMax10 = costBasis * 1.1  // +10%
+      
+      // Check if actual data range exceeds ±10%
+      const actualMin = Math.min(min, rangeMin10)
+      const actualMax = Math.max(max, rangeMax10)
+      
+      // If actual range is wider than ±10%, use actual range with small padding
+      if (min < rangeMin10 || max > rangeMax10) {
+        const padding = (actualMax - actualMin) * 0.05 // 5% padding
+        return [Math.max(0, actualMin - padding), actualMax + padding]
+      }
+      
+      // Otherwise, use ±10% range
+      return [Math.max(0, rangeMin10), rangeMax10]
+    }
+    
+    // For longer timeframes (1W, 1M, 3M, 6M, 1Y, ALL), show from 0 to max
     const range = max - min || max || 1
     const padding = range * 0.1 // 10% padding for better visibility
-    // Never show negative Y-axis unless values are truly negative
-    return [Math.max(0, min - padding), max + padding]
-  }, [points])
+    return [0, max + padding]
+  }, [points, chartRange])
 
   const ranges = [
     { label: '1H', value: '1h' },

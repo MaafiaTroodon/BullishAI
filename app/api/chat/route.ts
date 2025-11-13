@@ -3,6 +3,7 @@ import { routeAIQuery, RAGContext } from '@/lib/ai-router'
 import { searchKnowledgeBase, detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-knowledge-base'
 import { findBestMatch, buildKnowledgePrompt, selectBestModel } from '@/lib/ai-knowledge-trainer'
 import { calculateTechnical } from '@/lib/technical-calculator'
+import { getSession } from '@/lib/auth-server'
 
 /**
  * Conversational Chat API - Main entry point for chat interface
@@ -10,6 +11,15 @@ import { calculateTechnical } from '@/lib/technical-calculator'
  * Routes to appropriate models (Groq/Gemini for text, PyTorch for numbers)
  */
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const session = await getSession()
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: 'Authentication required. Please log in to use AI features.' },
+      { status: 401 }
+    )
+  }
+
   let query = ''
   let symbol = ''
   

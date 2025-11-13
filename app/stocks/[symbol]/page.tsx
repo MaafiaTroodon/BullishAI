@@ -15,6 +15,7 @@ import { MarketSessionBadge } from '@/components/MarketSessionBadge'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 import { showToast } from '@/components/Toast'
+import { authClient } from '@/lib/auth-client'
 
 const fetcher = async (url: string) => {
   try {
@@ -43,6 +44,10 @@ export default function StockPage() {
   const [chartRange, setChartRange] = useState(searchParams.get('range') || '1d')
   const [watchlistItems, setWatchlistItems] = useState<string[]>([])
   const [isInWatchlist, setIsInWatchlist] = useState(false)
+  
+  // Check if user is logged in
+  const { data: session } = authClient.useSession()
+  const isLoggedIn = !!session?.user
 
   // Get symbol and normalize for Canadian stocks
   let symbol = (params?.symbol as string)?.toUpperCase() || 'AAPL'
@@ -100,17 +105,7 @@ export default function StockPage() {
     localStorage.setItem('watchlistItems', JSON.stringify(newItems))
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Error Loading Stock</h1>
-          <p className="text-slate-400">{error.message || 'Failed to load stock data'}</p>
-        </div>
-      </div>
-    )
-  }
-
+  // Handle loading and errors gracefully - don't block logged-out users
   if (isLoading || !data) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -119,12 +114,14 @@ export default function StockPage() {
     )
   }
 
-  if (!data.quote) {
+  // If no quote data, show a helpful message but don't block the page
+  if (!data?.quote) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Stock Not Found</h1>
-          <p className="text-slate-400">Could not load data for {symbol}</p>
+          <h1 className="text-2xl font-bold text-white mb-4">Stock Data Unavailable</h1>
+          <p className="text-slate-400 mb-4">Could not load data for {symbol}. The symbol may be invalid or the data source is temporarily unavailable.</p>
+          <p className="text-slate-500 text-sm">Try searching for a different stock symbol.</p>
         </div>
       </div>
     )
@@ -234,14 +231,16 @@ export default function StockPage() {
           <div className="grid lg:grid-cols-2 gap-6 mt-8">
             {/* Left Column */}
             <div className="space-y-6">
-              {/* AI Insights */}
-              <StockAIInsights 
-                symbol={symbol} 
-                quote={quote} 
-                candles={candles || []} 
-                news={news || []}
-                changePctOverRange={changePctOverRange}
-              />
+              {/* AI Insights - Only show for logged-in users */}
+              {isLoggedIn && (
+                <StockAIInsights 
+                  symbol={symbol} 
+                  quote={quote} 
+                  candles={candles || []} 
+                  news={news || []}
+                  changePctOverRange={changePctOverRange}
+                />
+              )}
               
               {/* Financials */}
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
@@ -315,8 +314,8 @@ export default function StockPage() {
           <NewsFeed symbol={symbol} initialNews={news || []} />
         </div>
 
-        {/* AI Chat - Fixed Bottom Right */}
-        {quote && (
+        {/* AI Chat - Fixed Bottom Right - Only show for logged-in users */}
+        {quote && isLoggedIn && (
           <StockAIChat symbol={symbol} quote={quote} news={news || []} />
         )}
       </main>

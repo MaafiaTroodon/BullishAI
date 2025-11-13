@@ -56,7 +56,13 @@ export default function Dashboard() {
       const saved = localStorage.getItem('watchlistItems')
       if (saved) {
         const items = JSON.parse(saved)
-        setWatchlistItems(items)
+        // Deduplicate watchlist items (case-insensitive)
+        const uniqueItems = Array.from(new Set(items.map((s: string) => s.toUpperCase())))
+        setWatchlistItems(uniqueItems)
+        // Update localStorage with deduplicated items
+        if (uniqueItems.length !== items.length) {
+          localStorage.setItem('watchlistItems', JSON.stringify(uniqueItems))
+        }
       } else {
         setWatchlistItems(DEFAULT_STOCKS)
       }
@@ -70,7 +76,20 @@ export default function Dashboard() {
     { refreshInterval: 30000 }
   )
 
-  const batchQuotes = batchQuotesData?.quotes || []
+  // Deduplicate quotes by symbol (case-insensitive) to prevent duplicate tickers
+  const batchQuotes = useMemo(() => {
+    const quotes = batchQuotesData?.quotes || []
+    const symbolMap = new Map<string, any>()
+    quotes.forEach((quote: any) => {
+      if (quote?.symbol) {
+        const symbolKey = quote.symbol.toUpperCase()
+        if (!symbolMap.has(symbolKey)) {
+          symbolMap.set(symbolKey, quote)
+        }
+      }
+    })
+    return Array.from(symbolMap.values())
+  }, [batchQuotesData?.quotes])
 
   // Handle search with suggestions
   const handleSearchChange = async (value: string) => {

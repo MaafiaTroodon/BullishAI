@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { routeAIQuery, RAGContext } from '@/lib/ai-router'
 import { calculateTechnical } from '@/lib/technical-calculator'
+import { getSession } from '@/lib/auth-server'
 
 export async function GET(req: NextRequest) {
   try {
+    // Check authentication
+    const session = await getSession()
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please log in to use AI features.' },
+        { status: 401 }
+      )
+    }
     const startTime = Date.now()
     const { searchParams } = new URL(req.url)
     const symbol = searchParams.get('symbol')?.toUpperCase() || 'AAPL'

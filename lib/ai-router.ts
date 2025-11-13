@@ -111,6 +111,25 @@ export function formatRAGContext(context: RAGContext): string {
 }
 
 /**
+ * Check if error is a rate limit or recoverable error
+ */
+function isRecoverableError(error: any): boolean {
+  if (!error) return false
+  
+  // Check for rate limit (429)
+  if (error.status === 429 || error.statusCode === 429) return true
+  
+  // Check error message for rate limit indicators
+  const message = error.message || error.error?.message || ''
+  if (message.includes('rate limit') || message.includes('Rate limit') || 
+      message.includes('429') || message.includes('quota') || message.includes('Quota')) {
+    return true
+  }
+  
+  return false
+}
+
+/**
  * Call Groq Llama-3 model
  */
 async function callGroq(
@@ -155,7 +174,14 @@ ${SAFETY_DISCLAIMER}`
     }
   } catch (error: any) {
     console.error('Groq API error:', error)
-    throw new Error(`Groq API failed: ${error.message}`)
+    
+    // Create error with recoverable flag
+    const groqError: any = new Error(`Groq API failed: ${error.message || JSON.stringify(error.error || error)}`)
+    groqError.status = error.status || error.statusCode
+    groqError.isRecoverable = isRecoverableError(error)
+    groqError.originalError = error
+    
+    throw groqError
   }
 }
 
@@ -170,22 +196,42 @@ async function callGemini(
 ): Promise<AIResponse> {
   const startTime = Date.now()
   
-  const defaultSystemPrompt = `You are a financial analysis AI assistant specializing in document analysis.
+  const defaultSystemPrompt = `You are a financial analysis AI assistant.
 Use ONLY the provided context for numbers and facts. Never guess or hallucinate numbers.
 If a number is not in the context, say "I don't have that information."
 Always include a one-line risk note at the end.
 ${SAFETY_DISCLAIMER}`
 
   const ragContext = formatRAGContext(context)
-  const fullPrompt = `${ragContext}\n\nUser Question: ${query}`
+  
+  // Add JSON format instruction if schema is provided
+  const jsonInstruction = jsonSchema 
+    ? '\n\nIMPORTANT: You must respond with valid JSON format only. Ensure your response is a valid JSON object that can be parsed.'
+    : ''
+  
+  const fullPrompt = `${ragContext}${jsonInstruction}\n\nUser Question: ${query}`
   
   try {
     const model = genAI.getGenerativeModel({
       model: 'gemini-1.5-flash',
-      systemInstruction: systemPrompt || defaultSystemPrompt,
+      systemInstruction: (systemPrompt || defaultSystemPrompt) + (jsonSchema ? ' Respond in valid JSON format only.' : ''),
     })
     
-    const result = await model.generateContent(fullPrompt)
+    // If JSON schema is required, add generation config
+    const generationConfig: any = {
+      temperature: 0.2,
+      maxOutputTokens: 1000,
+    }
+    
+    if (jsonSchema) {
+      generationConfig.responseMimeType = 'application/json'
+    }
+    
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      generationConfig,
+    })
+    
     const response = await result.response
     const answer = response.text()
     const latency = Date.now() - startTime
@@ -194,7 +240,7 @@ ${SAFETY_DISCLAIMER}`
       answer,
       model: 'gemini',
       latency,
-      riskNote: 'Document analysis is based on provided materials. Verify current filings.',
+      riskNote: 'Analysis is based on provided materials. Verify current market data.',
     }
   } catch (error: any) {
     console.error('Gemini API error:', error)
@@ -259,7 +305,7 @@ async function callLocalPyTorch(
 }
 
 /**
- * Main router function
+ * Main router function with automatic fallback
  */
 export async function routeAIQuery(
   query: string,
@@ -282,11 +328,35 @@ export async function routeAIQuery(
         return await callGroq(query, context, systemPrompt, jsonSchema)
     }
   } catch (error: any) {
-    // Fallback to Groq on any error
-    if (model !== 'groq-llama') {
-      console.warn(`Model ${model} failed, falling back to Groq:`, error)
-      return await callGroq(query, context, systemPrompt, jsonSchema)
+    // If Groq fails (rate limit, etc.), fallback to Gemini
+    if (model === 'groq-llama' || (model === 'local-pytorch' && error.message?.includes('Groq'))) {
+      if (error.isRecoverable || error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('429')) {
+        console.warn(`Groq rate limit or error detected, falling back to Gemini:`, error.message)
+        try {
+          return await callGemini(query, context, systemPrompt, jsonSchema)
+        } catch (geminiError: any) {
+          console.error('Gemini fallback also failed:', geminiError)
+          throw new Error(`Both Groq and Gemini failed. Groq: ${error.message}. Gemini: ${geminiError.message}`)
+        }
+      }
     }
+    
+    // For other models, fallback to Groq first, then Gemini
+    if (model !== 'groq-llama' && model !== 'gemini') {
+      console.warn(`Model ${model} failed, falling back to Groq:`, error)
+      try {
+        return await callGroq(query, context, systemPrompt, jsonSchema)
+      } catch (groqError: any) {
+        // If Groq also fails, try Gemini
+        if (groqError.isRecoverable || groqError.status === 429) {
+          console.warn('Groq fallback failed, trying Gemini:', groqError.message)
+          return await callGemini(query, context, systemPrompt, jsonSchema)
+        }
+        throw groqError
+      }
+    }
+    
+    // If Gemini fails and we're already on Gemini, or if it's a non-recoverable error
     throw error
   }
 }

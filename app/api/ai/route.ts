@@ -3,6 +3,7 @@ import { z } from 'zod'
 import Groq from 'groq-sdk'
 import * as Tools from '@/lib/tools'
 import { summarizeNews } from '@/lib/gemini'
+import { getSession } from '@/lib/auth-server'
 
 // Format timestamp to ET
 function formatET(date: Date): string {
@@ -165,6 +166,15 @@ function normalizeToTicker(input: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    // Check authentication
+    const session = await getSession()
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please log in to use AI features.' },
+        { status: 401 }
+      )
+    }
+
     const body = await req.json()
     const { query, symbol, sessionId } = (body || {}) as { query: string; symbol?: string; sessionId?: string }
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 })

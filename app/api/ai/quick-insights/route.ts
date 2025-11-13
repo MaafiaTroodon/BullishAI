@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { routeAIQuery, RAGContext } from '@/lib/ai-router'
+import { getSession } from '@/lib/auth-server'
 
 /**
  * Generate deterministic tags for a ticker based on its metrics
@@ -42,6 +43,15 @@ function generateTags(symbol: string, changePct: number, volume: number, avgVolu
 
 export async function GET(req: NextRequest) {
   try {
+    // Check authentication
+    const session = await getSession()
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please log in to use AI features.' },
+        { status: 401 }
+      )
+    }
+
     const startTime = Date.now()
     
     // Fetch market data using internal APIs

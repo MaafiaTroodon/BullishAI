@@ -82,16 +82,19 @@ export function PortfolioHoldings() {
   // This ensures new users see empty state, not data from localStorage
   const items = data?.items !== undefined ? data.items : localItems
   
-  // Filter out zero-share positions immediately and deduplicate by symbol
-  const filteredItems = items
-    .filter((p:any) => (p.totalShares || 0) > 0)
-    // Deduplicate: keep only the first occurrence of each symbol
-    .reduce((acc: any[], current: any) => {
-      if (!acc.find((item: any) => item.symbol === current.symbol)) {
-        acc.push(current)
+  // Filter out zero-share positions immediately and deduplicate by symbol (case-insensitive)
+  // Use a Map for O(1) lookup to ensure no duplicates
+  const symbolMap = new Map<string, any>()
+  items.forEach((p: any) => {
+    if ((p.totalShares || 0) > 0 && p.symbol) {
+      const symbolKey = p.symbol.toUpperCase()
+      // Only add if we haven't seen this symbol before
+      if (!symbolMap.has(symbolKey)) {
+        symbolMap.set(symbolKey, p)
       }
-      return acc
-    }, [])
+    }
+  })
+  const filteredItems = Array.from(symbolMap.values())
 
   // Enrich local-only items with live quotes so value/PNL render correctly
   useEffect(() => {
@@ -100,15 +103,17 @@ export function PortfolioHoldings() {
       if (!filteredItems || filteredItems.length === 0) { setEnriched([]); return }
       // If items already have currentPrice from API, use them (but still filter and deduplicate)
       if (filteredItems[0]?.currentPrice != null) { 
-        const deduplicated = filteredItems
-          .filter((p:any)=> (p.totalShares||0) > 0)
-          .reduce((acc: any[], current: any) => {
-            if (!acc.find((item: any) => item.symbol === current.symbol)) {
-              acc.push(current)
+        // Use Map for O(1) deduplication
+        const symbolMap = new Map<string, any>()
+        filteredItems
+          .filter((p:any)=> (p.totalShares||0) > 0 && p.symbol)
+          .forEach((p: any) => {
+            const symbolKey = p.symbol.toUpperCase()
+            if (!symbolMap.has(symbolKey)) {
+              symbolMap.set(symbolKey, p)
             }
-            return acc
-          }, [])
-        setEnriched(deduplicated)
+          })
+        setEnriched(Array.from(symbolMap.values()))
         return 
       }
       try {
@@ -127,14 +132,17 @@ export function PortfolioHoldings() {
             out.push({ ...p, currentPrice: null, totalValue: 0, unrealizedPnl: 0, unrealizedPnlPct: 0 })
           }
         }))
-        // Deduplicate enriched array by symbol before setting state
-        const deduplicated = out.reduce((acc: any[], current: any) => {
-          if (!acc.find((item: any) => item.symbol === current.symbol)) {
-            acc.push(current)
+        // Deduplicate enriched array by symbol before setting state (use Map for O(1) lookup)
+        const symbolMap = new Map<string, any>()
+        out.forEach((p: any) => {
+          if (p.symbol) {
+            const symbolKey = p.symbol.toUpperCase()
+            if (!symbolMap.has(symbolKey)) {
+              symbolMap.set(symbolKey, p)
+            }
           }
-          return acc
-        }, [])
-        if (!cancelled) setEnriched(deduplicated)
+        })
+        if (!cancelled) setEnriched(Array.from(symbolMap.values()))
       } catch {
         if (!cancelled) setEnriched(filteredItems)
       }

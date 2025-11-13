@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import axios from 'axios'
+import { getSession } from '@/lib/auth-server'
 
 const FINNHUB_KEY = process.env.NEXT_PUBLIC_FINNHUB_KEY
 const NEWS_API_KEY = process.env.NEXT_PUBLIC_NEWSAPI_KEY
@@ -15,6 +16,15 @@ interface StockData {
 }
 
 export async function POST(request: NextRequest) {
+  // Check authentication
+  const session = await getSession()
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: 'Authentication required. Please log in to use AI features.' },
+      { status: 401 }
+    )
+  }
+
   try {
     const { query, context } = await request.json()
     if (!query) {

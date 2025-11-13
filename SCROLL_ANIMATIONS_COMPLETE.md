@@ -212,3 +212,4 @@ Added scroll-triggered animations and visual effects across all pages using Fram
 - Footer with micro-interactions
 - No theme changes (kept dark slate theme)
 
+
