@@ -4,6 +4,15 @@ import { searchKnowledgeBase, detectSection, extractTickers, loadKnowledgeBase }
 import { findBestMatch, buildKnowledgePrompt, selectBestModel } from '@/lib/ai-knowledge-trainer'
 import { calculateTechnical } from '@/lib/technical-calculator'
 import { getSession } from '@/lib/auth-server'
+import { 
+  isRecommendedQuestion, 
+  fetchMarketSummary, 
+  fetchTopMovers, 
+  fetchEarnings, 
+  fetchMarketNews,
+  fetchRecommendedStocks,
+  formatET
+} from '@/lib/chat-data-fetchers'
 
 /**
  * Conversational Chat API - Main entry point for chat interface
@@ -35,23 +44,120 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 1. Load and search knowledge base for best matches (always do this first)
-    let kb: any[] = []
-    let relevantContext: any[] = []
-    
-    try {
-      kb = await loadKnowledgeBase()
-      relevantContext = findBestMatch(query, kb, 5)
-    } catch (kbError) {
-      console.error('Failed to load knowledge base:', kbError)
-      // Continue without KB, but will use empty array
-    }
+    // 1. Check if this is a recommended question that needs live data FIRST
+    // This ensures recommended questions always use BullishAI APIs, not generic KB
+    const recommendedCheck = isRecommendedQuestion(query)
+    const isRecommended = recommendedCheck.needsLiveData
     
     // 2. Detect section/intent
     const section = detectSection(query)
     const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
+    
+    // 3. For recommended questions, fetch live data BEFORE checking knowledge base
+    let liveDataContext = ''
+    let dataSource = ''
+    let dataTimestamp = ''
+    
+    if (isRecommended && recommendedCheck.type) {
+      const origin = req.nextUrl.origin
+      
+      switch (recommendedCheck.type) {
+        case 'market-summary': {
+          const marketData = await fetchMarketSummary(origin)
+          if (marketData) {
+            const indicesText = marketData.indices.map(idx => 
+              `${idx.symbol}: $${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}%)`
+            ).join(', ')
+            liveDataContext = `Market Indices (Live): ${indicesText}`
+            dataSource = marketData.source
+            dataTimestamp = formatET(marketData.timestamp)
+          }
+          break
+        }
+        
+        case 'top-movers': {
+          const moversData = await fetchTopMovers(origin)
+          if (moversData) {
+            const gainersText = moversData.gainers.map(m => 
+              `${m.symbol}: +${m.changePercent.toFixed(2)}%`
+            ).join(', ')
+            const losersText = moversData.losers.map(m => 
+              `${m.symbol}: ${m.changePercent.toFixed(2)}%`
+            ).join(', ')
+            liveDataContext = `Top Gainers: ${gainersText}\nTop Losers: ${losersText}`
+            dataSource = moversData.source
+            dataTimestamp = formatET(moversData.timestamp)
+          }
+          break
+        }
+        
+        case 'news': {
+          const newsData = await fetchMarketNews(origin, 5)
+          if (newsData) {
+            const newsText = newsData.items.map((n, i) => 
+              `${i + 1}. ${n.headline} (${n.source})`
+            ).join('\n')
+            liveDataContext = `Breaking News:\n${newsText}`
+            dataSource = newsData.source
+            dataTimestamp = formatET(newsData.timestamp)
+          }
+          break
+        }
+        
+        case 'earnings': {
+          const earningsData = await fetchEarnings(origin, 'today')
+          if (earningsData && earningsData.today.length > 0) {
+            const earningsText = earningsData.today.map(e => 
+              `${e.symbol}${e.time ? ` (${e.time})` : ''}${e.estimate ? ` - EPS Est: $${e.estimate}` : ''}`
+            ).join('\n')
+            liveDataContext = `Earnings Today:\n${earningsText}`
+            dataSource = earningsData.source
+            dataTimestamp = formatET(earningsData.timestamp)
+          }
+          break
+        }
+        
+        case 'value-quality':
+        case 'momentum':
+        case 'breakouts':
+        case 'rebound':
+        case 'dividend-momentum': {
+          const typeMap: Record<string, 'value' | 'momentum' | 'breakout' | 'rebound' | 'dividend'> = {
+            'value-quality': 'value',
+            'momentum': 'momentum',
+            'breakouts': 'breakout',
+            'rebound': 'rebound',
+            'dividend-momentum': 'dividend',
+          }
+          const stocksData = await fetchRecommendedStocks(origin, typeMap[recommendedCheck.type] || 'value')
+          if (stocksData && stocksData.stocks.length > 0) {
+            const stocksText = stocksData.stocks.map((s: any, i: number) => 
+              `${i + 1}. ${s.symbol}${s.name ? ` (${s.name})` : ''}: $${(s.price || s.currentPrice || 0).toFixed(2)}${s.changePercent !== undefined ? ` (${s.changePercent >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%)` : ''}`
+            ).join('\n')
+            liveDataContext = `Recommended Stocks:\n${stocksText}`
+            dataSource = stocksData.source
+            dataTimestamp = formatET(stocksData.timestamp)
+          }
+          break
+        }
+      }
+    }
+    
+    // 4. Load knowledge base (but don't use it for recommended questions)
+    let kb: any[] = []
+    let relevantContext: any[] = []
+    
+    // Only use KB for non-recommended questions or as fallback
+    if (!isRecommended) {
+      try {
+        kb = await loadKnowledgeBase()
+        relevantContext = findBestMatch(query, kb, 5)
+      } catch (kbError) {
+        console.error('Failed to load knowledge base:', kbError)
+      }
+    }
 
-    // 3. Fetch real-time market data based on query intent
+    // 5. Fetch real-time market data based on query intent
     const context: RAGContext = {
       symbol: symbol || tickers[0] || undefined,
       prices: {},
@@ -62,8 +168,11 @@ export async function POST(req: NextRequest) {
       news: [],
     }
 
-    // Fetch market indices for quick insights
-    if (section === 'Quick Insights' || query.toLowerCase().includes('market') || query.toLowerCase().includes('index')) {
+    // Fetch market indices for market-related queries
+    if (isRecommended && recommendedCheck.type === 'market-summary' || 
+        section === 'Quick Insights' || 
+        query.toLowerCase().includes('market') || 
+        query.toLowerCase().includes('index')) {
       try {
         const indicesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=SPY,QQQ,DIA,IWM,VIX`)
         const indices = await indicesRes.json().catch(() => ({ quotes: [] }))
@@ -121,7 +230,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch news for news-related queries
-    if (query.toLowerCase().includes('news') || query.toLowerCase().includes('headline') || section === 'Quick Insights') {
+    if (isRecommended && recommendedCheck.type === 'news' ||
+        query.toLowerCase().includes('news') || 
+        query.toLowerCase().includes('headline') || 
+        section === 'Quick Insights') {
       try {
         const newsRes = await fetch(`${req.nextUrl.origin}/api/news/movers?limit=10`)
         const news = await newsRes.json().catch(() => ({ items: [] }))
@@ -131,9 +243,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. If we have a knowledge base match, use it directly (faster, more reliable)
-    // This ensures users always get answers even if AI is down
-    if (relevantContext.length > 0) {
+    // 6. For recommended questions, NEVER use knowledge base - always use live data + AI
+    // Skip KB check for recommended questions
+    if (isRecommended) {
+      // We already fetched live data above, now pass it to AI
+    } else if (relevantContext.length > 0) {
+      // For non-recommended questions, KB is still useful as fallback
       const bestMatch = relevantContext[0]
       console.log('Found knowledge base match for query:', query, 'Answer:', bestMatch.answer.substring(0, 50))
       
@@ -168,17 +283,41 @@ export async function POST(req: NextRequest) {
       })
     }
     
-    // 5. Build enhanced prompt using knowledge base
-    const enhancedPrompt = buildKnowledgePrompt(query, kb, relevantContext)
+    // 7. Build enhanced prompt using knowledge base (only for non-recommended questions)
+    const enhancedPrompt = !isRecommended ? buildKnowledgePrompt(query, kb, relevantContext) : query
     
-    // 6. Select best model based on query and knowledge base
+    // 8. Select best model based on query and knowledge base
     const selectedModel = selectBestModel(query, relevantContext, Object.keys(context.prices || {}).length > 0)
     
-    // 7. Build system prompt with knowledge base examples
-    const systemPrompt = `You are BullishAI — a conversational market analyst who chats casually about stocks, trends, and insights. 
+    // 9. Build system prompt - different for recommended vs regular questions
+    let systemPrompt = ''
+    
+    if (isRecommended && liveDataContext) {
+      // For recommended questions, emphasize using the live data we fetched
+      systemPrompt = `You are BullishAI Market Analyst. Answer the user's question using ONLY the live data provided below.
+
+LIVE DATA FROM BULLISHAI:
+${liveDataContext}
+
+${dataTimestamp ? `Data timestamp: ${dataTimestamp}` : ''}
+${dataSource ? `Data source: ${dataSource}` : ''}
+
+CRITICAL RULES:
+1. Use ONLY the live data provided above - do not make up numbers or tickers
+2. Start with a 1-2 sentence summary that directly answers the question
+3. Then list specific tickers/numbers from the data
+4. Always include the data source and timestamp in your response
+5. End with: "⚠️ This is for educational purposes only and not financial advice."
+6. NEVER say "Powered by Knowledge Base" - instead say "Data from ${dataSource || 'BullishAI live market feed'}"
+7. If data is missing, clearly state what's unavailable and why
+
+Tone: Confident, factual, helpful.`
+    } else {
+      // For regular questions, use conversational style with KB examples
+      systemPrompt = `You are BullishAI — a conversational market analyst who chats casually about stocks, trends, and insights. 
 You're friendly, confident, and human-like. Avoid robotic tables or bullet-point spam unless explicitly asked.
 
-${relevantContext.length > 0 ? `\nUse these examples from our knowledge base as style guides:\n${relevantContext.slice(0, 3).map(ctx => `Q: ${ctx.question}\nA: ${ctx.answer}`).join('\n\n')}\n` : ''}
+${relevantContext.length > 0 && !isRecommended ? `\nUse these examples from our knowledge base as style guides:\n${relevantContext.slice(0, 3).map(ctx => `Q: ${ctx.question}\nA: ${ctx.answer}`).join('\n\n')}\n` : ''}
 
 Guidelines:
 - Match the conversational style of the examples above
@@ -189,8 +328,10 @@ Guidelines:
 - Never show error JSON or technical details to users
 - If you don't have data, say so naturally: "I don't have that info right now, but I can check [alternative]"
 - Include disclaimers naturally: "Not financial advice, but..." or "Just my take, not a recommendation"
+- NEVER say "Powered by Knowledge Base" - if using live data, mention the source
 
 Tone: Chatty, confident, helpful, not robotic.`
+    }
 
     const fullQuery = query
 
