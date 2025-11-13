@@ -24,6 +24,17 @@ export interface RAGContext {
     session: string
     indices: Record<string, { value: number; change: number; changePercent: number }>
   }
+  lists?: {
+    gainers?: Array<{ symbol: string; name?: string; price: number; changePercent: number; sector?: string; volume?: number }>
+    losers?: Array<{ symbol: string; name?: string; price: number; changePercent: number; sector?: string; volume?: number }>
+    sectors?: Array<{ name: string; symbol: string; changePercent: number; change: number; strength: number }>
+    unusualVolume?: Array<{ symbol: string; name?: string; price: number; changePercent: number; volume: number; avgVolume: number; relativeVolume: number; sector?: string }>
+    screener?: Array<any>
+  }
+  calendar?: {
+    earnings?: Array<{ symbol: string; name?: string; time?: string; estimate?: number }>
+    dividends?: Array<any>
+  }
 }
 
 export interface AIResponse {
