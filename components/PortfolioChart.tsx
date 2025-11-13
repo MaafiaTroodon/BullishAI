@@ -240,22 +240,39 @@ export function PortfolioChart() {
     // For short timeframes (1H, 1D, 3D), show ±10% around cost basis, but expand if needed
     const shortTimeframes = ['1h', '1d', '3d']
     if (shortTimeframes.includes(chartRange)) {
+      // Trim extreme outliers so large historical jumps don't dominate the view
+      const sortedValues = [...portfolioValues].sort((a, b) => a - b)
+      const trimCount = sortedValues.length >= 20
+        ? Math.floor(sortedValues.length * 0.05)
+        : sortedValues.length >= 10
+          ? 1
+          : 0
+      const trimmedValues = trimCount > 0 && (sortedValues.length - trimCount * 2) >= 3
+        ? sortedValues.slice(trimCount, sortedValues.length - trimCount)
+        : sortedValues
+      const focusMin = Math.min(...trimmedValues)
+      const focusMax = Math.max(...trimmedValues)
+
       // Calculate ±10% range around cost basis
       const rangeMin10 = costBasis * 0.9  // -10%
       const rangeMax10 = costBasis * 1.1  // +10%
-      
-      // Check if actual data range exceeds ±10%
-      const actualMin = Math.min(min, rangeMin10)
-      const actualMax = Math.max(max, rangeMax10)
-      
-      // If actual range is wider than ±10%, use actual range with small padding
-      if (min < rangeMin10 || max > rangeMax10) {
-        const padding = (actualMax - actualMin) * 0.05 // 5% padding
-        return [Math.max(0, actualMin - padding), actualMax + padding]
+
+      let lowerBound = Math.max(0, rangeMin10)
+      let upperBound = rangeMax10
+
+      // Expand below -10% only if sustained drawdown beyond threshold
+      if (focusMin < rangeMin10) {
+        const padding = Math.max(costBasis * 0.01, (rangeMax10 - rangeMin10) * 0.05)
+        lowerBound = Math.max(0, focusMin - padding)
       }
-      
-      // Otherwise, use ±10% range
-      return [Math.max(0, rangeMin10), rangeMax10]
+
+      // Expand above +10% if gains exceed threshold
+      if (focusMax > rangeMax10) {
+        const padding = Math.max(costBasis * 0.01, (rangeMax10 - rangeMin10) * 0.05)
+        upperBound = focusMax + padding
+      }
+
+      return [lowerBound, upperBound]
     }
     
     // For longer timeframes (1W, 1M, 3M, 6M, 1Y, ALL), show from 0 to max
