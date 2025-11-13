@@ -16,6 +16,10 @@ const nextConfig = {
   },
   // Disable static optimization for AI pages that use search params
   generateStaticParams: false,
+  // Ensure API routes work in production
+  async rewrites() {
+    return []
+  },
 }
 
 module.exports = nextConfig
