@@ -316,6 +316,66 @@ export async function fetchRecommendedStocks(origin: string, type: 'value' | 'mo
 }
 
 /**
+ * Fetch sector leaders/laggards
+ */
+export async function fetchSectorLeaders(origin: string): Promise<SectorLeadersData | null> {
+  try {
+    const res = await fetch(`${origin}/api/market/sector-momentum`)
+    const data = await res.json().catch(() => ({ sectors: [] }))
+
+    const sectors: SectorSnapshot[] = (data.sectors || []).map((sector: any) => ({
+      name: sector.name,
+      symbol: sector.symbol,
+      changePercent: parseFloat(sector.changePercent || 0),
+      change: parseFloat(sector.change || 0),
+      strength: Math.abs(parseFloat(sector.strength || sector.changePercent || 0)),
+    }))
+
+    return {
+      sectors,
+      timestamp: new Date().toISOString(),
+      source: 'BullishAI Sector Heatmap',
+    }
+  } catch (error) {
+    console.error('Failed to fetch sector leaders:', error)
+    return null
+  }
+}
+
+/**
+ * Fetch unusual volume screener data
+ */
+export async function fetchUnusualVolume(origin: string, limit: number = 10): Promise<UnusualVolumeData | null> {
+  try {
+    const cappedLimit = Math.max(5, Math.min(limit, 100))
+    const res = await fetch(`${origin}/api/screeners/unusual-volume?limit=${cappedLimit}`)
+    const data = await res.json().catch(() => ({ items: [] }))
+
+    const entries: UnusualVolumeEntry[] = (data.items || data.data || [])
+      .slice(0, cappedLimit)
+      .map((item: any) => ({
+        symbol: item.symbol,
+        name: item.name,
+        price: parseFloat(item.price || item.lastPrice || 0),
+        changePercent: parseFloat(item.changePercent || item.changePct || 0),
+        volume: Number(item.volume || 0),
+        avgVolume: Number(item.avgVolume || item.averageVolume || 0),
+        relativeVolume: parseFloat(item.relativeVolume || item.rv || ((item.volume && item.avgVolume) ? item.volume / item.avgVolume : 0)),
+        sector: item.sector,
+      }))
+
+    return {
+      entries,
+      timestamp: new Date().toISOString(),
+      source: 'BullishAI Unusual Volume Scanner',
+    }
+  } catch (error) {
+    console.error('Failed to fetch unusual volume:', error)
+    return null
+  }
+}
+
+/**
  * Format timestamp to ET
  */
 export function formatET(timestamp?: string | number): string {
