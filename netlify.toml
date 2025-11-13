@@ -1,8 +1,10 @@
 [build]
   command = "npm run build"
+  # Let the Netlify Next.js plugin determine the publish directory
   publish = ".next"
 
 # Use Netlify Next.js plugin for proper routing
+# This plugin automatically handles Next.js routing, API routes, and serverless functions
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
