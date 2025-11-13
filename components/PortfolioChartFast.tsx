@@ -76,7 +76,7 @@ export function PortfolioChartFast() {
     // Update chart with new TPV point
     const now = Date.now()
     const newPoint: LineData = {
-      time: Math.floor(now / 1000), // Lightweight Charts uses Unix timestamp in seconds
+      time: Math.floor(now / 1000) as any, // Lightweight Charts uses Unix timestamp in seconds
       value: result.tpv,
     }
 
@@ -168,12 +168,12 @@ export function PortfolioChartFast() {
           },
         })
 
-        if (!chart || typeof chart.addLineSeries !== 'function') {
+        if (!chart || typeof (chart as any).addLineSeries !== 'function') {
           console.error('Chart initialization failed: addLineSeries not available', chart)
           return
         }
 
-        const series = chart.addLineSeries({
+        const series = (chart as any).addLineSeries({
           color: '#10b981', // emerald-500
           lineWidth: 2,
           priceFormat: {
@@ -268,7 +268,7 @@ export function PortfolioChartFast() {
     const tpv = pf.totals.tpv
     if (lastTPVRef.current !== tpv) {
       const now = Math.floor(Date.now() / 1000)
-      const newPoint: LineData = { time: now, value: tpv }
+      const newPoint: LineData = { time: now as any, value: tpv }
       
       // Coalesce
       if (pointsRef.current.length > 0) {

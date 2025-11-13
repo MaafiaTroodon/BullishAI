@@ -16,7 +16,7 @@ export function GlobalNavbar() {
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const { data: session, isLoading: sessionLoading } = authClient.useSession()
+  const { data: session, isPending: sessionLoading } = authClient.useSession()
   const { mutate: globalMutate } = useSWRConfig()
   
   // Store last known balance to prevent $0 flicker during navigation/revalidation

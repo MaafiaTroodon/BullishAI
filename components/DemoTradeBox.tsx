@@ -59,6 +59,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
     
     function loadPositions() {
       try {
+        if (!positionsStorageKey) return
         const raw = localStorage.getItem(positionsStorageKey)
         if (raw) {
           const map = JSON.parse(raw)
@@ -166,7 +167,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
         } else if (j.item) {
           // Fallback: update single position (backward compatibility)
           if (positionsStorageKey) {
-            const raw = localStorage.getItem(positionsStorageKey)
+            const raw = localStorage.getItem(positionsStorageKey as string)
             const map = raw ? JSON.parse(raw) : {}
             const symbolKey = (j.item.symbol || symbol).toUpperCase()
             if (j.item.totalShares <= 0) {
@@ -183,7 +184,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
         // Persist transaction history
         if (j.transaction && transactionsStorageKey) {
           try {
-            const txRaw = localStorage.getItem(transactionsStorageKey)
+            const txRaw = localStorage.getItem(transactionsStorageKey as string)
             const transactions = txRaw ? JSON.parse(txRaw) : []
             const exists = transactions.some((t: any) => 
               t.id === j.transaction.id || 
@@ -242,7 +243,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
             mutate()
             // Reload positions
             if (positionsStorageKey) {
-              const raw = localStorage.getItem(positionsStorageKey)
+              const raw = localStorage.getItem(positionsStorageKey as string)
               if (raw) {
                 const map = JSON.parse(raw)
                 const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
@@ -255,7 +256,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
             mutate()
             // Reload positions when switching to sell
             if (positionsStorageKey) {
-              const raw = localStorage.getItem(positionsStorageKey)
+              const raw = localStorage.getItem(positionsStorageKey as string)
               if (raw) {
                 const map = JSON.parse(raw)
                 const items = Object.values(map).filter((p: any) => (p.totalShares || 0) > 0)
@@ -332,7 +333,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
                         setLocalItems(items)
                         console.log('[DemoTradeBox] Positions after sell all:', items)
                         
-                        const txRaw = localStorage.getItem(transactionsStorageKey)
+                        const txRaw = localStorage.getItem(transactionsStorageKey as string)
                         const transactions = txRaw ? JSON.parse(txRaw) : []
                         const transaction = j.transaction || {
                           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

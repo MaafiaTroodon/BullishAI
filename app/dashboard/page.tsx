@@ -57,7 +57,7 @@ export default function Dashboard() {
       if (saved) {
         const items = JSON.parse(saved)
         // Deduplicate watchlist items (case-insensitive)
-        const uniqueItems = Array.from(new Set(items.map((s: string) => s.toUpperCase())))
+        const uniqueItems: string[] = Array.from(new Set(items.map((s: string) => s.toUpperCase())))
         setWatchlistItems(uniqueItems)
         // Update localStorage with deduplicated items
         if (uniqueItems.length !== items.length) {

@@ -118,6 +118,7 @@ export function PortfolioChart() {
     }
     
     try {
+      if (!positionsStorageKey) return
       const raw = localStorage.getItem(positionsStorageKey)
       if (raw) setLocalItems(Object.values(JSON.parse(raw)))
       else setLocalItems([])
@@ -147,6 +148,7 @@ export function PortfolioChart() {
     
     async function syncData() {
       try {
+        if (!transactionsStorageKey || !walletTxStorageKey || !positionsStorageKey) return
         const txRaw = localStorage.getItem(transactionsStorageKey)
         const walletTxRaw = localStorage.getItem(walletTxStorageKey)
         const positionsRaw = localStorage.getItem(positionsStorageKey)

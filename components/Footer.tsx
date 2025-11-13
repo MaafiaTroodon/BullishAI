@@ -9,40 +9,46 @@ import Link from 'next/link'
 import { Reveal } from './anim/Reveal'
 import { StaggerGrid } from './anim/StaggerGrid'
 
-const footerSections = [
+type FooterLink = {
+  label: string
+  href: string
+  external?: boolean
+}
+
+const footerSections: Array<{ title: string; links: FooterLink[] }> = [
   {
     title: 'About',
     links: [
-      { label: 'Our Story', href: '/about' },
-      { label: 'Team', href: '/team' },
-      { label: 'Careers', href: '/careers' },
-      { label: 'Press', href: '/press' },
+      { label: 'Our Story', href: '/about', external: false },
+      { label: 'Team', href: '/team', external: false },
+      { label: 'Careers', href: '/careers', external: false },
+      { label: 'Press', href: '/press', external: false },
     ],
   },
   {
     title: 'Platform',
     links: [
-      { label: 'Features', href: '/features' },
-      { label: 'Pricing', href: '/pricing' },
-      { label: 'Integrations', href: '/integrations' },
+      { label: 'Features', href: '/features', external: false },
+      { label: 'Pricing', href: '/pricing', external: false },
+      { label: 'Integrations', href: '/integrations', external: false },
     ],
   },
   {
     title: 'Resources',
     links: [
-      { label: 'Documentation', href: '/docs' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Guides', href: '/guides' },
-      { label: 'Support', href: '/support' },
+      { label: 'Documentation', href: '/docs', external: false },
+      { label: 'Blog', href: '/blog', external: false },
+      { label: 'Guides', href: '/guides', external: false },
+      { label: 'Support', href: '/support', external: false },
     ],
   },
   {
     title: 'Support',
     links: [
-      { label: 'Help Center', href: '/help' },
-      { label: 'Contact Us', href: '/contact' },
-      { label: 'Status', href: '/status' },
-      { label: 'Community', href: '/community' },
+      { label: 'Help Center', href: '/help', external: false },
+      { label: 'Contact Us', href: '/contact', external: false },
+      { label: 'Status', href: '/status', external: false },
+      { label: 'Community', href: '/community', external: false },
     ],
   },
   {
