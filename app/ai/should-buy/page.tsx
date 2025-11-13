@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { Suspense, useState, useEffect } from 'react'
 import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { HelpCircle, ArrowLeft, Search, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
@@ -9,7 +11,7 @@ import { useSearchParams } from 'next/navigation'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-export default function ShouldBuyPage() {
+function ShouldBuyContent() {
   const searchParams = useSearchParams()
   const [symbol, setSymbol] = useState(searchParams.get('symbol')?.toUpperCase() || 'AAPL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -201,6 +203,14 @@ export default function ShouldBuyPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ShouldBuyPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+      <ShouldBuyContent />
+    </Suspense>
   )
 }
 

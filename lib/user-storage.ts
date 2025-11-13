@@ -11,7 +11,7 @@ export async function getCurrentUserId(): Promise<string | null> {
   try {
     const { authClient } = await import('@/lib/auth-client')
     const session = await authClient.getSession()
-    return session?.user?.id || null
+    return (session as any)?.user?.id || null
   } catch {
     return null
   }

@@ -77,7 +77,9 @@ export function createHoldingsMap(positions: Position[] | any[]): HoldingsMap {
   // Limit cache size
   if (HOLDINGS_CACHE.size > 100) {
     const firstKey = HOLDINGS_CACHE.keys().next().value
-    HOLDINGS_CACHE.delete(firstKey)
+    if (firstKey) {
+      HOLDINGS_CACHE.delete(firstKey)
+    }
   }
 
   return map

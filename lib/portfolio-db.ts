@@ -4,18 +4,8 @@
  * This file is kept for backward compatibility during migration
  */
 
-// Re-export from db-sql for backward compatibility
-export {
-  loadPortfolioFromDB,
-  savePositionToDB,
-  saveTradeToDB,
-  saveWalletTransactionToDB,
-  updateWalletBalanceInDB,
-  syncPositionsToDB,
-  getOrCreatePortfolio,
-} from './db-sql'
-
 import type { Position, Transaction } from './portfolio'
+import { db } from './db'
 
 /**
  * Check if Prisma client is properly initialized

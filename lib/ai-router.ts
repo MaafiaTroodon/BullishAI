@@ -364,8 +364,8 @@ export async function routeAIQuery(
       }
     }
     
-    // For other models, fallback to Groq first, then always to Gemini (which never throws)
-    if (model !== 'groq-llama' && model !== 'gemini') {
+    // For other models (local-pytorch), fallback to Groq first, then always to Gemini (which never throws)
+    if (model === 'local-pytorch') {
       console.warn(`Model ${model} failed, falling back to Groq:`, error)
       try {
         return await callGroq(query, context, systemPrompt, jsonSchema)

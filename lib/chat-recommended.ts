@@ -160,7 +160,7 @@ export async function handleRecommendedQuery(params: {
     }
 
     case 'top-movers': {
-      const limit = followUp ? computeExpandedLimit(previousContext) : DEFAULT_LIMIT
+      const limit = followUp ? computeExpandedLimit(previousContext || undefined) : DEFAULT_LIMIT
       const movers = await fetchTopMovers(origin, limit)
       if (!movers || (movers.gainers.length === 0 && movers.losers.length === 0)) {
         // Return conceptual answer structure instead of throwing
@@ -361,7 +361,12 @@ export async function handleRecommendedQuery(params: {
         .join('\n')
 
       const ragContext: RAGContext = {
-        news: news.items,
+        news: news.items.map((item) => ({
+          headline: item.headline || '',
+          summary: item.summary || '',
+          source: item.source || 'News',
+          datetime: item.datetime || Date.now(),
+        })),
       }
 
       return {
@@ -444,7 +449,7 @@ export async function handleRecommendedQuery(params: {
     }
 
     case 'unusual-volume': {
-      const limit = followUp ? computeExpandedLimit(previousContext) : DEFAULT_LIMIT
+      const limit = followUp ? computeExpandedLimit(previousContext || undefined) : DEFAULT_LIMIT
       const volumeData = await fetchUnusualVolume(origin, limit)
       if (!volumeData || volumeData.entries.length === 0) {
         // Return conceptual answer structure instead of throwing

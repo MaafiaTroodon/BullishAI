@@ -14,7 +14,7 @@ export function useUserId(): string | null {
     async function fetchUserId() {
       try {
         const session = await authClient.getSession()
-        setUserId(session?.user?.id || null)
+        setUserId((session as any)?.user?.id || null)
       } catch (error) {
         // Silently fail - user is not logged in
         setUserId(null)

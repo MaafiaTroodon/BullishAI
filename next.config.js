@@ -14,6 +14,8 @@ const nextConfig = {
       },
     ],
   },
+  // Disable static optimization for AI pages that use search params
+  generateStaticParams: false,
 }
 
 module.exports = nextConfig

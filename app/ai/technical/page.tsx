@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { Suspense, useState, useEffect } from 'react'
 import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { BarChart3, ArrowLeft, Search } from 'lucide-react'
@@ -9,7 +11,7 @@ import { useSearchParams } from 'next/navigation'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-export default function TechnicalPage() {
+function TechnicalContent() {
   const searchParams = useSearchParams()
   const [symbol, setSymbol] = useState(searchParams.get('symbol')?.toUpperCase() || 'AAPL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -278,6 +280,14 @@ export default function TechnicalPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function TechnicalPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+      <TechnicalContent />
+    </Suspense>
   )
 }
 

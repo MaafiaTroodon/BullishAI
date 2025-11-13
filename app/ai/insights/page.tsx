@@ -1,9 +1,12 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
+import { Suspense } from 'react'
 import { AIInsightsToolbar } from '@/components/AIInsightsToolbar'
 import { useSearchParams } from 'next/navigation'
 
-export default function AIInsightsPage() {
+function AIInsightsContent() {
   const searchParams = useSearchParams()
   const symbol = searchParams.get('symbol')?.toUpperCase()
 
@@ -21,6 +24,14 @@ export default function AIInsightsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AIInsightsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+      <AIInsightsContent />
+    </Suspense>
   )
 }
 

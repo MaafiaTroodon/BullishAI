@@ -59,7 +59,7 @@ const dbLoadPromises: Record<string, Promise<void>> = {}
  * This is called once per user session to hydrate the in-memory store
  */
 async function loadPortfolioFromDB(userId: string): Promise<void> {
-  if (dbLoadPromises[userId]) {
+  if (userId in dbLoadPromises) {
     await dbLoadPromises[userId]
     return
   }

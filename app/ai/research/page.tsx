@@ -1,6 +1,7 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { Search as SearchIcon, ArrowLeft, ExternalLink, FileText } from 'lucide-react'
@@ -9,7 +10,7 @@ import { useSearchParams } from 'next/navigation'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-export default function ResearchPage() {
+function ResearchContent() {
   const searchParams = useSearchParams()
   const [symbol, setSymbol] = useState(searchParams.get('symbol')?.toUpperCase() || 'AAPL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -190,6 +191,14 @@ export default function ResearchPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ResearchPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+      <ResearchContent />
+    </Suspense>
   )
 }
 
