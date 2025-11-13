@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { routeAIQuery, RAGContext } from '@/lib/ai-router'
-import { searchKnowledgeBase, detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-knowledge-base'
+import { RAGContext } from '@/lib/ai-router'
+import { detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-knowledge-base'
 import { findBestMatch, buildKnowledgePrompt, selectBestModel } from '@/lib/ai-knowledge-trainer'
 import { calculateTechnical } from '@/lib/technical-calculator'
 import { getSession } from '@/lib/auth-server'
-import { 
-  isRecommendedQuestion, 
-  fetchMarketSummary, 
-  fetchTopMovers, 
-  fetchEarnings, 
-  fetchMarketNews,
-  fetchRecommendedStocks,
-  formatET
-} from '@/lib/chat-data-fetchers'
+import { classifyChatDomain } from '@/lib/chat-domains'
+import { runHybridLLM } from '@/lib/hybrid-llm-router'
+import { handleRecommendedQuery, FollowUpContext, RecommendedType } from '@/lib/chat-recommended'
+import { isRecommendedQuestion } from '@/lib/chat-data-fetchers'
+
+const PRESET_TYPE_MAP: Record<string, RecommendedType> = {
+  'market-summary': 'market-summary',
+  'top-movers': 'top-movers',
+  'sector-performance': 'sectors',
+  'breaking-news': 'news',
+  'unusual-volume': 'unusual-volume',
+  'earnings-today': 'earnings',
+  upgrades: 'upgrades',
+  breakouts: 'breakouts',
+  'value-quality': 'value-quality',
+  momentum: 'momentum',
+  rebound: 'rebound',
+  'dividend-momentum': 'dividend-momentum',
+}
 
 /**
  * Conversational Chat API - Main entry point for chat interface
