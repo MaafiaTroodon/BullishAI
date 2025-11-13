@@ -9,9 +9,51 @@ export interface MarketSummaryData {
   source: string
 }
 
+export interface TopMoversEntry {
+  symbol: string
+  name?: string
+  price: number
+  changePercent: number
+  change?: number
+  sector?: string
+  volume?: number
+  avgVolume?: number
+}
+
 export interface TopMoversData {
-  gainers: Array<{ symbol: string; name?: string; price: number; changePercent: number; volume?: number }>
-  losers: Array<{ symbol: string; name?: string; price: number; changePercent: number; volume?: number }>
+  gainers: Array<TopMoversEntry>
+  losers: Array<TopMoversEntry>
+  timestamp: string
+  source: string
+}
+
+export interface SectorSnapshot {
+  name: string
+  symbol: string
+  changePercent: number
+  change: number
+  strength: number
+}
+
+export interface SectorLeadersData {
+  sectors: SectorSnapshot[]
+  timestamp: string
+  source: string
+}
+
+export interface UnusualVolumeEntry {
+  symbol: string
+  name?: string
+  price: number
+  changePercent: number
+  volume: number
+  avgVolume: number
+  relativeVolume: number
+  sector?: string
+}
+
+export interface UnusualVolumeData {
+  entries: UnusualVolumeEntry[]
   timestamp: string
   source: string
 }
@@ -22,8 +64,17 @@ export interface EarningsData {
   source: string
 }
 
+export interface NewsItem {
+  headline: string
+  summary?: string
+  source: string
+  datetime: number
+  url?: string
+  symbols?: string[]
+}
+
 export interface NewsData {
-  items: Array<{ headline: string; summary?: string; source: string; datetime: number }>
+  items: Array<NewsItem>
   timestamp: string
   source: string
 }
@@ -142,25 +193,36 @@ export async function fetchMarketSummary(origin: string): Promise<MarketSummaryD
 /**
  * Fetch top movers
  */
-export async function fetchTopMovers(origin: string): Promise<TopMoversData | null> {
+export async function fetchTopMovers(origin: string, limit: number = 10): Promise<TopMoversData | null> {
   try {
-    const res = await fetch(`${origin}/api/market/top-movers?limit=10`)
+    const cappedLimit = Math.max(5, Math.min(limit, 100))
+    const res = await fetch(`${origin}/api/market/top-movers?limit=${cappedLimit}`)
     const data = await res.json().catch(() => ({ gainers: [], losers: [] }))
     
-    const gainers = (data.gainers || data.data?.gainers || []).slice(0, 5).map((m: any) => ({
+    const gainers = (data.gainers || data.data?.gainers || [])
+      .slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
+      .map((m: any) => ({
       symbol: m.symbol,
       name: m.name,
       price: parseFloat(m.price || m.currentPrice || 0),
       changePercent: parseFloat(m.changePercent || m.changePct || 0),
-      volume: m.volume,
+      change: parseFloat(m.change || 0),
+      sector: m.sector,
+      volume: Number(m.volume || m.totalVolume || 0),
+      avgVolume: Number(m.avgVolume || m.averageVolume || 0),
     }))
     
-    const losers = (data.losers || data.data?.losers || []).slice(0, 5).map((m: any) => ({
+    const losers = (data.losers || data.data?.losers || [])
+      .slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
+      .map((m: any) => ({
       symbol: m.symbol,
       name: m.name,
       price: parseFloat(m.price || m.currentPrice || 0),
       changePercent: parseFloat(m.changePercent || m.changePct || 0),
-      volume: m.volume,
+      change: parseFloat(m.change || 0),
+      sector: m.sector,
+      volume: Number(m.volume || m.totalVolume || 0),
+      avgVolume: Number(m.avgVolume || m.averageVolume || 0),
     }))
     
     return {

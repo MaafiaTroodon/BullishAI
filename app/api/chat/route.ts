@@ -247,6 +247,15 @@ export async function POST(req: NextRequest) {
     // Skip KB check for recommended questions
     if (isRecommended) {
       // We already fetched live data above, now pass it to AI
+      // If live data fetch failed, provide a helpful error message
+      if (!liveDataContext) {
+        return NextResponse.json({
+          answer: `I couldn't fetch live data right now because of a data provider issue. Please try again in a moment.\n\n⚠️ *This is for educational purposes only and not financial advice.*`,
+          model: 'error',
+          modelBadge: 'Data Unavailable',
+          latency: 0,
+        })
+      }
     } else if (relevantContext.length > 0) {
       // For non-recommended questions, KB is still useful as fallback
       const bestMatch = relevantContext[0]
@@ -333,9 +342,12 @@ Guidelines:
 Tone: Chatty, confident, helpful, not robotic.`
     }
 
-    const fullQuery = query
+    // 10. Build the query - for recommended questions, include live data context
+    const fullQuery = isRecommended && liveDataContext 
+      ? `${query}\n\nUse this live data: ${liveDataContext}`
+      : (!isRecommended ? buildKnowledgePrompt(query, kb, relevantContext) : query)
 
-    // 8. Route to appropriate model with enhanced prompt
+    // 11. Route to appropriate model with enhanced prompt
     let response
     try {
       // Use the selected model
@@ -462,9 +474,29 @@ Tone: Chatty, confident, helpful, not robotic.`
     }
 
     // Add model badge info (will be displayed in UI)
-    const modelBadge = response.model === 'groq-llama' ? 'Groq Live' : 
-                      response.model === 'gemini' ? 'Gemini AI' : 
-                      response.model || 'AI'
+    // For recommended questions, show data source instead of "Knowledge Base"
+    let modelBadge = response.model === 'groq-llama' ? 'Groq Live' : 
+                     response.model === 'gemini' ? 'Gemini AI' : 
+                     response.model || 'AI'
+    
+    // For recommended questions with live data, show data source
+    if (isRecommended && dataSource) {
+      modelBadge = dataSource
+    }
+    
+    // Ensure answer includes data source and timestamp for recommended questions
+    if (isRecommended && dataSource && !answer.includes(dataSource)) {
+      if (dataTimestamp) {
+        answer += `\n\n*Updated: ${dataTimestamp} • Source: ${dataSource}*`
+      } else {
+        answer += `\n\n*Source: ${dataSource}*`
+      }
+    }
+    
+    // Ensure disclaimer is present
+    if (!answer.toLowerCase().includes('educational') && !answer.toLowerCase().includes('not financial advice')) {
+      answer += '\n\n⚠️ *This is for educational purposes only and not financial advice.*'
+    }
 
     return NextResponse.json({
       answer,
