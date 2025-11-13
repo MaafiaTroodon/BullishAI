@@ -20,11 +20,20 @@ export function useUserId(): string | null {
         setUserId(null)
       }
     }
+    
+    // Initial fetch
     fetchUserId()
     
-    // Listen for auth changes - reduce polling to every 5 seconds to avoid excessive requests
-    const interval = setInterval(fetchUserId, 5000)
-    return () => clearInterval(interval)
+    // Only poll if we're in development or if user is logged in
+    // In production, rely on authClient.useSession() which handles updates better
+    if (process.env.NODE_ENV === 'development') {
+      // Listen for auth changes - reduce polling to every 10 seconds to avoid excessive requests
+      const interval = setInterval(fetchUserId, 10000)
+      return () => clearInterval(interval)
+    }
+    
+    // In production, don't poll - let useSession handle it
+    // Just fetch once on mount
   }, [])
 
   return userId

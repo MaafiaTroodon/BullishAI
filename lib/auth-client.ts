@@ -2,10 +2,18 @@
 
 import { createAuthClient } from "better-auth/react"
 
+// Get base URL - prioritize environment variable, then window.location, then fallback
+function getBaseURL(): string {
+  if (typeof window !== 'undefined') {
+    // Use window.location.origin in browser
+    return window.location.origin
+  }
+  // Server-side: use environment variable or fallback
+  return process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3000"
+}
+
 export const authClient = createAuthClient({
-  baseURL: typeof window !== 'undefined' 
-    ? window.location.origin 
-    : (process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3000"),
+  baseURL: getBaseURL(),
   basePath: "/api/auth",
 })
 

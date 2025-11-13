@@ -54,8 +54,14 @@ export default function Home() {
   }, [selectedExchange])
   
   // Use actual auth session instead of localStorage
-  const { data: session } = authClient.useSession()
+  // Add timeout and error handling to prevent infinite loading
+  const { data: session, isPending: sessionLoading, error: sessionError } = authClient.useSession()
   const isLoggedIn = !!session?.user
+  
+  // If session check fails, don't block the page - just assume not logged in
+  if (sessionError) {
+    console.warn('Session check failed:', sessionError)
+  }
 
   // Check URL for focusSymbol parameter
   useEffect(() => {

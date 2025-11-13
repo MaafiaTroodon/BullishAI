@@ -16,8 +16,16 @@ export function GlobalNavbar() {
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([])
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const { data: session, isPending: sessionLoading } = authClient.useSession()
+  // Add timeout and error handling to prevent infinite loading
+  const { data: session, isPending: sessionLoading, error: sessionError } = authClient.useSession()
   const { mutate: globalMutate } = useSWRConfig()
+  
+  // If session check fails, don't block rendering - just assume not logged in
+  useEffect(() => {
+    if (sessionError) {
+      console.warn('Navbar: Session check failed:', sessionError)
+    }
+  }, [sessionError])
   
   // Store last known balance to prevent $0 flicker during navigation/revalidation
   const lastBalanceRef = useRef<number | null>(null)

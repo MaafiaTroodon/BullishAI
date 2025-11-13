@@ -7,11 +7,20 @@ const protectedRoutes = ['/dashboard', '/watchlist', '/alerts', '/settings', '/w
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  // Check for session token in cookies
-  const sessionToken = request.cookies.get('better-auth.session_token')
+  // Skip middleware for API routes (except auth)
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
+    return NextResponse.next()
+  }
+  
+  // Check for session token in cookies - try multiple possible cookie names
+  const sessionToken = 
+    request.cookies.get('better-auth.session_token')?.value ||
+    request.cookies.get('better-auth_session_token')?.value ||
+    request.cookies.get('session_token')?.value
   const hasSession = !!sessionToken
   
   // If accessing sign-in/sign-up while logged in, redirect to dashboard
+  // But only if we have a valid session token
   if ((pathname.startsWith('/auth/signin') || pathname.startsWith('/auth/signup')) && hasSession) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
@@ -20,10 +29,19 @@ export function middleware(request: NextRequest) {
   const isProtected = protectedRoutes.some(route => pathname.startsWith(route))
   
   // If accessing protected route without session, redirect to sign-in
+  // But prevent redirect loops by checking the next parameter
   if (isProtected && !hasSession) {
-    const signInUrl = new URL('/auth/signin', request.url)
-    signInUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(signInUrl)
+    // Check if we're already being redirected from signin (prevent loops)
+    const nextParam = request.nextUrl.searchParams.get('next')
+    const isRedirectingFromSignin = nextParam === pathname
+    
+    // Don't redirect if we're in a redirect loop
+    if (!isRedirectingFromSignin) {
+      const signInUrl = new URL('/auth/signin', request.url)
+      signInUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(signInUrl)
+    }
+    // If we're in a loop, just let the page render (it will show signin form)
   }
   
   return NextResponse.next()
