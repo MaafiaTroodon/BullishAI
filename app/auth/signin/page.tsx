@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingUp, Mail, Lock, AlertCircle } from 'lucide-react'
+import { TrendingUp, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 
 function SignInContent() {
@@ -12,6 +12,7 @@ function SignInContent() {
   const { data: session, isPending: sessionLoading } = authClient.useSession()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
