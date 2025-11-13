@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   
   try {
     const body = await req.json()
-    query = body.query || ''
+    query = typeof body.query === 'string' ? body.query.trim() : ''
     symbol = body.symbol || ''
 
     if (!query || typeof query !== 'string') {
@@ -54,102 +54,137 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 1. Check if this is a recommended question that needs live data FIRST
-    // This ensures recommended questions always use BullishAI APIs, not generic KB
+    const presetId: string | undefined = body.presetId || undefined
+    const followUp: boolean = Boolean(body.followUp)
+    const previousContext: FollowUpContext | null =
+      body.previousContext && typeof body.previousContext === 'object' ? body.previousContext : null
+
+    // 1. Determine if this is a recommended preset question
     const recommendedCheck = isRecommendedQuestion(query)
-    const isRecommended = recommendedCheck.needsLiveData
-    
+    let recommendedType: RecommendedType | null = null
+    if (followUp && previousContext?.type) {
+      recommendedType = previousContext.type
+    } else if (presetId && PRESET_TYPE_MAP[presetId]) {
+      recommendedType = PRESET_TYPE_MAP[presetId]
+    } else if (recommendedCheck.needsLiveData && recommendedCheck.type) {
+      recommendedType = recommendedCheck.type as RecommendedType
+    }
+
     // 2. Detect section/intent
     const section = detectSection(query)
     const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
-    
-    // 3. For recommended questions, fetch live data BEFORE checking knowledge base
-    let liveDataContext = ''
-    let dataSource = ''
-    let dataTimestamp = ''
-    
-    if (isRecommended && recommendedCheck.type) {
-      const origin = req.nextUrl.origin
-      
-      switch (recommendedCheck.type) {
-        case 'market-summary': {
-          const marketData = await fetchMarketSummary(origin)
-          if (marketData) {
-            const indicesText = marketData.indices.map(idx => 
-              `${idx.symbol}: $${idx.price.toFixed(2)} (${idx.changePercent >= 0 ? '+' : ''}${idx.changePercent.toFixed(2)}%)`
-            ).join(', ')
-            liveDataContext = `Market Indices (Live): ${indicesText}`
-            dataSource = marketData.source
-            dataTimestamp = formatET(marketData.timestamp)
-          }
-          break
+
+    // 3. Handle recommended presets with live data before knowledge base logic
+    if (recommendedType && recommendedType !== 'technical') {
+      try {
+        const recommendedResult = await handleRecommendedQuery({
+          type: recommendedType,
+          origin: req.nextUrl.origin,
+          followUp,
+          previousContext,
+        })
+
+        const {
+          ragContext,
+          liveDataText,
+          dataSource,
+          dataTimestamp,
+          requiredPhrases,
+          domain,
+          followUpContext,
+          summaryInstruction,
+        } = recommendedResult
+
+        const systemPrompt = `You are BullishAI Market Analyst. You must use ONLY the BullishAI live data provided below.
+
+Rules:
+- Start with a confident, friendly one-sentence takeaway.
+- Mention specific numbers/tickers from the live data (no guessing).
+- Provide broader market context (sector themes, macro tone, catalysts).
+- Keep the tone optimistic, educational, and actionable.
+- Explicitly cite: Updated ${dataTimestamp} • Source: ${dataSource}.
+- Offer at least TWO follow-up options that users can trigger.
+- End with: "⚠️ This is for educational purposes only and not financial advice."
+
+Additional guidance: ${summaryInstruction}
+`
+        const userPrompt = `${query}
+
+Live BullishAI data to use:
+${liveDataText}
+
+Answer using the rules above.`
+
+        const llmResponse = await runHybridLLM({
+          userPrompt,
+          systemPrompt,
+          context: ragContext,
+          domain,
+          requiredPhrases: Array.from(new Set([...(requiredPhrases || []), dataSource])),
+          minLength: followUp ? 170 : 130,
+        })
+
+        let answer = llmResponse.answer?.trim() || ''
+
+        const sourceLine = `*Updated: ${dataTimestamp} • Source: ${dataSource}*`
+        if (!answer.includes(sourceLine)) {
+          answer += `\n\n${sourceLine}`
         }
-        
-        case 'top-movers': {
-          const moversData = await fetchTopMovers(origin)
-          if (moversData) {
-            const gainersText = moversData.gainers.map(m => 
-              `${m.symbol}: +${m.changePercent.toFixed(2)}%`
-            ).join(', ')
-            const losersText = moversData.losers.map(m => 
-              `${m.symbol}: ${m.changePercent.toFixed(2)}%`
-            ).join(', ')
-            liveDataContext = `Top Gainers: ${gainersText}\nTop Losers: ${losersText}`
-            dataSource = moversData.source
-            dataTimestamp = formatET(moversData.timestamp)
-          }
-          break
+
+        const followUpHooks = [
+          'Want me to expand with more names or dig into a sector?',
+          'Want analysis on any specific ticker?',
+          'Need me to watch for catalysts or earnings dates?',
+        ]
+        const hasFollowUpHook = followUpHooks.some((hook) => answer.toLowerCase().includes(hook.toLowerCase()))
+        if (!hasFollowUpHook) {
+          answer += `\n\nWant me to expand with more names or dig into a sector? Or analyze any specific ticker?`
         }
-        
-        case 'news': {
-          const newsData = await fetchMarketNews(origin, 5)
-          if (newsData) {
-            const newsText = newsData.items.map((n, i) => 
-              `${i + 1}. ${n.headline} (${n.source})`
-            ).join('\n')
-            liveDataContext = `Breaking News:\n${newsText}`
-            dataSource = newsData.source
-            dataTimestamp = formatET(newsData.timestamp)
-          }
-          break
+
+        if (!answer.toLowerCase().includes('educational') && !answer.toLowerCase().includes('not financial advice')) {
+          answer += `\n\n⚠️ This is for educational purposes only and not financial advice.`
         }
-        
-        case 'earnings': {
-          const earningsData = await fetchEarnings(origin, 'today')
-          if (earningsData && earningsData.today.length > 0) {
-            const earningsText = earningsData.today.map(e => 
-              `${e.symbol}${e.time ? ` (${e.time})` : ''}${e.estimate ? ` - EPS Est: $${e.estimate}` : ''}`
-            ).join('\n')
-            liveDataContext = `Earnings Today:\n${earningsText}`
-            dataSource = earningsData.source
-            dataTimestamp = formatET(earningsData.timestamp)
-          }
-          break
+
+        const tickersFromData = (requiredPhrases || []).filter((item) =>
+          /^[A-Z]{1,5}(?:\.[A-Z]{1,3})?$/.test(item),
+        )
+
+        const payloadFollowUp: FollowUpContext = {
+          ...followUpContext,
+          presetId: presetId || previousContext?.presetId || undefined,
         }
-        
-        case 'value-quality':
-        case 'momentum':
-        case 'breakouts':
-        case 'rebound':
-        case 'dividend-momentum': {
-          const typeMap: Record<string, 'value' | 'momentum' | 'breakout' | 'rebound' | 'dividend'> = {
-            'value-quality': 'value',
-            'momentum': 'momentum',
-            'breakouts': 'breakout',
-            'rebound': 'rebound',
-            'dividend-momentum': 'dividend',
-          }
-          const stocksData = await fetchRecommendedStocks(origin, typeMap[recommendedCheck.type] || 'value')
-          if (stocksData && stocksData.stocks.length > 0) {
-            const stocksText = stocksData.stocks.map((s: any, i: number) => 
-              `${i + 1}. ${s.symbol}${s.name ? ` (${s.name})` : ''}: $${(s.price || s.currentPrice || 0).toFixed(2)}${s.changePercent !== undefined ? ` (${s.changePercent >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%)` : ''}`
-            ).join('\n')
-            liveDataContext = `Recommended Stocks:\n${stocksText}`
-            dataSource = stocksData.source
-            dataTimestamp = formatET(stocksData.timestamp)
-          }
-          break
+
+        return NextResponse.json({
+          answer,
+          model: llmResponse.model,
+          modelBadge: dataSource,
+          latency: llmResponse.latency,
+          section: section || undefined,
+          tickers: tickersFromData.length > 0 ? tickersFromData : undefined,
+          followUpContext: payloadFollowUp,
+        })
+      } catch (error: any) {
+        if (error?.message === 'UPGRADES_UNAVAILABLE') {
+          return NextResponse.json({
+            answer:
+              "Upgrades data isn't wired into BullishAI yet. Want me to pull stocks with improving fundamentals or strong trend reversals instead?\n\n⚠️ *This is for educational purposes only and not financial advice.*",
+            model: 'bullishai-system',
+            modelBadge: 'BullishAI Screener Engine',
+            latency: 0,
+            section: section || undefined,
+            followUpContext: previousContext || undefined,
+          })
         }
+
+        console.error('Recommended preset handling error:', error)
+        return NextResponse.json({
+          answer:
+            "Live data is temporarily unavailable. Here's a general perspective: markets rotate quickly, so check sectors leading today and keep an eye on upcoming catalysts. Want me to retry in a moment or pivot to another insight?\n\n⚠️ *This is for educational purposes only and not financial advice.*",
+          model: 'bullishai-fallback',
+          modelBadge: 'BullishAI Live Feed (cached)',
+          latency: 0,
+          section: section || undefined,
+        })
       }
     }
     
