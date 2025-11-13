@@ -415,29 +415,40 @@ export async function runHybridLLM(request: HybridLLMRequest): Promise<HybridLLM
   }
 
   // Step 3: If all local models failed, try remote models as fallback (but don't rely on them)
+  // Only use remote models if local models completely failed
   const remoteModels: RemoteModelKey[] = []
   if (process.env.GROQ_API_KEY) remoteModels.push('groq-llama')
   if (process.env.GEMINI_API_KEY) remoteModels.push('gemini')
 
-  for (const remoteModel of remoteModels) {
+  // Try remote models in parallel for speed
+  const remotePromises = remoteModels.map(async (remoteModel) => {
     try {
       const fallback = await routeAIQuery(userPrompt, context, fullSystemPrompt, jsonSchema, remoteModel)
-      contributors.push(remoteModel)
-      return {
-        answer: fallback.answer,
-        model: 'multi-model',
-        latency: fallback.latency || Date.now() - startTime,
-        metadata: {
-          contributors,
-          strategy: 'remote-fallback',
-          primaryModel: strategy.primary,
-          secondaryModel: strategy.secondary,
-          fallbackModel: remoteModel,
-          localErrors: errors,
-        },
-      }
+      return { model: remoteModel, result: fallback, success: true }
     } catch (err: any) {
       errors.push(`Remote (${remoteModel}): ${err.message}`)
+      return { model: remoteModel, result: null, success: false }
+    }
+  })
+
+  const remoteResults = await Promise.all(remotePromises)
+  const successfulRemote = remoteResults.find((r) => r.success)
+
+  if (successfulRemote) {
+    contributors.push(successfulRemote.model)
+    return {
+      answer: successfulRemote.result!.answer,
+      model: 'multi-model',
+      latency: successfulRemote.result!.latency || Date.now() - startTime,
+      metadata: {
+        contributors,
+        strategy: 'remote-fallback',
+        primaryModel: strategy.primary,
+        secondaryModel: strategy.secondary,
+        fallbackModel: successfulRemote.model,
+        localErrors: errors,
+        note: 'Local models unavailable, using remote fallback',
+      },
     }
   }
 
