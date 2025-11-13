@@ -8,6 +8,8 @@ import { safeJsonFetcher } from '@/lib/safeFetch'
 import { getMarketSession, getRefreshInterval } from '@/lib/marketSession'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 import { authClient } from '@/lib/auth-client'
+import { useFastPricePolling } from '@/hooks/useFastPricePolling'
+import { createHoldingsMap, calculateMarkToMarketDelta } from '@/lib/portfolio-mark-to-market-fast'
 
 export function PortfolioChart() {
   const userId = useUserId()
@@ -34,9 +36,9 @@ export function PortfolioChart() {
     session?.user ? '/api/portfolio?enrich=1' : null,
     safeJsonFetcher,
     { 
-      // Real-time mark-to-market: poll every 20s during market hours
+      // Ultra-real-time mark-to-market: poll every 3s during market hours to capture every 0.01% change
       refreshInterval: session?.user 
-        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 20000 : portfolioRefreshInterval)
+        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 3000 : portfolioRefreshInterval)
         : 0,
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user,
@@ -64,6 +66,59 @@ export function PortfolioChart() {
     }
   }, [pathname, userId, mutatePf, pf])
   const [localItems, setLocalItems] = useState<any[]>([])
+  
+  // Extract symbols from holdings for fast price polling
+  const symbols = useMemo(() => {
+    const items = pf?.items || localItems || []
+    return Array.from(new Set(
+      items
+        .filter((p: any) => (p.totalShares || 0) > 0)
+        .map((p: any) => p.symbol?.toUpperCase())
+        .filter(Boolean)
+    ))
+  }, [pf?.items, localItems])
+  
+  // Create holdings map for fast price polling
+  const holdingsMap = useMemo(() => {
+    const items = pf?.items || localItems || []
+    return createHoldingsMap(items)
+  }, [pf?.items, localItems])
+  
+  const priceMapRef = useRef<Map<string, number>>(new Map())
+  const [liveTPV, setLiveTPV] = useState<number | null>(null)
+  
+  // Handle fast price updates for real-time chart updates
+  const handlePriceUpdate = useCallback((updates: Array<{ symbol: string; price: number; timestamp: number }>) => {
+    if (updates.length === 0) return
+    
+    // Update price map
+    for (const update of updates) {
+      priceMapRef.current.set(update.symbol.toUpperCase(), update.price)
+    }
+    
+    // Calculate delta mark-to-market
+    const walletBalance = pf?.wallet?.balance || 0
+    const result = calculateMarkToMarketDelta(
+      holdingsMap,
+      updates,
+      priceMapRef.current,
+      walletBalance,
+      false // wallet excluded
+    )
+    
+    // Update live TPV for real-time display
+    setLiveTPV(result.tpv)
+    
+    // Trigger timeseries update to add new point to chart
+    mutateTimeseries()
+  }, [holdingsMap, pf?.wallet?.balance, mutateTimeseries])
+  
+  // Start fast price polling for ultra-real-time updates (every 2 seconds during market hours)
+  useFastPricePolling({
+    symbols,
+    onUpdate: handlePriceUpdate,
+    enabled: !!session?.user && symbols.length > 0 && Object.keys(holdingsMap).length > 0,
+  })
   
   // Map internal ranges to API ranges (consistent mapping)
   const apiRangeMap: Record<string, string> = {
@@ -93,9 +148,9 @@ export function PortfolioChart() {
     session?.user ? `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}` : null,
     safeJsonFetcher,
     { 
-      // Real-time mark-to-market: poll every 20s during market hours
+      // Ultra-real-time mark-to-market: poll every 3s during market hours to capture every 0.01% change
       refreshInterval: session?.user 
-        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 20000 : timeseriesRefreshInterval)
+        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 3000 : timeseriesRefreshInterval)
         : 0,
       revalidateOnFocus: !!session?.user,
       revalidateOnReconnect: !!session?.user

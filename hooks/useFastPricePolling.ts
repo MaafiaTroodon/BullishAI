@@ -39,9 +39,11 @@ export function useFastPricePolling({ symbols, onUpdate, enabled = true }: UseFa
   const uniqueSymbols = Array.from(new Set(symbols.filter(Boolean)))
   
   // Determine polling interval based on market session
+  // During market hours: poll every 2 seconds for ultra-real-time updates (captures 0.01% changes)
+  // When closed: poll every 30 seconds
   const marketSession = typeof window !== 'undefined' ? getMarketSession() : { session: 'CLOSED' as const }
   const isMarketOpen = marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST'
-  const pollInterval = isMarketOpen ? 5000 : 30000 // 5s during market, 30s when closed
+  const pollInterval = isMarketOpen ? 2000 : 30000 // 2s during market for real-time, 30s when closed
 
   // Fetch prices for all symbols in parallel
   const fetchPrices = useCallback(async () => {
