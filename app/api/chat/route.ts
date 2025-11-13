@@ -7,6 +7,7 @@ import { classifyChatDomain } from '@/lib/chat-domains'
 import { runHybridLLM, getModelBadge } from '@/lib/hybrid-llm-router'
 import { handleRecommendedQuery, FollowUpContext, RecommendedType } from '@/lib/chat-recommended'
 import { isRecommendedQuestion } from '@/lib/chat-data-fetchers'
+import { isStockRecommendationQuery, handleStockRecommendation } from '@/lib/chat-stock-recommendations'
 
 const PRESET_TYPE_MAP: Record<string, RecommendedType> = {
   'market-summary': 'market-summary',
@@ -58,7 +59,68 @@ export async function POST(req: NextRequest) {
     const previousContext: FollowUpContext | null =
       body.previousContext && typeof body.previousContext === 'object' ? body.previousContext : null
 
-    // 1. Determine if this is a recommended preset question
+    // 1. Check if this is a stock recommendation question (highest priority)
+    if (isStockRecommendationQuery(query)) {
+      try {
+        const recommendation = await handleStockRecommendation(query, req.nextUrl.origin)
+        
+        // Use hybrid LLM to enhance the answer
+        const systemPrompt = `You are BullishAI Market Analyst. The user asked for stock recommendations. 
+I've already prepared a data-driven answer with specific stocks, prices, and percentages.
+Your job is to:
+1. Keep the exact structure (Quick Summary, Data Section, Context, Follow-ups, Disclaimer)
+2. Enhance the language to be more confident and actionable
+3. Add any additional insights from the context data
+4. Keep all the exact numbers and tickers I provided
+5. Make sure the answer feels personalized and specific, not generic
+
+Do NOT:
+- Remove any tickers or numbers
+- Add generic placeholders
+- Say "I don't have data" or "unavailable"
+- Change the structure`
+
+        const llmResponse = await runHybridLLM({
+          userPrompt: `User asked: "${query}"\n\nHere's my prepared answer:\n\n${recommendation.answer}\n\nEnhance this answer while keeping all the exact data, numbers, and structure.`,
+          systemPrompt,
+          context: recommendation.ragContext,
+          domain: recommendation.domain,
+          requiredPhrases: recommendation.ragContext.lists?.gainers?.map((g: any) => g.symbol) || [],
+          minLength: 200,
+        })
+
+        let finalAnswer = llmResponse.answer || recommendation.answer
+        
+        // Ensure disclaimer is present
+        if (!finalAnswer.toLowerCase().includes('educational') && !finalAnswer.toLowerCase().includes('not financial advice')) {
+          finalAnswer += '\n\n⚠️ *This is for educational purposes only and not financial advice.*'
+        }
+
+        const modelBadge = getModelBadge(llmResponse.metadata) || recommendation.dataSource
+
+        return NextResponse.json({
+          answer: finalAnswer,
+          model: llmResponse.model,
+          modelBadge,
+          latency: llmResponse.latency,
+          section: 'Stock Recommendations',
+          tickers: recommendation.ragContext.lists?.gainers?.map((g: any) => g.symbol) || undefined,
+        })
+      } catch (error: any) {
+        console.error('Stock recommendation error:', error)
+        // Fallback to conceptual answer
+        const region = query.toLowerCase().includes('canada') || query.toLowerCase().includes('tsx') ? 'TSX' : 'U.S.'
+        return NextResponse.json({
+          answer: `I don't have fresh ${region} market data right now, but here's how traders typically approach stock selection: focus on stocks with positive momentum (>1% gains), above-average volume, strong sector support, and improving fundamentals. Want me to explain how to screen for these criteria?\n\n⚠️ *This is for educational purposes only and not financial advice.*`,
+          model: 'bullishai-conceptual',
+          modelBadge: 'BullishAI Market Education',
+          latency: 0,
+          section: 'Stock Recommendations',
+        })
+      }
+    }
+
+    // 2. Determine if this is a recommended preset question
     const recommendedCheck = isRecommendedQuestion(query)
     let recommendedType: RecommendedType | null = null
     if (followUp && previousContext?.type) {
@@ -69,11 +131,11 @@ export async function POST(req: NextRequest) {
       recommendedType = recommendedCheck.type as RecommendedType
     }
 
-    // 2. Detect section/intent
+    // 3. Detect section/intent
     const section = detectSection(query)
     const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
 
-    // 3. Handle recommended presets with live data before knowledge base logic
+    // 4. Handle recommended presets with live data before knowledge base logic
     if (recommendedType && recommendedType !== 'technical') {
       try {
         const recommendedResult = await handleRecommendedQuery({
@@ -203,7 +265,7 @@ Answer using the rules above.`
       }
     }
     
-    // 4. Load BullishAI playbook entries (for tone/style on general questions)
+    // 5. Load BullishAI playbook entries (for tone/style on general questions)
     let kb: any[] = []
     let relevantContext: any[] = []
     try {
