@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authClient } from '@/lib/auth-server'
+import { getSession } from '@/lib/auth-server'
 import { getUpcomingDividends } from '@/lib/dividend-processor'
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await authClient.getSession()
+    const session = await getSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

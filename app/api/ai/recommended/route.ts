@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
           summary: `${symbol} showing ${tags.join(', ')} with ${changePct.toFixed(2)}% move.`,
         }
       })
-      .filter((rec): rec is Recommendation => !!rec && rec.price > 0)
+      .filter((rec: Recommendation | null): rec is Recommendation => !!rec && rec.price > 0)
       .filter((rec) => filterByUniverse(rec.symbol, universe))
       .filter((rec) => {
         if (exchanges.length === 0) return true
