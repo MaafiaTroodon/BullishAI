@@ -267,30 +267,48 @@ export function PortfolioSummary() {
       })),
     }, { revalidate: false })
 
+    // CRITICAL: Only save snapshots if we have ACTUAL market prices (not costBasis fallback)
+    // Check if at least one holding has a real currentPrice > 0
+    const hasRealPrices = result.holdings.some(h => h.currentPrice && h.currentPrice > 0)
+    
     // Rapid snapshot creation: save every 2 seconds OR if TPV changed by >0.01%
-    // This ensures the graph updates rapidly with real portfolio value changes
+    // BUT ONLY if we have real prices (not costBasis fallback)
     const now = Date.now()
-    const shouldSave = !lastSnapshotRef.current || 
+    const shouldSave = hasRealPrices && userId && (
+      !lastSnapshotRef.current || 
       (now - lastSnapshotRef.current.timestamp > 2000) || // 2 seconds passed (rapid updates)
       (Math.abs(result.tpv - lastSnapshotRef.current.tpv) / (lastSnapshotRef.current.tpv || 1) > 0.0001) // 0.01% change (more sensitive)
+    )
 
-    if (shouldSave && userId) {
-      lastSnapshotRef.current = { tpv: result.tpv, timestamp: now }
+    if (shouldSave) {
+      // CRITICAL VALIDATION: Ensure tpv is calculated from actual market prices, not costBasis
+      // Double-check that tpv > costBasis OR tpv < costBasis (showing real movement)
+      // If tpv === costBasis, it means we're using costBasis fallback (no real prices)
+      const isRealValue = Math.abs(result.tpv - result.costBasis) > 0.01
       
-      // Save snapshot asynchronously (fire and forget)
-      fetch('/api/portfolio/snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tpv: result.tpv,
-          costBasis: result.costBasis,
-          totalReturn: result.totalReturn,
-          totalReturnPct: result.totalReturnPct,
-          holdings: result.holdings,
-          walletBalance,
-          lastUpdated: now
-        })
-      }).catch(err => console.error('Error saving snapshot:', err))
+      if (isRealValue && result.tpv > 0) {
+        lastSnapshotRef.current = { tpv: result.tpv, timestamp: now }
+        
+        // Save snapshot asynchronously (fire and forget)
+        fetch('/api/portfolio/snapshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tpv: result.tpv,
+            costBasis: result.costBasis,
+            totalReturn: result.totalReturn,
+            totalReturnPct: result.totalReturnPct,
+            holdings: result.holdings,
+            walletBalance,
+            lastUpdated: now
+          })
+        }).catch(err => console.error('Error saving snapshot:', err))
+      } else {
+        // Don't save if tpv === costBasis (means no real prices loaded yet)
+        if (result.tpv === result.costBasis) {
+          console.log(`[PortfolioSummary] Skipping snapshot save: tpv=$${result.tpv.toLocaleString()} equals costBasis (no real prices loaded yet)`)
+        }
+      }
     }
   }, [holdingsMap, data, mutate, userId])
 

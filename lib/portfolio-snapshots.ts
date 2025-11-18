@@ -210,11 +210,18 @@ export async function getPortfolioSnapshots(
       console.log(`[DB QUERY] Snapshots with tpv > 0: ${nonZeroTpv}/${snapshots.length}`)
     }
 
-    // Create evenly spaced sections for the requested window
+    // Create evenly spaced sections for the requested window (for X-axis display)
     const sections = getSectionsForRange(normalizedRange, startTime, endTime)
 
-    // Downsample if necessary to keep chart performant
-    snapshots = downsampleSnapshots(snapshots, normalizedRange)
+    // CRITICAL: Only downsample if we have too many points (>300)
+    // Downsampling groups snapshots by time buckets but preserves actual tpv values
+    // For ranges like 1H/1D, we want ALL snapshots to show movement
+    if (snapshots.length > 300) {
+      console.log(`[DB Query] Downsampling ${snapshots.length} snapshots to keep chart performant`)
+      snapshots = downsampleSnapshots(snapshots, normalizedRange)
+    } else {
+      console.log(`[DB Query] Using all ${snapshots.length} snapshots (no downsampling needed)`)
+    }
 
     // If no snapshots, return metadata with empty array (sections still included)
     if (snapshots.length === 0) {

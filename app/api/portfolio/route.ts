@@ -228,14 +228,23 @@ export async function GET(req: NextRequest) {
       console.log(`[portfolio] Sample: ${sample.symbol}, currentPrice: ${sample.currentPrice}, totalValue: ${sample.totalValue}, costBasis: ${sample.totalCost}`)
     }
     
-    // If we have live quotes, save snapshot
-    if (hasLiveQuotes) {
+    // CRITICAL: Only save snapshot if we have REAL market prices (not costBasis fallback)
+    // Check that tpv is calculated from actual currentPrice values, not costBasis
+    const calculatedTPV = enriched.reduce((sum, h) => sum + (h.totalValue || 0), 0)
+    const calculatedCostBasis = enriched.reduce((sum, h) => sum + (h.totalCost || 0), 0)
+    const hasRealPrices = enriched.some((h) => h.currentPrice && h.currentPrice > 0 && h.totalValue !== h.totalCost)
+    
+    // Only save if:
+    // 1. We have live quotes AND
+    // 2. TPV is different from costBasis (showing real market movement) AND
+    // 3. TPV > 0
+    if (hasLiveQuotes && hasRealPrices && calculatedTPV > 0 && Math.abs(calculatedTPV - calculatedCostBasis) > 0.01) {
       const { savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
       const mtm = {
-        tpv: enriched.reduce((sum, h) => sum + (h.totalValue || 0), 0),
-        costBasis: enriched.reduce((sum, h) => sum + (h.totalCost || 0), 0),
-        totalReturn: enriched.reduce((sum, h) => sum + (h.unrealizedPnl || 0), 0),
-        totalReturnPct: 0,
+        tpv: calculatedTPV, // Use calculated TPV from actual market prices
+        costBasis: calculatedCostBasis,
+        totalReturn: calculatedTPV - calculatedCostBasis,
+        totalReturnPct: calculatedCostBasis > 0 ? ((calculatedTPV - calculatedCostBasis) / calculatedCostBasis) * 100 : 0,
         holdings: enriched.map(h => ({
           symbol: h.symbol,
           shares: h.totalShares,
@@ -249,17 +258,23 @@ export async function GET(req: NextRequest) {
         walletBalance: bal,
         lastUpdated: Date.now(),
       }
-      mtm.totalReturnPct = mtm.costBasis > 0 ? (mtm.totalReturn / mtm.costBasis) * 100 : 0
+      
+      // CRITICAL: Log to verify we're saving real values
+      console.log(`[portfolio] Saving snapshot with REAL tpv: $${mtm.tpv.toLocaleString()}, costBasis: $${mtm.costBasis.toLocaleString()}, return: ${mtm.totalReturnPct.toFixed(2)}%`)
       
       // Save snapshot asynchronously (don't block response)
       savePortfolioSnapshot(userId, mtm).catch(err => {
         console.error('Error saving portfolio snapshot:', err)
       })
+    } else {
+      if (!hasRealPrices) {
+        console.log(`[portfolio] Skipping snapshot: No real prices (all holdings using costBasis fallback)`)
+      } else if (Math.abs(calculatedTPV - calculatedCostBasis) <= 0.01) {
+        console.log(`[portfolio] Skipping snapshot: tpv=$${calculatedTPV.toLocaleString()} equals costBasis (no market movement)`)
+      }
     }
     
-    // Calculate totals from enriched holdings
-    const calculatedCostBasis = enriched.reduce((sum, h) => sum + (h.totalCost || 0), 0)
-    const calculatedTPV = enriched.reduce((sum, h) => sum + (h.totalValue || 0), 0)
+    // Calculate totals from enriched holdings (reuse variables already calculated above)
     const calculatedReturn = calculatedTPV - calculatedCostBasis
     const calculatedReturnPct = calculatedCostBasis > 0 ? (calculatedReturn / calculatedCostBasis) * 100 : 0
     

@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await getUserId()
     if (!userId) {
+      console.error('[Timeseries API] Unauthorized - no userId')
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
@@ -56,7 +57,23 @@ export async function GET(req: NextRequest) {
     const apiRange = rangeMap[rangeKey] || rangeKey || '1d'
     
     // Get snapshots from database (handles all ranges with proper time windows and downsampling)
-    const { snapshots, startTime, endTime, range: normalizedRange, sections } = await getPortfolioSnapshots(userId, apiRange, gran)
+    let snapshots: any[] = []
+    let startTime: number = Date.now()
+    let endTime: number = Date.now()
+    let normalizedRange: string = apiRange
+    let sections: number[] = []
+    
+    try {
+      const result = await getPortfolioSnapshots(userId, apiRange, gran)
+      snapshots = result.snapshots || []
+      startTime = result.startTime || Date.now()
+      endTime = result.endTime || Date.now()
+      normalizedRange = result.range || apiRange
+      sections = result.sections || []
+    } catch (error: any) {
+      console.error('[Timeseries API] Error fetching snapshots:', error)
+      // Continue with empty snapshots - will use fallback logic
+    }
     
     // Get sections - for 1H, ensure exactly 60 minutes from startTime to endTime
     let sectionTimestamps = sections.length > 0
@@ -196,28 +213,69 @@ export async function GET(req: NextRequest) {
         })
       }
       
-    // Convert snapshots to series format
-    // CRITICAL: Use ACTUAL snapshot values - each point shows portfolio value at that specific time
-    // snapshot.tpv is the ACTUAL portfolio value when that snapshot was taken
-    // FIX: If tpv = 0 but costBasis > 0, use costBasis (snapshot was saved incorrectly)
-    const series = snapshots.map((snapshot, index) => {
-      // FIX: If tpv is 0 but we have costBasis, use costBasis (data corruption fix)
-      const actualTpv = snapshot.tpv > 0 ? snapshot.tpv : (snapshot.costBasis > 0 ? snapshot.costBasis : 0)
+    // CRITICAL: Use ACTUAL database snapshot values - map 1:1 from DB to chart
+    // Each snapshot = one point on the chart with its ACTUAL timestamp and tpv value
+    // This preserves history: if portfolio was $8,001,000 at 12:00 and $8,000,000 at 12:05, both show
+    
+    // DEBUG: Log what we got from DB
+    console.log(`[Timeseries API] Received ${snapshots.length} snapshots from DB`)
+    if (snapshots.length > 0) {
+      const sampleSnapshots = snapshots.slice(0, 5).map(s => ({
+        timestamp: new Date(s.timestamp).toISOString(),
+        tpv: s.tpv,
+        costBasis: s.costBasis,
+        totalReturn: s.totalReturn
+      }))
+      console.log(`[Timeseries API] Sample snapshots:`, JSON.stringify(sampleSnapshots, null, 2))
+      
+      const zeroTpvCount = snapshots.filter(s => s.tpv === 0).length
+      const nonZeroTpvCount = snapshots.filter(s => s.tpv > 0).length
+      console.log(`[Timeseries API] Snapshots with tpv=0: ${zeroTpvCount}, tpv>0: ${nonZeroTpvCount}`)
+    }
+    
+    // CRITICAL: Filter out snapshots with tpv=0 AND costBasis=0 (completely invalid)
+    // If tpv=0 but costBasis>0, we'll use costBasis as the portfolio value (fallback)
+    const validSnapshots = snapshots.filter(s => {
+      const hasValue = s.tpv > 0 || s.costBasis > 0
+      if (!hasValue) {
+        console.warn(`[Timeseries API] Filtering out invalid snapshot at ${new Date(s.timestamp).toISOString()}: tpv=${s.tpv}, costBasis=${s.costBasis}`)
+      }
+      return hasValue
+    })
+    
+    if (validSnapshots.length === 0) {
+      console.error('[Timeseries API] ERROR: No valid snapshots found - all have tpv=0 and costBasis=0')
+      console.error('[Timeseries API] This means snapshots were saved incorrectly or portfolio has no positions')
+    }
+    
+    // Map each snapshot directly to a chart point - NO section mapping, use ACTUAL timestamps
+    // CRITICAL: Each point must have the ACTUAL portfolio value from the snapshot at that time
+    const series = validSnapshots.map((snapshot, index) => {
+      // Use ACTUAL snapshot.tpv from database - this is the portfolio value at that exact time
+      // If tpv=0 but costBasis>0, use costBasis (data was saved before prices loaded)
+      // This ensures we NEVER return 0 for portfolio value if we have valid data
+      const actualTpv = snapshot.tpv > 0 ? snapshot.tpv : snapshot.costBasis
+      
+      // CRITICAL VALIDATION: If actualTpv is still 0, something is very wrong
+      if (actualTpv === 0) {
+        console.error(`[Timeseries API] ERROR: Snapshot at ${new Date(snapshot.timestamp).toISOString()} has tpv=0 and costBasis=0 - this should have been filtered out!`)
+      }
+      
+      // Calculate returns based on actual values
       const actualReturn = snapshot.totalReturn !== 0 ? snapshot.totalReturn : (actualTpv - snapshot.costBasis)
       const actualReturnPct = snapshot.totalReturnPct !== 0 ? snapshot.totalReturnPct : 
         (snapshot.costBasis > 0 ? ((actualTpv - snapshot.costBasis) / snapshot.costBasis) * 100 : 0)
       
       // Calculate delta from start (first snapshot)
-      const firstTpv = snapshots[0].tpv > 0 ? snapshots[0].tpv : (snapshots[0].costBasis > 0 ? snapshots[0].costBasis : 0)
+      const firstTpv = validSnapshots[0].tpv > 0 ? validSnapshots[0].tpv : validSnapshots[0].costBasis
       const deltaFromStart$ = actualTpv - firstTpv
       const deltaFromStartPct = firstTpv > 0 ? (deltaFromStart$ / firstTpv) * 100 : 0
       
-      // Use ACTUAL snapshot values - these show what happened historically
-      // snapshot.timestamp is the section timestamp (different for each point)
-      // actualTpv is the ACTUAL portfolio value at that time (or costBasis if tpv was 0)
+      // CRITICAL: Use ACTUAL snapshot timestamp and tpv - this is the historical record
+      // Example: snapshot at 12:00 PM with tpv=$8,001,000 → point at (12:00 PM, $8,001,000)
       return {
-        t: snapshot.timestamp, // X-axis: timestamp (time) - different for each point
-        portfolio: actualTpv, // Y-axis: ACTUAL portfolio value at this time (preserves historical movement)
+        t: snapshot.timestamp, // X-axis: ACTUAL timestamp from DB (when snapshot was saved)
+        portfolio: actualTpv, // Y-axis: ACTUAL portfolio value at that time (from DB snapshot)
         portfolioAbs: actualTpv,
         costBasis: snapshot.costBasis,
         costBasisAbs: snapshot.costBasis,
@@ -225,8 +283,8 @@ export async function GET(req: NextRequest) {
         netInvestedAbs: snapshot.costBasis,
         deltaFromStart$,
         deltaFromStartPct,
-        overallReturn$: actualReturn, // Actual return at that time
-        overallReturnPct: actualReturnPct, // Actual return % at that time
+        overallReturn$: actualReturn,
+        overallReturnPct: actualReturnPct,
         holdingsCount: snapshot.holdingsCount
       }
     })
@@ -234,17 +292,21 @@ export async function GET(req: NextRequest) {
     // Ensure series is sorted by timestamp ASC (should already be sorted, but safety check)
     series.sort((a, b) => a.t - b.t)
     
-    // CRITICAL: Preserve ACTUAL snapshot values from database
-    // Each point shows the portfolio value at that specific time (from DB snapshot)
-    // Only update the LAST point if it's actually the most recent point (within last 5 seconds)
+    // CRITICAL: Preserve ALL historical snapshot values - DO NOT overwrite!
+    // Each point already has the ACTUAL portfolio value from the database at that time
+    // Example: point at 12:00 PM has tpv=$8,001,000 → shows $8,001,000, not current value
+    
+    // Only update the LAST point if it's very recent (within 10 seconds) to show live updates
+    // All other points keep their historical DB values forever
     if (series.length > 0) {
       const lastSnapshotTime = series[series.length - 1].t
       const now = Date.now()
-      const isLastPointRecent = (now - lastSnapshotTime) < 5000 // Within last 5 seconds
+      const secondsSinceLastSnapshot = (now - lastSnapshotTime) / 1000
+      const isLastPointVeryRecent = secondsSinceLastSnapshot < 10 // Within last 10 seconds
       
-      // Only update last point if it's actually recent (most recent snapshot)
-      // This preserves historical values: 1:20 PM shows value at 1:20 PM, not current value
-      if (isLastPointRecent) {
+      // Only update last point if it's very recent AND we have valid current data
+      // This allows the chart to show live updates while preserving all history
+      if (isLastPointVeryRecent) {
         const positions = listPositions(userId)
         if (positions.length > 0) {
           try {
@@ -260,20 +322,26 @@ export async function GET(req: NextRequest) {
             if (portfolioRes.ok) {
               const currentData = await portfolioRes.json()
               const currentTpv = currentData?.totals?.tpv || 0
-              const currentCostBasis = currentData?.totals?.costBasis || series[0].costBasis
-              const currentReturn = currentTpv - currentCostBasis
-              const currentReturnPct = currentCostBasis > 0 ? (currentReturn / currentCostBasis) * 100 : 0
               
-              // Only update if we have a valid current value
+              // Only update if we have a valid current value AND it's different from last snapshot
               if (currentTpv > 0) {
                 const lastPoint = series[series.length - 1]
-                // Update ONLY the last point (most recent) with current dashboard value
-                // All other points keep their ACTUAL historical snapshot values from DB
-                lastPoint.portfolio = currentTpv
-                lastPoint.portfolioAbs = currentTpv
-                lastPoint.overallReturn$ = currentReturn
-                lastPoint.overallReturnPct = currentReturnPct
-                lastPoint.t = endTime // Use current time (now) for most recent point
+                const lastSnapshotTpv = lastPoint.portfolio
+                
+                // Only update if value changed significantly (avoid unnecessary overwrites)
+                if (Math.abs(currentTpv - lastSnapshotTpv) > 0.01) {
+                  const currentCostBasis = currentData?.totals?.costBasis || lastPoint.costBasis
+                  const currentReturn = currentTpv - currentCostBasis
+                  const currentReturnPct = currentCostBasis > 0 ? (currentReturn / currentCostBasis) * 100 : 0
+                  
+                  // Update ONLY the last point with current dashboard value
+                  // All other points keep their ACTUAL historical snapshot values from DB
+                  lastPoint.portfolio = currentTpv
+                  lastPoint.portfolioAbs = currentTpv
+                  lastPoint.overallReturn$ = currentReturn
+                  lastPoint.overallReturnPct = currentReturnPct
+                  lastPoint.t = now // Use current time for most recent point
+                }
               }
             }
           } catch (err: any) {
@@ -283,8 +351,8 @@ export async function GET(req: NextRequest) {
         }
       } else {
         // Last point is not recent - preserve ACTUAL snapshot value from DB
-        // This ensures 1:20 PM shows value at 1:20 PM, not current value
-        console.log(`[Timeseries] Last snapshot is ${Math.round((now - lastSnapshotTime) / 1000)}s old - preserving DB value`)
+        // This ensures historical points show their actual values, not current value
+        console.log(`[Timeseries] Last snapshot is ${Math.round(secondsSinceLastSnapshot)}s old - preserving DB value $${series[series.length - 1].portfolio.toLocaleString()}`)
       }
     }
     
@@ -294,14 +362,16 @@ export async function GET(req: NextRequest) {
       if (series.length >= 2) {
         const firstPoint = series[0]
         const lastPoint = series[series.length - 1]
-        console.log(`[Timeseries] First point: ${new Date(firstPoint.t).toISOString()} = $${firstPoint.portfolio.toLocaleString()}`)
-        console.log(`[Timeseries] Last point: ${new Date(lastPoint.t).toISOString()} = $${lastPoint.portfolio.toLocaleString()}`)
-        console.log(`[Timeseries] Value difference: $${(lastPoint.portfolio - firstPoint.portfolio).toLocaleString()}`)
+        if (firstPoint && lastPoint && typeof firstPoint.portfolio === 'number' && typeof lastPoint.portfolio === 'number') {
+          console.log(`[Timeseries] First point: ${new Date(firstPoint.t).toISOString()} = $${firstPoint.portfolio.toLocaleString()}`)
+          console.log(`[Timeseries] Last point: ${new Date(lastPoint.t).toISOString()} = $${lastPoint.portfolio.toLocaleString()}`)
+          console.log(`[Timeseries] Value difference: $${(lastPoint.portfolio - firstPoint.portfolio).toLocaleString()}`)
+        }
       }
       // Log a few sample points to verify they have different values
       const sampleIndices = [0, Math.floor(series.length / 2), series.length - 1]
       sampleIndices.forEach(idx => {
-        if (series[idx]) {
+        if (series[idx] && typeof series[idx].portfolio === 'number') {
           const point = series[idx]
           console.log(`[Timeseries] Sample point ${idx}: ${new Date(point.t).toISOString()} = $${point.portfolio.toLocaleString()}`)
         }
@@ -309,16 +379,17 @@ export async function GET(req: NextRequest) {
     }
     
     // Debug: Log first and last timestamps to verify they're different
-    if (series.length > 1) {
+    if (series.length > 1 && series[0] && series[series.length - 1]) {
       const firstTime = new Date(series[0].t).toISOString()
       const lastTime = new Date(series[series.length - 1].t).toISOString()
-      const firstValue = series[0].portfolio
-      const lastValue = series[series.length - 1].portfolio
+      const firstValue = series[0].portfolio || 0
+      const lastValue = series[series.length - 1].portfolio || 0
       console.log(`[Portfolio Timeseries] Range: ${rawRange}, Points: ${series.length}, First: ${firstTime} ($${firstValue.toLocaleString()}), Last: ${lastTime} ($${lastValue.toLocaleString()})`)
     }
 
-    // Get totals from latest snapshot
-    const latestSnapshot = snapshots[snapshots.length - 1]
+    // Get totals from latest snapshot (or use series data if snapshots empty)
+    const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null
+    const lastSeriesPoint = series.length > 0 ? series[series.length - 1] : null
     
     return NextResponse.json({
       range: rawRange,
@@ -328,17 +399,17 @@ export async function GET(req: NextRequest) {
       sections: sectionTimestamps,
       window: { startTime, endTime },
       totals: {
-        tpv: latestSnapshot.tpv,
-        costBasis: latestSnapshot.costBasis,
-        totalReturn: latestSnapshot.totalReturn,
-        totalReturnPct: latestSnapshot.totalReturnPct
+        tpv: latestSnapshot?.tpv || lastSeriesPoint?.portfolio || 0,
+        costBasis: latestSnapshot?.costBasis || lastSeriesPoint?.costBasis || 0,
+        totalReturn: latestSnapshot?.totalReturn || lastSeriesPoint?.overallReturn$ || 0,
+        totalReturnPct: latestSnapshot?.totalReturnPct || lastSeriesPoint?.overallReturnPct || 0
       },
       meta: {
-        symbols: latestSnapshot.details?.holdings?.map((h: any) => h.symbol) || [],
+        symbols: latestSnapshot?.details?.holdings?.map((h: any) => h.symbol) || [],
         hasFx: false,
-        lastQuoteTs: new Date(latestSnapshot.timestamp).toISOString(),
+        lastQuoteTs: latestSnapshot?.timestamp ? new Date(latestSnapshot.timestamp).toISOString() : new Date().toISOString(),
         startIndex: 0,
-        startPortfolioAbs: snapshots[0]?.tpv || 0
+        startPortfolioAbs: snapshots[0]?.tpv || series[0]?.portfolio || 0
       }
     })
   } catch (error: any) {
