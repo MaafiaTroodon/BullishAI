@@ -163,19 +163,19 @@ export function PortfolioChart() {
     }
     
     // Map timeseries data from PostgreSQL snapshots
-    // CRITICAL: Each point must have a different timestamp (numeric) for Recharts
-    // The timestamp is already in milliseconds from the database
+    // CRITICAL: Preserve ACTUAL snapshot values - these show historical portfolio movement
+    // Each point shows the portfolio value at that specific time (from database)
     const mapped = timeseriesData.series.map((p: any) => {
-      // Get portfolio value - try multiple fields
+      // Get portfolio value - prioritize actual snapshot values
+      // p.portfolio is the ACTUAL portfolio value from the snapshot at that time
       const portfolioVal = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
       const costBasisVal = p.costBasis || p.costBasisAbs || p.netInvested || p.netInvestedAbs || 0
       
-      // Debug logging for first point
-      if (timeseriesData.series.indexOf(p) === 0) {
-        console.log('[Chart Points] First point data:', {
+      // Debug logging for first and last points
+      if (timeseriesData.series.indexOf(p) === 0 || timeseriesData.series.indexOf(p) === timeseriesData.series.length - 1) {
+        console.log(`[Chart Points] ${timeseriesData.series.indexOf(p) === 0 ? 'First' : 'Last'} point:`, {
           portfolio: p.portfolio,
           portfolioAbs: p.portfolioAbs,
-          portfolioValue: p.portfolioValue,
           value: p.value,
           finalPortfolioVal: portfolioVal,
           t: p.t,
@@ -184,17 +184,17 @@ export function PortfolioChart() {
       }
       
       return {
-        timestamp: p.t, // Numeric timestamp in milliseconds
-        portfolioValue: portfolioVal, // Portfolio value from snapshot
+        timestamp: p.t, // X-axis: timestamp (time) - different for each point
+        portfolioValue: portfolioVal, // Y-axis: ACTUAL portfolio value at this time (preserves historical movement)
         costBasis: costBasisVal,
         netInvested: p.netInvested || p.netInvestedAbs || costBasisVal,
         deltaFromStart$: p.deltaFromStart$ || 0,
         deltaFromStartPct: p.deltaFromStartPct || 0,
         overallReturn$: p.overallReturn$ || 0,
         overallReturnPct: p.overallReturnPct || 0,
-        // Keep 't' and 'value' for backward compatibility with existing chart code
+        // Keep 't' and 'value' for backward compatibility
         t: p.t,
-        value: portfolioVal
+        value: portfolioVal // ACTUAL snapshot value
       }
     })
     
@@ -219,21 +219,27 @@ export function PortfolioChart() {
     const summaryTotalReturn = pf?.totals?.totalReturn || timeseriesData?.totals?.totalReturn || 0
     const summaryTotalReturnPct = pf?.totals?.totalReturnPct || timeseriesData?.totals?.totalReturnPct || 0
     
-    // Use ACTUAL snapshot values - each point shows portfolio value at that specific time
-    // Only update the LAST point with current dashboard value (most recent)
-    if (sorted.length > 0 && summaryTpv > 0) {
-      // Update ONLY the last point with current dashboard value
-      // All other points keep their historical snapshot values
+    // CRITICAL: Use ACTUAL database snapshot values - DO NOT overwrite!
+    // Each point already has the portfolio value from the database snapshot at that time
+    // The API (/api/portfolio/timeseries) already handles updating only the last point
+    // We preserve all historical values here - 1:20 PM shows value at 1:20 PM from DB
+    // Only update the LAST point if it's very recent (within 5 seconds) and we have current dashboard value
+    if (sorted.length > 0) {
       const lastPoint = sorted[sorted.length - 1]
-      lastPoint.portfolioValue = summaryTpv // Current dashboard value
-      lastPoint.value = summaryTpv
-      lastPoint.costBasis = summaryCostBasis || lastPoint.costBasis || 0
-      lastPoint.overallReturn$ = summaryTotalReturn
-      lastPoint.overallReturnPct = summaryTotalReturnPct
+      const now = Date.now()
+      const lastPointTime = lastPoint.timestamp || lastPoint.t
+      const isLastPointRecent = (now - lastPointTime) < 5000 // Within last 5 seconds
       
-      // Ensure all other points use their actual snapshot values (don't overwrite)
-      // Each point already has the portfolio value from when that snapshot was taken
-      // This way, hovering at 6pm shows value at 6pm, hovering at 10pm shows value at 10pm
+      // Only update last point if it's actually recent AND we have a valid dashboard value
+      // This ensures historical points (1:20 PM, 2:00 PM, etc.) keep their DB snapshot values
+      if (isLastPointRecent && summaryTpv > 0) {
+        lastPoint.portfolioValue = summaryTpv // Current dashboard value (most recent only)
+        lastPoint.value = summaryTpv
+        lastPoint.costBasis = summaryCostBasis || lastPoint.costBasis || 0
+        lastPoint.overallReturn$ = summaryTotalReturn
+        lastPoint.overallReturnPct = summaryTotalReturnPct
+      }
+      // All other points (including 1:20 PM, 2:00 PM, etc.) keep their ACTUAL DB snapshot values
     }
 
     // Recharts needs at least two points to render a line.

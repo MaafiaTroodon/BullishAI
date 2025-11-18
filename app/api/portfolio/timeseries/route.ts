@@ -197,29 +197,36 @@ export async function GET(req: NextRequest) {
       }
       
     // Convert snapshots to series format
-    // CRITICAL: Each snapshot.timestamp is already a section timestamp (different for each point)
-    // This ensures the X-axis shows real time progression, not "13 Nov to 13 Nov"
+    // CRITICAL: Use ACTUAL snapshot values - each point shows portfolio value at that specific time
+    // snapshot.tpv is the ACTUAL portfolio value when that snapshot was taken
+    // FIX: If tpv = 0 but costBasis > 0, use costBasis (snapshot was saved incorrectly)
     const series = snapshots.map((snapshot, index) => {
-      // Calculate delta from start (first snapshot)
-      const deltaFromStart$ = snapshot.tpv - (snapshots[0].tpv || snapshot.costBasis)
-      const deltaFromStartPct = snapshots[0].tpv > 0 
-        ? (deltaFromStart$ / snapshots[0].tpv) * 100 
-        : 0
+      // FIX: If tpv is 0 but we have costBasis, use costBasis (data corruption fix)
+      const actualTpv = snapshot.tpv > 0 ? snapshot.tpv : (snapshot.costBasis > 0 ? snapshot.costBasis : 0)
+      const actualReturn = snapshot.totalReturn !== 0 ? snapshot.totalReturn : (actualTpv - snapshot.costBasis)
+      const actualReturnPct = snapshot.totalReturnPct !== 0 ? snapshot.totalReturnPct : 
+        (snapshot.costBasis > 0 ? ((actualTpv - snapshot.costBasis) / snapshot.costBasis) * 100 : 0)
       
-      // CRITICAL: snapshot.timestamp is the section timestamp (different for each section)
-      // This creates a timeline array with different timestamps: [startTime, startTime+step, ..., endTime]
+      // Calculate delta from start (first snapshot)
+      const firstTpv = snapshots[0].tpv > 0 ? snapshots[0].tpv : (snapshots[0].costBasis > 0 ? snapshots[0].costBasis : 0)
+      const deltaFromStart$ = actualTpv - firstTpv
+      const deltaFromStartPct = firstTpv > 0 ? (deltaFromStart$ / firstTpv) * 100 : 0
+      
+      // Use ACTUAL snapshot values - these show what happened historically
+      // snapshot.timestamp is the section timestamp (different for each point)
+      // actualTpv is the ACTUAL portfolio value at that time (or costBasis if tpv was 0)
       return {
-        t: snapshot.timestamp, // This is the section timestamp, ensuring each point has a different timestamp
-        portfolio: snapshot.tpv,
-        portfolioAbs: snapshot.tpv,
+        t: snapshot.timestamp, // X-axis: timestamp (time) - different for each point
+        portfolio: actualTpv, // Y-axis: ACTUAL portfolio value at this time (preserves historical movement)
+        portfolioAbs: actualTpv,
         costBasis: snapshot.costBasis,
         costBasisAbs: snapshot.costBasis,
         netInvested: snapshot.costBasis,
         netInvestedAbs: snapshot.costBasis,
         deltaFromStart$,
         deltaFromStartPct,
-        overallReturn$: snapshot.totalReturn,
-        overallReturnPct: snapshot.totalReturnPct,
+        overallReturn$: actualReturn, // Actual return at that time
+        overallReturnPct: actualReturnPct, // Actual return % at that time
         holdingsCount: snapshot.holdingsCount
       }
     })
@@ -227,46 +234,78 @@ export async function GET(req: NextRequest) {
     // Ensure series is sorted by timestamp ASC (should already be sorted, but safety check)
     series.sort((a, b) => a.t - b.t)
     
-    // Always ensure the LAST point shows the CURRENT portfolio value (rapid updates)
+    // CRITICAL: Preserve ACTUAL snapshot values from database
+    // Each point shows the portfolio value at that specific time (from DB snapshot)
+    // Only update the LAST point if it's actually the most recent point (within last 5 seconds)
     if (series.length > 0) {
-      const positions = listPositions(userId)
-      if (positions.length > 0) {
-        try {
-          const protocol = req.headers.get('x-forwarded-proto') || 'http'
-          const host = req.headers.get('host') || 'localhost:3000'
-          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
-          
-          const portfolioRes = await fetch(`${baseUrl}/api/portfolio?enrich=1`, {
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json' }
-          })
-          
-          if (portfolioRes.ok) {
-            const currentData = await portfolioRes.json()
-            const currentTpv = currentData?.totals?.tpv || 0
-            const currentCostBasis = currentData?.totals?.costBasis || series[0].costBasis
-            const currentReturn = currentTpv - currentCostBasis
-            const currentReturnPct = currentCostBasis > 0 ? (currentReturn / currentCostBasis) * 100 : 0
+      const lastSnapshotTime = series[series.length - 1].t
+      const now = Date.now()
+      const isLastPointRecent = (now - lastSnapshotTime) < 5000 // Within last 5 seconds
+      
+      // Only update last point if it's actually recent (most recent snapshot)
+      // This preserves historical values: 1:20 PM shows value at 1:20 PM, not current value
+      if (isLastPointRecent) {
+        const positions = listPositions(userId)
+        if (positions.length > 0) {
+          try {
+            const protocol = req.headers.get('x-forwarded-proto') || 'http'
+            const host = req.headers.get('host') || 'localhost:3000'
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
             
-            // Update the last point with CURRENT portfolio value (rapid refresh)
-            const lastPoint = series[series.length - 1]
-            lastPoint.portfolio = currentTpv
-            lastPoint.portfolioAbs = currentTpv
-            lastPoint.overallReturn$ = currentReturn
-            lastPoint.overallReturnPct = currentReturnPct
-            lastPoint.t = endTime // Use current time (now)
+            const portfolioRes = await fetch(`${baseUrl}/api/portfolio?enrich=1`, {
+              cache: 'no-store',
+              headers: { 'Content-Type': 'application/json' }
+            })
             
-            // If current value is different from previous, add it as a new point
-            const prevValue = series.length > 1 ? series[series.length - 2].portfolio : series[0].portfolio
-            if (Math.abs(currentTpv - prevValue) > 0.01 && currentTpv > 0) {
-              // Value changed - update last point timestamp to now
-              lastPoint.t = endTime
+            if (portfolioRes.ok) {
+              const currentData = await portfolioRes.json()
+              const currentTpv = currentData?.totals?.tpv || 0
+              const currentCostBasis = currentData?.totals?.costBasis || series[0].costBasis
+              const currentReturn = currentTpv - currentCostBasis
+              const currentReturnPct = currentCostBasis > 0 ? (currentReturn / currentCostBasis) * 100 : 0
+              
+              // Only update if we have a valid current value
+              if (currentTpv > 0) {
+                const lastPoint = series[series.length - 1]
+                // Update ONLY the last point (most recent) with current dashboard value
+                // All other points keep their ACTUAL historical snapshot values from DB
+                lastPoint.portfolio = currentTpv
+                lastPoint.portfolioAbs = currentTpv
+                lastPoint.overallReturn$ = currentReturn
+                lastPoint.overallReturnPct = currentReturnPct
+                lastPoint.t = endTime // Use current time (now) for most recent point
+              }
             }
+          } catch (err: any) {
+            console.error('Failed to fetch current portfolio for timeseries:', err.message)
+            // Don't overwrite historical values if fetch fails - keep DB snapshot values
           }
-        } catch (err: any) {
-          console.error('Failed to fetch current portfolio for timeseries:', err.message)
         }
+      } else {
+        // Last point is not recent - preserve ACTUAL snapshot value from DB
+        // This ensures 1:20 PM shows value at 1:20 PM, not current value
+        console.log(`[Timeseries] Last snapshot is ${Math.round((now - lastSnapshotTime) / 1000)}s old - preserving DB value`)
       }
+    }
+    
+    // Debug: Log snapshot values to verify we're using ACTUAL DB values
+    if (series.length > 0) {
+      console.log(`[Timeseries] Total snapshots: ${series.length}`)
+      if (series.length >= 2) {
+        const firstPoint = series[0]
+        const lastPoint = series[series.length - 1]
+        console.log(`[Timeseries] First point: ${new Date(firstPoint.t).toISOString()} = $${firstPoint.portfolio.toLocaleString()}`)
+        console.log(`[Timeseries] Last point: ${new Date(lastPoint.t).toISOString()} = $${lastPoint.portfolio.toLocaleString()}`)
+        console.log(`[Timeseries] Value difference: $${(lastPoint.portfolio - firstPoint.portfolio).toLocaleString()}`)
+      }
+      // Log a few sample points to verify they have different values
+      const sampleIndices = [0, Math.floor(series.length / 2), series.length - 1]
+      sampleIndices.forEach(idx => {
+        if (series[idx]) {
+          const point = series[idx]
+          console.log(`[Timeseries] Sample point ${idx}: ${new Date(point.t).toISOString()} = $${point.portfolio.toLocaleString()}`)
+        }
+      })
     }
     
     // Debug: Log first and last timestamps to verify they're different

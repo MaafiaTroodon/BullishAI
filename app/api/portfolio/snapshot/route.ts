@@ -18,13 +18,25 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
+    
+    // CRITICAL: Don't save snapshots with tpv=0 if we have costBasis (invalid data)
+    // Only save if tpv > 0 OR if tpv=0 but costBasis is also 0 (empty portfolio)
+    const tpv = parseFloat(body.tpv) || 0
+    const costBasis = parseFloat(body.costBasis) || 0
+    
+    // Skip saving if tpv=0 but costBasis>0 (invalid snapshot - prices not loaded yet)
+    if (tpv === 0 && costBasis > 0) {
+      console.warn(`[Snapshot] Skipping save: tpv=0 but costBasis=$${costBasis.toLocaleString()} (prices not loaded)`)
+      return NextResponse.json({ success: false, reason: 'tpv_zero_with_cost_basis' })
+    }
+    
     const snapshot = {
-      tpv: body.tpv || 0,
-      costBasis: body.costBasis || 0,
-      totalReturn: body.totalReturn || 0,
-      totalReturnPct: body.totalReturnPct || 0,
+      tpv,
+      costBasis,
+      totalReturn: parseFloat(body.totalReturn) || 0,
+      totalReturnPct: parseFloat(body.totalReturnPct) || 0,
       holdings: body.holdings || [],
-      walletBalance: body.walletBalance || 0,
+      walletBalance: parseFloat(body.walletBalance) || 0,
       lastUpdated: body.lastUpdated || Date.now(),
     }
 

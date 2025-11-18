@@ -180,19 +180,35 @@ export async function getPortfolioSnapshots(
           parsedDetails = null
         }
       }
-      return {
+      const snapshot = {
         id: row.id,
         userId: row.userId,
         timestamp: Math.floor(row.timestamp),
-        tpv: row.tpv,
-        walletBalance: row.walletBalance,
-        costBasis: row.costBasis,
-        totalReturn: row.totalReturn,
-        totalReturnPct: row.totalReturnPct,
+        tpv: parseFloat(row.tpv) || 0, // Ensure it's a number
+        walletBalance: parseFloat(row.walletBalance) || 0,
+        costBasis: parseFloat(row.costBasis) || 0,
+        totalReturn: parseFloat(row.totalReturn) || 0,
+        totalReturnPct: parseFloat(row.totalReturnPct) || 0,
         holdingsCount: row.holdingsCount || 0,
         details: parsedDetails,
       }
+      
+      // CRITICAL DEBUG: Log if we find snapshots with tpv = 0
+      if (snapshot.tpv === 0 && snapshot.costBasis > 0) {
+        console.error(`[DB SNAPSHOT ERROR] Found snapshot with tpv=0 but costBasis=${snapshot.costBasis} at ${new Date(snapshot.timestamp).toISOString()}`)
+      }
+      
+      return snapshot
     })
+    
+    // CRITICAL DEBUG: Log what we got from DB
+    console.log(`[DB QUERY] Found ${snapshots.length} snapshots for range ${normalizedRange}`)
+    if (snapshots.length > 0) {
+      const sample = snapshots[0]
+      console.log(`[DB QUERY] Sample snapshot: tpv=$${sample.tpv.toLocaleString()}, costBasis=$${sample.costBasis.toLocaleString()}, timestamp=${new Date(sample.timestamp).toISOString()}`)
+      const nonZeroTpv = snapshots.filter(s => s.tpv > 0).length
+      console.log(`[DB QUERY] Snapshots with tpv > 0: ${nonZeroTpv}/${snapshots.length}`)
+    }
 
     // Create evenly spaced sections for the requested window
     const sections = getSectionsForRange(normalizedRange, startTime, endTime)
@@ -211,16 +227,18 @@ export async function getPortfolioSnapshots(
       }
     }
 
-    // Map snapshots to nearest section (one point per section)
-    const sectionedSnapshots = mapSnapshotsToSections(snapshots, sections)
+    // CRITICAL: Use ACTUAL snapshots directly - don't map to sections if it loses data
+    // Each snapshot has: timestamp (actual DB time), tpv (actual portfolio value at that time)
+    // We'll map to sections in the API route for X-axis display, but preserve actual values here
     
-    // Return sorted by timestamp ASC
+    // Return ACTUAL snapshots sorted by timestamp ASC
+    // These are the real historical values from the database
     return {
-      snapshots: sectionedSnapshots.sort((a, b) => a.timestamp - b.timestamp),
+      snapshots: snapshots.sort((a, b) => a.timestamp - b.timestamp), // Use actual snapshots, not sectioned
       startTime,
       endTime,
       range: normalizedRange,
-      sections,
+      sections, // Keep sections for X-axis generation, but use actual snapshot values
     }
   } catch (error: any) {
     if (error.message?.includes('does not exist')) {
@@ -419,26 +437,30 @@ function mapSnapshotsToSections(
     if (snapshotIndex < snapshots.length && snapshots[snapshotIndex].timestamp <= sectionTime) {
       const snapshot = snapshots[snapshotIndex]
       lastKnownSnapshot = snapshot
-      // CRITICAL: Use section time (different for each section) but keep snapshot data
-      // This ensures each point has a DIFFERENT timestamp so the chart moves
-      // Example: sectionTime for 1W might be [Nov 6 14:00, Nov 7 14:00, Nov 8 14:00, ...]
+      // CRITICAL: Use section timestamp for X-axis (evenly spaced: 1:00, 1:05, 1:10, etc.)
+      // But use ACTUAL snapshot.tpv value from database (preserves historical values)
+      // Example: At section 1:20 PM, show the portfolio value from snapshot closest to 1:20 PM
+      // snapshot.tpv is the ACTUAL portfolio value when that snapshot was saved to DB
       mapped.push({
         ...snapshot,
-        timestamp: sectionTime // Use section time, not snapshot time - this creates the timeline
+        timestamp: sectionTime // X-axis: evenly spaced section time (1:00, 1:05, 1:10, etc.)
+        // snapshot.tpv is preserved - this is the ACTUAL value from DB at that time
       })
     } else if (lastKnownSnapshot) {
       // Carry forward last known value if no snapshot for this section
-      // Still use section time so X-axis shows proper time progression
+      // Use section time for X-axis but keep the ACTUAL snapshot value (tpv) from DB
       mapped.push({
         ...lastKnownSnapshot,
-        timestamp: sectionTime // Different timestamp for each section
+        timestamp: sectionTime // X-axis: evenly spaced section time
+        // lastKnownSnapshot.tpv is preserved - this is the ACTUAL value from DB
       })
     } else if (snapshots.length > 0) {
       // If we haven't found any snapshot yet, use the first one
       lastKnownSnapshot = snapshots[0]
       mapped.push({
         ...snapshots[0],
-        timestamp: sectionTime // Use section time, ensuring different timestamp
+        timestamp: sectionTime // X-axis: evenly spaced section time
+        // snapshots[0].tpv is preserved - this is the ACTUAL value from DB
       })
     }
   }
