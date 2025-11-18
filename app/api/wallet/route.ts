@@ -102,6 +102,17 @@ export async function POST(req: NextRequest) {
     
     if (action === 'deposit') {
       const result = await depositToWallet(userId, roundedAmount, method, idempotencyKey)
+      
+      // Create snapshot after wallet change
+      const { listPositions } = await import('@/lib/portfolio')
+      const { calculateMarkToMarket, savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
+      const positions = listPositions(userId)
+      if (positions.length > 0) {
+        calculateMarkToMarket(positions, result.balance, false)
+          .then(mtm => savePortfolioSnapshot(userId, mtm))
+          .catch(err => console.error('Error saving snapshot after deposit:', err))
+      }
+      
       const res = NextResponse.json({ 
         balance: result.balance, 
         transaction: result.transaction 
@@ -111,6 +122,17 @@ export async function POST(req: NextRequest) {
     }
     if (action === 'withdraw') {
       const result = await withdrawFromWallet(userId, roundedAmount, method, idempotencyKey)
+      
+      // Create snapshot after wallet change
+      const { listPositions } = await import('@/lib/portfolio')
+      const { calculateMarkToMarket, savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
+      const positions = listPositions(userId)
+      if (positions.length > 0) {
+        calculateMarkToMarket(positions, result.balance, false)
+          .then(mtm => savePortfolioSnapshot(userId, mtm))
+          .catch(err => console.error('Error saving snapshot after withdraw:', err))
+      }
+      
       const res = NextResponse.json({ 
         balance: result.balance, 
         transaction: result.transaction 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { TradeInputSchema, listPositions, upsertTrade, getWalletBalance, initializeWalletFromBalance, TransactionSchema, syncTransactions, syncWalletTransactions, ensurePortfolioLoaded } from '@/lib/portfolio'
+import { getLatestPortfolioSnapshot, type PortfolioSnapshot } from '@/lib/portfolio-snapshots'
 import { getUserId } from '@/lib/auth-server'
 
 export const runtime = 'nodejs'
@@ -66,41 +67,212 @@ export async function GET(req: NextRequest) {
     return res
   }
 
-  // Use mark-to-market calculation for real-time portfolio valuation
-  const { calculateMarkToMarket, savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
-  
+  const respondWithSnapshot = async (snapshot: PortfolioSnapshot | null, reason: string) => {
+    console.warn(`[portfolio] Falling back to snapshot data (${reason})`)
+    let enriched: any[] = []
+
+    if (snapshot?.details?.holdings && Array.isArray(snapshot.details.holdings) && snapshot.details.holdings.length > 0) {
+      // Use snapshot holdings - these have the actual market values from when snapshot was saved
+      enriched = snapshot.details.holdings.map((h: any) => {
+        const fallbackPosition = items.find(p => p.symbol === h.symbol)
+        const shares = h.shares ?? h.totalShares ?? fallbackPosition?.totalShares ?? 0
+        const avgPrice = h.avgPrice ?? fallbackPosition?.avgPrice ?? 0
+        const baseCost = h.costBasis ?? h.totalCost ?? fallbackPosition?.totalCost ?? (avgPrice * shares || 0)
+        
+        // CRITICAL: Use snapshot's stored marketValue - this is the actual value from when quote was fetched
+        // Don't fall back to cost basis unless marketValue is truly missing
+        const snapshotMarketValue = h.marketValue ?? h.totalValue ?? null
+        const totalValue = (snapshotMarketValue && snapshotMarketValue > 0) 
+          ? snapshotMarketValue 
+          : (baseCost > 0 ? baseCost : 0) // Only use cost if no market value at all
+        
+        const currentPrice = h.currentPrice ?? (shares > 0 && totalValue > 0 ? totalValue / shares : null)
+        const unrealizedPnl = totalValue - baseCost
+        const unrealizedPnlPct = baseCost > 0 ? (unrealizedPnl / baseCost) * 100 : 0
+        
+        return {
+          symbol: h.symbol,
+          totalShares: shares,
+          avgPrice,
+          currentPrice,
+          totalValue,
+          unrealizedPnl,
+          unrealizedPnlPct,
+          totalCost: baseCost,
+          realizedPnl: fallbackPosition?.realizedPnl || 0,
+        }
+      })
+    } else {
+      // No snapshot holdings - use current positions from DB (which have cost basis from transactions)
+      // When quotes fail, use cost basis as value so returns show 0% instead of -100%
+      enriched = items.map((p: any) => {
+        const shares = p.totalShares || 0
+        // CRITICAL: Use totalCost from DB position (calculated from actual buy transactions)
+        const cost = p.totalCost || (p.avgPrice * shares) || 0
+        
+        // Try to get current price/value from position if available (may not exist on Position type)
+        const currentPriceFromPos = p.currentPrice && typeof p.currentPrice === 'number' && p.currentPrice > 0 ? p.currentPrice : null
+        const derivedValueFromPrice = currentPriceFromPos ? currentPriceFromPos * shares : null
+        const hasExistingValue = p.totalValue && typeof p.totalValue === 'number' && p.totalValue > 0
+        
+        // If we have a market value, use it; otherwise use cost basis (so returns show 0%, not -100%)
+        const totalValue = hasExistingValue 
+          ? p.totalValue 
+          : (derivedValueFromPrice && derivedValueFromPrice > 0 
+              ? derivedValueFromPrice 
+              : cost) // Fallback to cost basis if no price available
+        
+        const currentPrice = currentPriceFromPos || (shares > 0 && totalValue > 0 ? totalValue / shares : null)
+        
+        const unrealizedPnl = totalValue - cost
+        const unrealizedPnlPct = cost > 0 ? (unrealizedPnl / cost) * 100 : 0
+        
+        return {
+          ...p,
+          currentPrice,
+          totalValue,
+          unrealizedPnl,
+          unrealizedPnlPct,
+          totalCost: cost,
+        }
+      })
+    }
+
+    const responseBody: any = { items: enriched, wallet: { balance: bal, cap: 1_000_000 } }
+
+    if (snapshot) {
+      responseBody.totals = {
+        tpv: snapshot.tpv,
+        costBasis: snapshot.costBasis,
+        totalReturn: snapshot.totalReturn,
+        totalReturnPct: snapshot.totalReturnPct,
+      }
+      responseBody.lastUpdated = snapshot.timestamp
+    } else {
+      const fallbackCost = enriched.reduce((sum, h: any) => sum + (h.totalCost || 0), 0)
+      const fallbackValue = enriched.reduce((sum, h: any) => sum + (h.totalValue || 0), 0)
+      responseBody.totals = {
+        tpv: fallbackValue,
+        costBasis: fallbackCost,
+        totalReturn: fallbackValue - fallbackCost,
+        totalReturnPct: fallbackCost > 0 ? ((fallbackValue - fallbackCost) / fallbackCost) * 100 : 0,
+      }
+      responseBody.lastUpdated = Date.now()
+    }
+
+    const res = NextResponse.json(responseBody)
+    try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
+    return res
+  }
+
+  // Check for recent snapshot first (within last hour) - use it if quotes are failing
+  const snapshot = await getLatestPortfolioSnapshot(userId)
+  const snapshotAge = snapshot ? Date.now() - snapshot.timestamp : Infinity
+  const isSnapshotRecent = snapshotAge < 60 * 60 * 1000 // 1 hour
+
+  // Fetch prices from /api/stocks/${symbol} for each holding (same as stock page - has fallback logic)
+  // This ensures we get prices even when /api/quote fails (502 errors)
   try {
-    const mtm = await calculateMarkToMarket(items, bal, false) // R3A: wallet excluded from TPV
+    const protocol = req.headers.get('x-forwarded-proto') || 'http'
+    const host = req.headers.get('host') || 'localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
     
-    // Save snapshot asynchronously (don't block response)
-    savePortfolioSnapshot(userId, mtm).catch(err => {
-      console.error('Error saving portfolio snapshot:', err)
-    })
-    
-    // Convert holdings to enriched format
-    const enriched = mtm.holdings.map(h => ({
-      symbol: h.symbol,
-      totalShares: h.shares,
-      avgPrice: h.avgPrice,
-      currentPrice: h.currentPrice,
-      totalValue: h.marketValue,
-      unrealizedPnl: h.unrealizedPnl,
-      unrealizedPnlPct: h.unrealizedPnlPct,
-      totalCost: h.costBasis,
-      // Keep original position fields
-      realizedPnl: items.find(p => p.symbol === h.symbol)?.realizedPnl || 0,
+    // Fetch prices for all holdings in parallel (same endpoint stock page uses)
+    const enriched = await Promise.all(items.map(async (p: any) => {
+      const shares = p.totalShares || 0
+      const costBasis = p.totalCost || (p.avgPrice * shares) || 0
+      
+      // Fetch price from /api/stocks/${symbol} (has fallback to candles if quote fails)
+      let currentPrice: number | null = null
+      try {
+        const stockRes = await fetch(`${baseUrl}/api/stocks/${p.symbol}`, {
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        if (stockRes.ok) {
+          const stockData = await stockRes.json()
+          currentPrice = stockData?.quote?.price || null
+        }
+      } catch (err: any) {
+        console.error(`Failed to fetch stock price for ${p.symbol}:`, err.message)
+      }
+      
+      // Calculate market value: use currentPrice if available, otherwise use costBasis (so returns show 0%, not -100%)
+      const marketValue = currentPrice && currentPrice > 0 
+        ? currentPrice * shares 
+        : costBasis
+      
+      const unrealizedPnl = marketValue - costBasis
+      const unrealizedPnlPct = costBasis > 0 ? (unrealizedPnl / costBasis) * 100 : 0
+      
+      return {
+        symbol: p.symbol,
+        totalShares: shares,
+        avgPrice: p.avgPrice,
+        currentPrice,
+        totalValue: marketValue,
+        unrealizedPnl,
+        unrealizedPnlPct,
+        totalCost: costBasis,
+        realizedPnl: p.realizedPnl || 0,
+      }
     }))
+    
+    // Check if we got any live prices
+    const hasLiveQuotes = enriched.some((h) => h.currentPrice && h.currentPrice > 0)
+    
+    // Debug logging
+    console.log(`[portfolio] Fetched prices from /api/stocks - hasLiveQuotes: ${hasLiveQuotes}, items: ${items.length}`)
+    if (enriched.length > 0) {
+      const sample = enriched[0]
+      console.log(`[portfolio] Sample: ${sample.symbol}, currentPrice: ${sample.currentPrice}, totalValue: ${sample.totalValue}, costBasis: ${sample.totalCost}`)
+    }
+    
+    // If we have live quotes, save snapshot
+    if (hasLiveQuotes) {
+      const { savePortfolioSnapshot } = await import('@/lib/portfolio-mark-to-market')
+      const mtm = {
+        tpv: enriched.reduce((sum, h) => sum + (h.totalValue || 0), 0),
+        costBasis: enriched.reduce((sum, h) => sum + (h.totalCost || 0), 0),
+        totalReturn: enriched.reduce((sum, h) => sum + (h.unrealizedPnl || 0), 0),
+        totalReturnPct: 0,
+        holdings: enriched.map(h => ({
+          symbol: h.symbol,
+          shares: h.totalShares,
+          avgPrice: h.avgPrice,
+          currentPrice: h.currentPrice,
+          marketValue: h.totalValue,
+          unrealizedPnl: h.unrealizedPnl,
+          unrealizedPnlPct: h.unrealizedPnlPct,
+          costBasis: h.totalCost,
+        })),
+        walletBalance: bal,
+        lastUpdated: Date.now(),
+      }
+      mtm.totalReturnPct = mtm.costBasis > 0 ? (mtm.totalReturn / mtm.costBasis) * 100 : 0
+      
+      // Save snapshot asynchronously (don't block response)
+      savePortfolioSnapshot(userId, mtm).catch(err => {
+        console.error('Error saving portfolio snapshot:', err)
+      })
+    }
+    
+    // Calculate totals from enriched holdings
+    const calculatedCostBasis = enriched.reduce((sum, h) => sum + (h.totalCost || 0), 0)
+    const calculatedTPV = enriched.reduce((sum, h) => sum + (h.totalValue || 0), 0)
+    const calculatedReturn = calculatedTPV - calculatedCostBasis
+    const calculatedReturnPct = calculatedCostBasis > 0 ? (calculatedReturn / calculatedCostBasis) * 100 : 0
     
     const res = NextResponse.json({ 
       items: enriched, 
       wallet: { balance: bal, cap: 1_000_000 },
       totals: {
-        tpv: mtm.tpv,
-        costBasis: mtm.costBasis,
-        totalReturn: mtm.totalReturn,
-        totalReturnPct: mtm.totalReturnPct,
+        tpv: calculatedTPV,
+        costBasis: calculatedCostBasis,
+        totalReturn: calculatedReturn,
+        totalReturnPct: calculatedReturnPct,
       },
-      lastUpdated: mtm.lastUpdated,
+      lastUpdated: Date.now(),
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -109,51 +281,13 @@ export async function GET(req: NextRequest) {
     try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
     return res
   } catch (error: any) {
-    console.error('Mark-to-market calculation failed:', error)
-    // Fallback to basic enrichment if mark-to-market fails
-    const enriched = await Promise.all(items.map(async (p) => {
-      try {
-        const protocol = req.headers.get('x-forwarded-proto') || 'http'
-        const host = req.headers.get('host') || 'localhost:3000'
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
-        
-        const r = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(p.symbol)}`, { 
-          cache: 'no-store',
-          headers: { 'Content-Type': 'application/json' }
-        })
-        
-        if (!r.ok) throw new Error(`Quote API returned ${r.status}`)
-        const j = await r.json()
-        const price = j?.data?.price ?? j?.price ?? null
-        const totalValue = price ? price * p.totalShares : 0
-        const base = (p.totalCost || p.avgPrice * p.totalShares) || 0
-        const unreal = price ? (price - p.avgPrice) * p.totalShares : 0
-        const unrealPct = base > 0 ? (unreal / base) * 100 : 0
-        return { 
-          ...p, 
-          currentPrice: price, 
-          totalValue, 
-          unrealizedPnl: unreal, 
-          unrealizedPnlPct: unrealPct,
-          totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
-        }
-      } catch (err: any) {
-        return { 
-          ...p, 
-          currentPrice: null, 
-          totalValue: 0, 
-          unrealizedPnl: 0, 
-          unrealizedPnlPct: 0,
-          totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
-        }
-      }
-    }))
-    
-    const res = NextResponse.json({ items: enriched, wallet: { balance: bal, cap: 1_000_000 } }, {
-      headers: { 'Content-Type': 'application/json' }
-    })
-    try { res.cookies.set(cookieName, String(bal), { path: '/', httpOnly: false, maxAge: 60 * 60 * 24 * 365 }) } catch {}
-    return res
+    console.error('Failed to fetch stock prices:', error)
+    // Fall back to snapshot if available
+    if (snapshot) {
+      return respondWithSnapshot(snapshot, 'price_fetch_exception')
+    }
+    // If no snapshot, return basic data from positions (cost basis as value)
+    return respondWithSnapshot(null, 'price_fetch_exception_no_snapshot')
   }
 }
 

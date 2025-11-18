@@ -241,3 +241,19 @@ model FXRate {
   @@unique([fromCurrency, toCurrency, date])
   @@map("fx_rates")
 }
+
+model PortfolioSnapshot {
+  id            String   @id @default(cuid())
+  userId        String
+  timestamp     DateTime  @default(now())
+  tpv           Float     // Total Portfolio Value
+  walletBalance Float     @default(0)
+  costBasis     Float     @default(0)
+  totalReturn   Float     @default(0)
+  totalReturnPct Float    @default(0)
+  holdingsCount Int       @default(0)
+  details       Json?     // Store holdings breakdown, etc.
+
+  @@index([userId, timestamp])
+  @@map("portfolio_snapshots")
+}

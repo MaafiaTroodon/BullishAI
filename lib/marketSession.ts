@@ -155,3 +155,50 @@ export function getSessionCountdown(endsAt?: string): string | null {
   return `${minsLeft}m`
 }
 
+/**
+ * Get the last trading session (for 1D chart - shows last completed trading day)
+ * Returns { sessionStart, sessionEnd } in milliseconds
+ */
+export function getLastTradingSession(now: Date = new Date()): { sessionStart: number; sessionEnd: number } {
+  const etDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = etDate.getDay() // 0 = Sunday, 6 = Saturday
+  const hours = etDate.getHours()
+  const minutes = etDate.getMinutes()
+  const timeInMinutes = hours * 60 + minutes
+  
+  // Regular trading hours: 9:30 AM - 4:00 PM ET
+  const REG_START_MINUTES = 9 * 60 + 30 // 9:30 AM
+  const REG_END_MINUTES = 16 * 60 // 4:00 PM
+  
+  // If it's weekend or before market open, show previous trading day
+  let targetDate = new Date(etDate)
+  
+  if (day === 0) {
+    // Sunday - show Friday
+    targetDate.setDate(targetDate.getDate() - 2)
+  } else if (day === 6) {
+    // Saturday - show Friday
+    targetDate.setDate(targetDate.getDate() - 1)
+  } else if (day === 1 && timeInMinutes < REG_START_MINUTES) {
+    // Monday before market open - show Friday
+    targetDate.setDate(targetDate.getDate() - 3)
+  } else if (timeInMinutes < REG_START_MINUTES) {
+    // Weekday before market open - show previous day
+    targetDate.setDate(targetDate.getDate() - 1)
+  }
+  
+  // Set session start: 9:30 AM ET
+  const sessionStart = new Date(targetDate)
+  sessionStart.setHours(9, 30, 0, 0)
+  
+  // Set session end: 4:00 PM ET
+  const sessionEnd = new Date(targetDate)
+  sessionEnd.setHours(16, 0, 0, 0)
+  
+  // Convert to milliseconds
+  return {
+    sessionStart: sessionStart.getTime(),
+    sessionEnd: sessionEnd.getTime()
+  }
+}
+

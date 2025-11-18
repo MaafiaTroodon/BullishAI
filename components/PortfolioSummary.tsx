@@ -68,12 +68,16 @@ export function PortfolioSummary() {
   }, [pathname, userId, mutate, data])
   const [localItems, setLocalItems] = useState<any[]>([])
   
-  // Fetch timeseries for Net Deposits (Cost Basis) - less frequent since it's historical
+  // Fetch timeseries for Net Deposits (Cost Basis) - more frequent during market hours for real-time
   // Only fetch when user is logged in
   const { data: timeseriesData } = useSWR(
     session?.user ? '/api/portfolio/timeseries?range=ALL&gran=1d' : null,
     safeJsonFetcher,
-    { refreshInterval: session?.user ? 30000 : 0 }
+    { 
+      refreshInterval: session?.user 
+        ? (marketSession.session === 'REG' || marketSession.session === 'PRE' || marketSession.session === 'POST' ? 5000 : 30000)
+        : 0 
+    }
   )
   
   useEffect(() => {
@@ -167,13 +171,16 @@ export function PortfolioSummary() {
               totalCost: p.totalCost || p.avgPrice * p.totalShares 
             })
           } catch {
+            const fallbackCost = p.totalCost || (p.avgPrice ? p.avgPrice * (p.totalShares || 0) : 0) || 0
+            const fallbackValue = p.totalValue ?? fallbackCost
+            const fallbackDelta = fallbackValue - fallbackCost
             out.push({ 
-              ...p, 
-              currentPrice: null, 
-              totalValue: 0, 
-              unrealizedPnl: 0, 
-              unrealizedPnlPct: 0,
-              totalCost: p.totalCost || p.avgPrice * p.totalShares || 0
+              ...p,
+              currentPrice: p.currentPrice ?? null,
+              totalValue: fallbackValue,
+              unrealizedPnl: fallbackDelta,
+              unrealizedPnlPct: fallbackCost > 0 ? (fallbackDelta / fallbackCost) * 100 : 0,
+              totalCost: fallbackCost
             })
           }
         }))
@@ -204,6 +211,7 @@ export function PortfolioSummary() {
   }, [enrichedItems])
 
   const priceMapRef = useRef<Map<string, number>>(new Map())
+  const lastSnapshotRef = useRef<{ tpv: number; timestamp: number } | null>(null)
   const [liveTotals, setLiveTotals] = useState<{
     tpv: number
     costBasis: number
@@ -258,7 +266,33 @@ export function PortfolioSummary() {
         totalCost: h.costBasis,
       })),
     }, { revalidate: false })
-  }, [holdingsMap, data, mutate])
+
+    // Rapid snapshot creation: save every 2 seconds OR if TPV changed by >0.01%
+    // This ensures the graph updates rapidly with real portfolio value changes
+    const now = Date.now()
+    const shouldSave = !lastSnapshotRef.current || 
+      (now - lastSnapshotRef.current.timestamp > 2000) || // 2 seconds passed (rapid updates)
+      (Math.abs(result.tpv - lastSnapshotRef.current.tpv) / (lastSnapshotRef.current.tpv || 1) > 0.0001) // 0.01% change (more sensitive)
+
+    if (shouldSave && userId) {
+      lastSnapshotRef.current = { tpv: result.tpv, timestamp: now }
+      
+      // Save snapshot asynchronously (fire and forget)
+      fetch('/api/portfolio/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tpv: result.tpv,
+          costBasis: result.costBasis,
+          totalReturn: result.totalReturn,
+          totalReturnPct: result.totalReturnPct,
+          holdings: result.holdings,
+          walletBalance,
+          lastUpdated: now
+        })
+      }).catch(err => console.error('Error saving snapshot:', err))
+    }
+  }, [holdingsMap, data, mutate, userId])
 
   // Start fast price polling after holdings are loaded
   useFastPricePolling({

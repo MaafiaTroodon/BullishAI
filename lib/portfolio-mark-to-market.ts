@@ -109,6 +109,7 @@ export async function calculateMarkToMarket(
 
 /**
  * Save portfolio snapshot to database
+ * Creates a snapshot with all portfolio metrics for time-series tracking
  */
 export async function savePortfolioSnapshot(
   userId: string,
@@ -118,9 +119,11 @@ export async function savePortfolioSnapshot(
   const client = await pool.connect()
 
   try {
+    const holdingsCount = snapshot.holdings?.length || 0
     await client.query(
-      `INSERT INTO portfolio_snapshots ("userId", "timestamp", "tpv", "walletBalance", "costBasis", "totalReturn", "totalReturnPct", "details")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO portfolio_snapshots ("userId", "timestamp", "tpv", "walletBalance", "costBasis", "totalReturn", "totalReturnPct", "holdingsCount", "details")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT DO NOTHING`,
       [
         userId,
         new Date(snapshot.lastUpdated),
@@ -129,6 +132,7 @@ export async function savePortfolioSnapshot(
         snapshot.costBasis,
         snapshot.totalReturn,
         snapshot.totalReturnPct,
+        holdingsCount,
         JSON.stringify({
           holdings: snapshot.holdings,
         }),
