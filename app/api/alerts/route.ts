@@ -7,12 +7,17 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const userId = await getUserId()
-  if (!userId) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  try {
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+    const data = await listAlerts(userId)
+    return NextResponse.json({ items: data })
+  } catch (error: any) {
+    console.error('Error fetching alerts:', error)
+    return NextResponse.json({ error: 'Failed to fetch alerts' }, { status: 500 })
   }
-  const data = listAlerts(userId)
-  return NextResponse.json({ items: data })
 }
 
 export async function POST(req: NextRequest) {
@@ -23,9 +28,10 @@ export async function POST(req: NextRequest) {
     }
     const body = await req.json()
     const parsed = CreateAlertSchema.parse(body)
-    const alert = createAlert(userId, parsed)
+    const alert = await createAlert(userId, parsed)
     return NextResponse.json({ item: alert })
   } catch (e: any) {
+    console.error('Error creating alert:', e)
     return NextResponse.json({ error: e?.message || 'invalid_payload' }, { status: 400 })
   }
 }

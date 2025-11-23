@@ -12,37 +12,44 @@ async function getQuote(symbol: string) {
 }
 
 export async function POST() {
-  const userId = await getUserId()
-  if (!userId) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  try {
+    const userId = await getUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+    const alerts = (await listAlerts(userId)).filter(a => a.active)
+    const results: any[] = []
+    for (const a of alerts) {
+      try {
+        const q = await getQuote(a.symbol)
+        const price = q?.price
+        const changePct = q?.dp
+        const volume = q?.volume
+        let triggered = false
+        if (price != null) {
+          if (a.type === 'price_above' && price >= a.value) triggered = true
+          if (a.type === 'price_below' && price <= a.value) triggered = true
+        }
+        if (changePct != null) {
+          if (a.type === 'percent_up' && changePct >= a.value) triggered = true
+          if (a.type === 'percent_down' && changePct <= -Math.abs(a.value)) triggered = true
+        }
+        if (volume != null) {
+          if (a.type === 'volume_above' && volume >= a.value) triggered = true
+        }
+        if (triggered) {
+          await updateAlert(userId, a.id, { active: false })
+          results.push({ id: a.id, symbol: a.symbol, type: a.type, triggered: true, price, changePct, volume })
+        }
+      } catch (error: any) {
+        console.error(`Error evaluating alert ${a.id}:`, error)
+      }
+    }
+    return NextResponse.json({ triggered: results })
+  } catch (error: any) {
+    console.error('Error evaluating alerts:', error)
+    return NextResponse.json({ error: 'Failed to evaluate alerts' }, { status: 500 })
   }
-  const alerts = listAlerts(userId).filter(a => a.active)
-  const results: any[] = []
-  for (const a of alerts) {
-    try {
-      const q = await getQuote(a.symbol)
-      const price = q?.price
-      const changePct = q?.dp
-      const volume = q?.volume
-      let triggered = false
-      if (price != null) {
-        if (a.type === 'price_above' && price >= a.value) triggered = true
-        if (a.type === 'price_below' && price <= a.value) triggered = true
-      }
-      if (changePct != null) {
-        if (a.type === 'percent_up' && changePct >= a.value) triggered = true
-        if (a.type === 'percent_down' && changePct <= -Math.abs(a.value)) triggered = true
-      }
-      if (volume != null) {
-        if (a.type === 'volume_above' && volume >= a.value) triggered = true
-      }
-      if (triggered) {
-        updateAlert(userId, a.id, { active: false })
-        results.push({ id: a.id, symbol: a.symbol, type: a.type, triggered: true, price, changePct, volume })
-      }
-    } catch {}
-  }
-  return NextResponse.json({ triggered: results })
 }
 
 

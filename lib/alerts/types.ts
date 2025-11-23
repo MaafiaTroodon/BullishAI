@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { db } from '@/lib/db'
 
 export const AlertTypeEnum = z.enum([
   'price_above',
@@ -24,44 +25,119 @@ export const AlertSchema = CreateAlertSchema.extend({
 export type Alert = z.infer<typeof AlertSchema>
 export type CreateAlertInput = z.infer<typeof CreateAlertSchema>
 
-// Simple in-memory store (replace with DB later)
-const alertsStore: Record<string, Alert[]> = {}
-
-export function listAlerts(userId: string): Alert[] {
-  return alertsStore[userId] || []
-}
-
-export function createAlert(userId: string, input: CreateAlertInput): Alert {
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const alert: Alert = {
-    id,
-    createdAt: Date.now(),
-    active: true,
-    ...input,
+// Database-backed alert functions
+export async function listAlerts(userId: string): Promise<Alert[]> {
+  try {
+    const alerts = await db.alert.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    // Convert DB format to API format
+    return alerts.map(alert => ({
+      id: alert.id,
+      symbol: alert.symbol,
+      type: alert.type as Alert['type'],
+      value: alert.value,
+      active: alert.active,
+      createdAt: alert.createdAt.getTime(),
+      notes: undefined, // Notes field doesn't exist in DB schema yet
+    }))
+  } catch (error: any) {
+    console.error('Error listing alerts from DB:', error)
+    return []
   }
-  alertsStore[userId] = [alert, ...(alertsStore[userId] || [])]
-  return alert
 }
 
-export function getAlert(userId: string, id: string): Alert | undefined {
-  return (alertsStore[userId] || []).find(a => a.id === id)
+export async function createAlert(userId: string, input: CreateAlertInput): Promise<Alert> {
+  try {
+    const alert = await db.alert.create({
+      data: {
+        userId,
+        symbol: input.symbol.toUpperCase(),
+        type: input.type,
+        value: input.value,
+        active: true,
+        notified: false,
+      },
+    })
+    
+    return {
+      id: alert.id,
+      symbol: alert.symbol,
+      type: alert.type as Alert['type'],
+      value: alert.value,
+      active: alert.active,
+      createdAt: alert.createdAt.getTime(),
+      notes: input.notes,
+    }
+  } catch (error: any) {
+    console.error('Error creating alert in DB:', error)
+    throw new Error(`Failed to create alert: ${error.message}`)
+  }
 }
 
-export function updateAlert(userId: string, id: string, patch: Partial<Alert>): Alert | undefined {
-  const list = alertsStore[userId] || []
-  const idx = list.findIndex(a => a.id === id)
-  if (idx === -1) return undefined
-  const updated = { ...list[idx], ...patch }
-  list[idx] = updated
-  alertsStore[userId] = list
-  return updated
+export async function getAlert(userId: string, id: string): Promise<Alert | undefined> {
+  try {
+    const alert = await db.alert.findFirst({
+      where: { id, userId },
+    })
+    
+    if (!alert) return undefined
+    
+    return {
+      id: alert.id,
+      symbol: alert.symbol,
+      type: alert.type as Alert['type'],
+      value: alert.value,
+      active: alert.active,
+      createdAt: alert.createdAt.getTime(),
+      notes: undefined,
+    }
+  } catch (error: any) {
+    console.error('Error getting alert from DB:', error)
+    return undefined
+  }
 }
 
-export function deleteAlert(userId: string, id: string): boolean {
-  const list = alertsStore[userId] || []
-  const next = list.filter(a => a.id !== id)
-  alertsStore[userId] = next
-  return next.length !== list.length
+export async function updateAlert(userId: string, id: string, patch: Partial<Alert>): Promise<Alert | undefined> {
+  try {
+    const updateData: any = {}
+    if (patch.active !== undefined) updateData.active = patch.active
+    if (patch.symbol !== undefined) updateData.symbol = patch.symbol.toUpperCase()
+    if (patch.type !== undefined) updateData.type = patch.type
+    if (patch.value !== undefined) updateData.value = patch.value
+    
+    const alert = await db.alert.update({
+      where: { id, userId },
+      data: updateData,
+    })
+    
+    return {
+      id: alert.id,
+      symbol: alert.symbol,
+      type: alert.type as Alert['type'],
+      value: alert.value,
+      active: alert.active,
+      createdAt: alert.createdAt.getTime(),
+      notes: undefined,
+    }
+  } catch (error: any) {
+    console.error('Error updating alert in DB:', error)
+    return undefined
+  }
+}
+
+export async function deleteAlert(userId: string, id: string): Promise<boolean> {
+  try {
+    await db.alert.delete({
+      where: { id, userId },
+    })
+    return true
+  } catch (error: any) {
+    console.error('Error deleting alert from DB:', error)
+    return false
+  }
 }
 
 
