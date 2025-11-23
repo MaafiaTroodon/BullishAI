@@ -9,21 +9,22 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 })
 
-// Popular stocks for demo (can be replaced with AI-selected stocks)
+// Popular stocks for demo (US + Canadian mix)
 const DEFAULT_POPULAR_STOCKS = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX'
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'RY.TO', 'TD.TO', 'SHOP.TO'
 ]
 
 export async function GET() {
   try {
     // Use Groq to select interesting stocks based on current market trends
-    const prompt = `You are a stock market analyst. Analyze current market trends and return exactly 8 stock tickers that are:
-1. Popular today in the US market
-2. Include a mix of tech stocks, ETFs, and other major sectors
-3. Have significant trading volume
+    const prompt = `You are a stock market analyst. Analyze current market trends and return exactly 10 stock tickers that are:
+1. Popular today in both US and Canadian markets
+2. Include a mix of tech stocks, ETFs, banks, energy, and other major sectors
+3. Include both US stocks (AAPL, MSFT, etc.) and Canadian stocks (RY.TO, TD.TO, SHOP.TO, etc.)
+4. Have significant trading volume
 
-Return ONLY a JSON array of exactly 8 ticker symbols (uppercase) like this format:
-["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "SPY", "QQQ", "NFLX"]
+Return ONLY a JSON array of exactly 10 ticker symbols (uppercase, use .TO suffix for Canadian stocks) like this format:
+["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "SPY", "RY.TO", "TD.TO", "SHOP.TO", "CNQ.TO"]
 
 Do not include any explanation or other text, just the JSON array.`
 
@@ -54,7 +55,7 @@ Do not include any explanation or other text, just the JSON array.`
     }
 
     // Fallback to default stocks if AI parsing fails
-    if (!stocks || !Array.isArray(stocks) || stocks.length !== 8) {
+    if (!stocks || !Array.isArray(stocks) || stocks.length < 8) {
       stocks = DEFAULT_POPULAR_STOCKS
     }
 

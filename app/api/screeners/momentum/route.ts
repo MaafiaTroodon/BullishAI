@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
     const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
     const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
 
-    // Always use fallback stocks to ensure we have proper data
+    // Always use fallback stocks to ensure we have proper data (US + Canadian)
     const fallbackStocks = [
+      // US stocks
       { symbol: 'AAPL', name: 'Apple Inc.' },
       { symbol: 'MSFT', name: 'Microsoft Corporation' },
       { symbol: 'GOOGL', name: 'Alphabet Inc.' },
@@ -26,6 +27,17 @@ export async function GET(req: NextRequest) {
       { symbol: 'NFLX', name: 'Netflix Inc.' },
       { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
       { symbol: 'V', name: 'Visa Inc.' },
+      // Canadian stocks
+      { symbol: 'RY.TO', name: 'Royal Bank of Canada' },
+      { symbol: 'TD.TO', name: 'Toronto-Dominion Bank' },
+      { symbol: 'SHOP.TO', name: 'Shopify Inc.' },
+      { symbol: 'CNQ.TO', name: 'Canadian Natural Resources' },
+      { symbol: 'ENB.TO', name: 'Enbridge Inc.' },
+      { symbol: 'TRP.TO', name: 'TC Energy Corporation' },
+      { symbol: 'BAM.TO', name: 'Brookfield Asset Management' },
+      { symbol: 'CP.TO', name: 'Canadian Pacific Kansas City' },
+      { symbol: 'CNR.TO', name: 'Canadian National Railway' },
+      { symbol: 'ATD.TO', name: 'Alimentation Couche-Tard' },
     ]
     
     // Use quotes if they have valid symbols, otherwise use fallback

@@ -13,10 +13,12 @@ export interface NewsItem {
   summary?: string
 }
 
-// Fetch from Yahoo Finance
+// Fetch from Yahoo Finance (includes Canadian stocks)
 async function fetchYahooNews(symbol: string): Promise<NewsItem[]> {
   try {
-    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${symbol}&quotesCount=1&newsCount=10`
+    // For Canadian stocks, try both TSX format and .TO format
+    const searchSymbol = symbol.endsWith('.TO') ? symbol.replace('.TO', '') : symbol
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${searchSymbol}&quotesCount=1&newsCount=10`
     const response = await axios.get(url, { timeout: 3000 })
     
     if (response.data?.news) {
@@ -33,6 +35,47 @@ async function fetchYahooNews(symbol: string): Promise<NewsItem[]> {
     return []
   } catch (error: any) {
     console.log('Yahoo news failed:', error.message)
+    return []
+  }
+}
+
+// Fetch from Yahoo Finance Canada
+async function fetchYahooCanadaNews(symbol: string): Promise<NewsItem[]> {
+  try {
+    const searchSymbol = symbol.endsWith('.TO') ? symbol.replace('.TO', '') : symbol
+    // Yahoo Finance Canada uses ca.finance.yahoo.com
+    const url = `https://ca.finance.yahoo.com/v1/finance/search?q=${searchSymbol}&quotesCount=1&newsCount=10`
+    const response = await axios.get(url, { timeout: 3000 })
+    
+    if (response.data?.news) {
+      return response.data.news.map((item: any, idx: number) => ({
+        id: `yahoo-ca-${item.uuid || idx}`,
+        datetime: item.providerPublishTime || Date.now(),
+        headline: item.title,
+        source: 'Yahoo Finance Canada',
+        url: item.link,
+        image: item.thumbnail?.resolutions?.[0]?.url,
+        summary: item.summary,
+      }))
+    }
+    return []
+  } catch (error: any) {
+    console.log('Yahoo Canada news failed:', error.message)
+    return []
+  }
+}
+
+// Fetch from Financial Post (Canadian financial news)
+async function fetchFinancialPostNews(symbol: string): Promise<NewsItem[]> {
+  try {
+    // Financial Post RSS feed search
+    const searchSymbol = symbol.endsWith('.TO') ? symbol.replace('.TO', '') : symbol
+    const url = `https://financialpost.com/search?q=${encodeURIComponent(searchSymbol)}`
+    // Note: This is a placeholder - Financial Post may require different API
+    // For now, return empty and let other sources handle it
+    return []
+  } catch (error: any) {
+    console.log('Financial Post news failed:', error.message)
     return []
   }
 }
@@ -119,11 +162,21 @@ async function fetchGeneralNews(): Promise<NewsItem[]> {
 
 // Main function with multi-source aggregation
 export async function getMultiSourceNews(symbol: string): Promise<NewsItem[]> {
+  const isCanadianStock = symbol.endsWith('.TO') || symbol.includes('.TO')
+  
   const newsPromises = [
     fetchYahooNews(symbol),
     fetchFinnhubNews(symbol),
     fetchAlphaVantageNews(symbol),
   ]
+  
+  // Add Canadian-specific sources for Canadian stocks
+  if (isCanadianStock) {
+    newsPromises.push(
+      fetchYahooCanadaNews(symbol),
+      fetchFinancialPostNews(symbol)
+    )
+  }
   
   // Fetch all sources in parallel
   const results = await Promise.allSettled(newsPromises)

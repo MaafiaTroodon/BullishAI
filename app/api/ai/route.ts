@@ -31,11 +31,11 @@ const tools: any[] = [
     type: 'function', 
     function: { 
       name: 'get_quote', 
-      description: 'Get real-time/near-real-time quote for a ticker symbol. Returns price, change%, volume, market cap, P/E ratio, and 52-week range. Always use this for current prices. Use ticker symbols like AMZN, MSFT, AAPL.', 
+      description: 'Get real-time/near-real-time quote for a ticker symbol. Returns price, change%, volume, market cap, P/E ratio, and 52-week range. Always use this for current prices. Use ticker symbols like AMZN, MSFT, AAPL for US stocks, or RY.TO, TD.TO, SHOP.TO for Canadian stocks.', 
       parameters: { 
         type: 'object', 
         properties: { 
-          symbol: { type: 'string', description: 'Stock ticker symbol (e.g., AMZN for Amazon, MSFT for Microsoft, AAPL for Apple). Always use ticker symbols, not company names.' },
+          symbol: { type: 'string', description: 'Stock ticker symbol (e.g., AMZN for Amazon, MSFT for Microsoft, AAPL for Apple, RY.TO for Royal Bank of Canada, TD.TO for TD Bank, SHOP.TO for Shopify). Always use ticker symbols, not company names. Use .TO suffix for Canadian stocks.' },
           fields: { type: 'array', items: { type: 'string' }, description: 'Optional fields to return' }
         }, 
         required: ['symbol'] 
@@ -46,18 +46,18 @@ const tools: any[] = [
     type: 'function', 
     function: { 
       name: 'get_news', 
-      description: 'Get latest reputable headlines for tickers/topics. Returns 1-2 line summaries of breaking/relevant news with sources and timestamps. Always use this to explain why a stock moved. Use ticker symbols (e.g., AMZN, MSFT) not company names.', 
+      description: 'Get latest reputable headlines for tickers/topics. Returns 1-2 line summaries of breaking/relevant news with sources and timestamps. Always use this to explain why a stock moved. Use ticker symbols (e.g., AMZN, MSFT for US stocks, RY.TO, TD.TO for Canadian stocks) not company names.', 
       parameters: { 
         type: 'object', 
         properties: { 
           symbols: { 
             type: 'array', 
             items: { type: 'string' }, 
-            description: 'Array of ticker symbols (e.g., ["AMZN", "MSFT"]). Use ticker symbols, not company names.' 
+            description: 'Array of ticker symbols (e.g., ["AMZN", "MSFT", "RY.TO", "TD.TO"]). Use ticker symbols, not company names. Use .TO suffix for Canadian stocks.' 
           },
           query: { 
             type: 'string', 
-            description: 'Ticker symbol (e.g., "AMZN" for Amazon). Always use ticker symbols, not company names.' 
+            description: 'Ticker symbol (e.g., "AMZN" for Amazon, "RY.TO" for Royal Bank of Canada). Always use ticker symbols, not company names. Use .TO suffix for Canadian stocks.' 
           },
           limit: { 
             type: 'number', 
@@ -227,7 +227,7 @@ When no recent news is available, provide plausible explanations based on:
 - Company-specific factors (earnings confidence, product launches)
 
 User provided symbol context: ${querySymbol || symbol || 'none'}
-When the user mentions a company name (e.g., "Amazon", "Microsoft"), always use the ticker symbol (AMZN, MSFT) when calling tools.`
+When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank", "TD Bank", "Shopify"), always use the ticker symbol (AMZN, MSFT for US stocks, RY.TO, TD.TO, SHOP.TO for Canadian stocks) when calling tools. For Canadian companies, use the .TO suffix.`
 
     // Enhance query with symbol context
     const enhancedQuery = querySymbol && !query.toLowerCase().includes(querySymbol.toLowerCase())

@@ -261,11 +261,11 @@ export async function GET(req: NextRequest) {
       
       // CRITICAL: Log to verify we're saving real values
       console.log(`[portfolio] Saving snapshot with REAL tpv: $${mtm.tpv.toLocaleString()}, costBasis: $${mtm.costBasis.toLocaleString()}, return: ${mtm.totalReturnPct.toFixed(2)}%`)
-      
-      // Save snapshot asynchronously (don't block response)
-      savePortfolioSnapshot(userId, mtm).catch(err => {
-        console.error('Error saving portfolio snapshot:', err)
-      })
+    
+    // Save snapshot asynchronously (don't block response)
+    savePortfolioSnapshot(userId, mtm).catch(err => {
+      console.error('Error saving portfolio snapshot:', err)
+    })
     } else {
       if (!hasRealPrices) {
         console.log(`[portfolio] Skipping snapshot: No real prices (all holdings using costBasis fallback)`)

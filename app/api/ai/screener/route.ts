@@ -26,10 +26,16 @@ export async function GET(req: NextRequest) {
     const popular = popularRes ? await popularRes.json().catch(() => ({ stocks: [] })) : { stocks: [] }
     const movers = moversRes ? await moversRes.json().catch(() => ({ movers: [] })) : { movers: [] }
 
-    // Use top movers if available, otherwise use popular stocks
+    // Use top movers if available, otherwise use popular stocks (include Canadian stocks)
+    const defaultStocks = [
+      // US stocks
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'AMD', 'INTC', 'NFLX',
+      // Canadian stocks
+      'RY.TO', 'TD.TO', 'BNS.TO', 'BMO.TO', 'CM.TO', 'SHOP.TO', 'CNQ.TO', 'ENB.TO', 'TRP.TO', 'BAM.TO', 'CP.TO', 'CNR.TO', 'ATD.TO', 'SU.TO', 'WCN.TO'
+    ]
     const stockList = movers.movers?.length > 0 
       ? movers.movers.map((m: any) => m.symbol).filter(Boolean)
-      : popular.stocks?.slice(0, 50).map((s: any) => s.symbol).filter(Boolean) || ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'AMD', 'INTC', 'NFLX']
+      : popular.stocks?.slice(0, 50).map((s: any) => s.symbol).filter(Boolean) || defaultStocks
     
     const symbols = stockList.join(',')
     
@@ -62,11 +68,11 @@ export async function GET(req: NextRequest) {
     })
 
     const queries: Record<string, string> = {
-      'value-quality': 'Which high-quality stocks offer the best value this week? Screen for value metrics (P/E, P/B) combined with quality factors (ROE, earnings growth). Return top 5-10 stocks in JSON format.',
-      'momentum': 'Which five stocks have the strongest short-term momentum? Screen for price momentum, volume trends, and recent breakouts. Return top 5 in JSON format.',
-      'undervalued': 'Which undervalued stocks are poised for a rebound? Screen for oversold conditions, mean reversion signals, and fundamental value. Return top 5-10 stocks in JSON format.',
-      'strongest': 'Which stocks are the strongest and most worth watching today? Screen for relative strength, volume leaders, and positive price action. Return top 5-10 in JSON format.',
-      'stable-growth': 'Which stocks are stable growth picks suitable for long-term holding? Screen for low beta, consistent EPS growth, and dividend history. Return top 5-10 in JSON format.',
+      'value-quality': 'Which high-quality stocks (US and Canadian) offer the best value this week? Screen for value metrics (P/E, P/B) combined with quality factors (ROE, earnings growth). Include both US stocks (AAPL, MSFT, etc.) and Canadian stocks (RY.TO, TD.TO, SHOP.TO, CNQ.TO, ENB.TO, etc.). Return top 5-10 stocks in JSON format with a mix of both markets.',
+      'momentum': 'Which five stocks (US and Canadian) have the strongest short-term momentum? Screen for price momentum, volume trends, and recent breakouts. Include both US stocks and Canadian stocks (RY.TO, TD.TO, SHOP.TO, etc.). Return top 5 in JSON format.',
+      'undervalued': 'Which undervalued stocks (US and Canadian) are poised for a rebound? Screen for oversold conditions, mean reversion signals, and fundamental value. Include both US stocks and Canadian stocks (RY.TO, TD.TO, CNQ.TO, ENB.TO, etc.). Return top 5-10 stocks in JSON format.',
+      'strongest': 'Which stocks (US and Canadian) are the strongest and most worth watching today? Screen for relative strength, volume leaders, and positive price action. Include both US stocks and Canadian stocks (RY.TO, TD.TO, SHOP.TO, BAM.TO, etc.). Return top 5-10 in JSON format.',
+      'stable-growth': 'Which stocks (US and Canadian) are stable growth picks suitable for long-term holding? Screen for low beta, consistent EPS growth, and dividend history. Include both US stocks and Canadian stocks (RY.TO, TD.TO, ENB.TO, TRP.TO, CP.TO, CNR.TO, etc.). Return top 5-10 in JSON format.',
     }
 
     const query = queries[type] || queries['value-quality']

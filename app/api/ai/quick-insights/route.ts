@@ -108,10 +108,10 @@ export async function GET(req: NextRequest) {
 
     // Generate snapshot paragraph using LLM (text only)
     const query = `Provide a one-paragraph market snapshot covering:
-1. Overall market sentiment (bullish/bearish/neutral) based on indices
-2. Key macro factors driving today's action
+1. Overall market sentiment (bullish/bearish/neutral) based on indices for both US and Canadian markets
+2. Key macro factors driving today's action in North American markets
 
-Use ONLY the provided context for numbers. Be concise, factual, and cite specific numbers.`
+Use ONLY the provided context for numbers. Be concise, factual, and cite specific numbers. Mention both US and Canadian market activity if relevant.`
 
     const systemPrompt = `You are a market analyst providing quick insights. Use ONLY numbers from context. Be concise, factual, and cite specific numbers.`
 

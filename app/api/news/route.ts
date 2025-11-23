@@ -97,8 +97,13 @@ async function fetchTopMarketNews() {
       )
     }
 
-    // Fetch from major stocks (AAPL, MSFT, GOOGL, TSLA, NVDA, AMD, META, JPM, BAC)
-    const majorStocks = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'AMD', 'META', 'JPM', 'BAC']
+    // Fetch from major stocks (US + Canadian)
+    const majorStocks = [
+      // US stocks
+      'AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'AMD', 'META', 'JPM', 'BAC',
+      // Canadian stocks
+      'RY.TO', 'TD.TO', 'SHOP.TO', 'CNQ.TO', 'ENB.TO', 'TRP.TO', 'BAM.TO', 'CP.TO', 'CNR.TO'
+    ]
     for (const stock of majorStocks) {
       newsPromises.push(getMultiSourceNews(stock).catch(() => []))
     }
@@ -156,10 +161,10 @@ I'm giving you ${newsSummaries.length} market news articles from today. Your tas
 Selection criteria:
 1. Market-moving impact (earnings, mergers, major announcements)
 2. Breaking news and recent developments (less than 24 hours old)
-3. Relevance to major stocks (AAPL, MSFT, GOOGL, TSLA, NVDA, etc.)
+3. Relevance to major stocks (US: AAPL, MSFT, GOOGL, TSLA, NVDA; Canadian: RY.TO, TD.TO, SHOP.TO, CNQ.TO, ENB.TO)
 4. Strategic importance for investors
-5. News from credible sources (CNBC, Bloomberg, Reuters, Wall Street Journal)
-6. Economic indicators and Fed policy news
+5. News from credible sources (CNBC, Bloomberg, Reuters, Wall Street Journal, BNN Bloomberg, Financial Post, Globe & Mail)
+6. Economic indicators and Fed/BoC policy news
 
 Return ONLY a JSON array of the IDs (numbers) of the top 20 most important news items in order of importance.
 

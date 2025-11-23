@@ -210,9 +210,9 @@ export function PortfolioChart() {
         portfolioValue: portfolioVal, // Y-axis: ACTUAL portfolio value at this time (preserves historical movement)
         costBasis: costBasisVal,
         netInvested: p.netInvested || p.netInvestedAbs || costBasisVal,
-        deltaFromStart$: p.deltaFromStart$ || 0,
-        deltaFromStartPct: p.deltaFromStartPct || 0,
-        overallReturn$: p.overallReturn$ || 0,
+      deltaFromStart$: p.deltaFromStart$ || 0,
+      deltaFromStartPct: p.deltaFromStartPct || 0,
+      overallReturn$: p.overallReturn$ || 0,
         overallReturnPct: p.overallReturnPct || 0,
         // Keep 't' and 'value' for backward compatibility
         t: p.t,

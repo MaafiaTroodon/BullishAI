@@ -40,11 +40,11 @@ export async function GET(req: NextRequest) {
       fundamentals: stockData || undefined,
     }
 
-    const query = `Provide a "Should I Buy?" analysis for ${symbol}:
-1. Investment thesis (2-3 sentences)
+    const query = `Provide a "Should I Buy?" analysis for ${symbol} (${symbol.includes('.TO') ? 'Canadian stock' : 'US stock'}):
+1. Investment thesis (2-3 sentences) - consider market context (US vs Canadian market dynamics)
 2. Entry considerations (price range, timing) - as a STRING, not an object
 3. Exit strategy (target price, stop loss) - as a STRING, not an object
-4. Key risks (3-4 points)
+4. Key risks (3-4 points) - include currency risk if Canadian stock, sector-specific risks
 5. Verdict: Buy/Hold/Sell with confidence level (1-10)
 
 IMPORTANT: This is NOT financial advice. Include strong disclaimers.

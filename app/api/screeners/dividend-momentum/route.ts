@@ -63,16 +63,23 @@ export async function GET(req: NextRequest) {
     let workingQuotes = quotes.quotes || []
     if (workingQuotes.length === 0) {
       const fallbackStocks = [
-        { symbol: 'AAPL', name: 'Apple Inc.' },
-        { symbol: 'MSFT', name: 'Microsoft Corporation' },
-        { symbol: 'GOOGL', name: 'Alphabet Inc.' },
-        { symbol: 'AMZN', name: 'Amazon.com Inc.' },
-        { symbol: 'TSLA', name: 'Tesla Inc.' },
-        { symbol: 'META', name: 'Meta Platforms Inc.' },
-        { symbol: 'NVDA', name: 'NVIDIA Corporation' },
-        { symbol: 'NFLX', name: 'Netflix Inc.' },
+        // US dividend stocks
+        { symbol: 'T', name: 'AT&T Inc.' },
+        { symbol: 'VZ', name: 'Verizon Communications' },
         { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
-        { symbol: 'V', name: 'Visa Inc.' },
+        { symbol: 'BAC', name: 'Bank of America Corp.' },
+        { symbol: 'XOM', name: 'Exxon Mobil Corporation' },
+        { symbol: 'CVX', name: 'Chevron Corporation' },
+        // Canadian dividend stocks
+        { symbol: 'RY.TO', name: 'Royal Bank of Canada' },
+        { symbol: 'TD.TO', name: 'Toronto-Dominion Bank' },
+        { symbol: 'BNS.TO', name: 'Bank of Nova Scotia' },
+        { symbol: 'BMO.TO', name: 'Bank of Montreal' },
+        { symbol: 'CM.TO', name: 'Canadian Imperial Bank' },
+        { symbol: 'ENB.TO', name: 'Enbridge Inc.' },
+        { symbol: 'TRP.TO', name: 'TC Energy Corporation' },
+        { symbol: 'CNQ.TO', name: 'Canadian Natural Resources' },
+        { symbol: 'SU.TO', name: 'Suncor Energy Inc.' },
       ]
       workingQuotes = fallbackStocks.map(stock => ({
         symbol: stock.symbol,
