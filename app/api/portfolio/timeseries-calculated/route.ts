@@ -3,19 +3,22 @@ import { getUserId } from '@/lib/auth-server'
 import { loadPortfolioFromDB } from '@/lib/db-sql'
 import { getSectionsForRange } from '@/lib/portfolio-snapshots'
 import { getCandles } from '@/lib/market-data'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/portfolio/timeseries-calculated
- * Calculates portfolio value over time based on trades and historical prices
+ * Calculates portfolio value over time using CURRENT HOLDINGS + real-time/historical prices
+ * 
+ * Formula: portfolioValue = sum(shares_i * price_i_at_that_time) for all holdings
  * 
  * This endpoint:
- * 1. Gets all trades from DB (with timestamps)
- * 2. For each time point in the range, calculates what positions existed at that time
- * 3. Fetches historical prices for each stock at that time point
- * 4. Calculates portfolio value = sum(historical_price * shares_owned_at_that_time)
+ * 1. Gets CURRENT holdings from DB (positions table with symbol, totalShares, avgPrice, totalCost)
+ * 2. For each time point in the range, fetches price at that time for each holding
+ * 3. Calculates portfolio value = sum(price_at_that_time * shares) for all holdings
+ * 4. Uses real-time prices for recent points to show live market movements
  */
 export async function GET(req: NextRequest) {
   try {
@@ -55,101 +58,86 @@ export async function GET(req: NextRequest) {
     }
     const apiRange = rangeMap[rawRange.toLowerCase()] || '1d'
     
-    // Get all trades from DB FIRST to find earliest purchase
-    const portfolioData = await loadPortfolioFromDB(userId)
-    const trades = portfolioData.transactions.sort((a, b) => a.timestamp - b.timestamp) // Sort ascending
-    
-    if (trades.length === 0) {
-      // No trades, return empty series
-      const now = Date.now()
-      const sections = getSectionsForRange(apiRange, now - (30 * 24 * 60 * 60 * 1000), now)
-      return NextResponse.json({
-        range: rawRange,
-        series: [],
-        sections: sections.map(ts => Number(ts)),
-        window: { startTime: now - (30 * 24 * 60 * 60 * 1000), endTime: now },
-        totals: {
-          tpv: 0,
-          costBasis: 0,
-          totalReturn: 0,
-          totalReturnPct: 0
-        }
-      })
-    }
-    
-    // Find the earliest BUY trade - that's when portfolio started
-    const buyTrades = trades.filter(t => t.action === 'buy')
-    if (buyTrades.length === 0) {
-      // No buy trades, return empty
-      const now = Date.now()
-      const sections = getSectionsForRange(apiRange, now - (30 * 24 * 60 * 60 * 1000), now)
-      return NextResponse.json({
-        range: rawRange,
-        series: [],
-        sections: sections.map(ts => Number(ts)),
-        window: { startTime: now - (30 * 24 * 60 * 60 * 1000), endTime: now },
-        totals: {
-          tpv: 0,
-          costBasis: 0,
-          totalReturn: 0,
-          totalReturnPct: 0
-        }
-      })
-    }
-    
-    const earliestBuyTrade = buyTrades.reduce((earliest, tx) => 
-      tx.timestamp < earliest.timestamp ? tx : earliest
-    )
-    const portfolioStartTime = earliestBuyTrade.timestamp
-    
-    // Calculate time window - start from when first stock was bought
+    // Calculate time window
     const now = Date.now()
-    let requestedStartTime: number
+    let startTime: number
     let endTime: number = now
     
     if (apiRange === '1h') {
-      requestedStartTime = now - (60 * 60 * 1000)
+      startTime = now - (60 * 60 * 1000)
     } else if (apiRange === '1d') {
-      requestedStartTime = now - (24 * 60 * 60 * 1000)
+      startTime = now - (24 * 60 * 60 * 1000)
     } else if (apiRange === '3d') {
-      requestedStartTime = now - (3 * 24 * 60 * 60 * 1000)
+      startTime = now - (3 * 24 * 60 * 60 * 1000)
     } else if (apiRange === '1week') {
-      requestedStartTime = now - (7 * 24 * 60 * 60 * 1000)
+      startTime = now - (7 * 24 * 60 * 60 * 1000)
     } else if (apiRange === '1m') {
-      requestedStartTime = now - (30 * 24 * 60 * 60 * 1000)
+      startTime = now - (30 * 24 * 60 * 60 * 1000)
     } else if (apiRange === '3m') {
-      requestedStartTime = now - (90 * 24 * 60 * 60 * 1000)
+      startTime = now - (90 * 24 * 60 * 60 * 1000)
     } else if (apiRange === '6m') {
-      requestedStartTime = now - (180 * 24 * 60 * 60 * 1000)
+      startTime = now - (180 * 24 * 60 * 60 * 1000)
     } else if (apiRange === '1y') {
-      requestedStartTime = now - (365 * 24 * 60 * 60 * 1000)
+      startTime = now - (365 * 24 * 60 * 60 * 1000)
     } else {
-      // For 'all', use portfolio start time
-      requestedStartTime = portfolioStartTime
+      // For 'all', get first trade timestamp
+      const portfolioData = await loadPortfolioFromDB(userId)
+      if (portfolioData.transactions.length > 0) {
+        const firstTrade = portfolioData.transactions.reduce((earliest, tx) => 
+          tx.timestamp < earliest.timestamp ? tx : earliest
+        )
+        startTime = firstTrade.timestamp
+      } else {
+        startTime = now - (30 * 24 * 60 * 60 * 1000)
+      }
     }
     
-    // CRITICAL: Start time should be the later of: requested range start OR when portfolio actually started
-    // This ensures we only show data from when stocks were actually bought
-    const startTime = Math.max(requestedStartTime, portfolioStartTime)
+    // Get CURRENT holdings from DB (positions table)
+    // These are the actual stocks we own RIGHT NOW with their shares and avg prices
+    const portfolioData = await loadPortfolioFromDB(userId)
+    const currentHoldings = portfolioData.positions.filter(p => p.totalShares > 0)
     
-    // Get time sections for the chart
+    if (currentHoldings.length === 0) {
+      // No holdings, return empty series
+      const sections = getSectionsForRange(apiRange, startTime, endTime)
+      return NextResponse.json({
+        range: rawRange,
+        series: [],
+        sections: sections.map(ts => Number(ts)),
+        window: { startTime, endTime },
+        totals: {
+          tpv: 0,
+          costBasis: 0,
+          totalReturn: 0,
+          totalReturnPct: 0
+        }
+      })
+    }
+    
+    // Calculate cost basis from current holdings (constant for all time points)
+    // costBasis = sum(shares_i * avgPrice_i) for all holdings
+    const costBasis = currentHoldings.reduce((sum, h) => {
+      return sum + (h.totalCost || (h.avgPrice * h.totalShares) || 0)
+    }, 0)
+    
+    // Get symbols from current holdings
+    const symbols = currentHoldings.map(h => h.symbol.toUpperCase())
+    
+    // Get time sections for the chart (x-axis points)
     const sections = getSectionsForRange(apiRange, startTime, endTime)
     const sectionTimestamps = sections
       .map((ts: any) => Number(ts))
       .filter((ts: number) => Number.isFinite(ts))
       .sort((a: number, b: number) => a - b)
     
-    // Get unique symbols from trades
-    const symbols = Array.from(new Set(trades.map(t => t.symbol.toUpperCase())))
-    
     // Fetch historical prices for all symbols
     // Map: symbol -> array of {t: timestamp, c: close_price}
     const historicalPricesMap = new Map<string, Array<{t: number, c: number}>>()
     
-    // Determine chart range for price fetching (use a wider range to ensure coverage)
+    // Determine chart range for price fetching based on requested range
     let chartRange = '1m'
     if (apiRange === '1h' || apiRange === '1d' || apiRange === '3d') {
-      chartRange = '1d'
+      chartRange = '1d' // 1d candles have minute-level data for 1H/1D views
     } else if (apiRange === '1week') {
       chartRange = '1m'
     } else if (apiRange === '1m') {
@@ -162,7 +150,7 @@ export async function GET(req: NextRequest) {
       chartRange = '1y'
     }
     
-    // Fetch prices for all symbols in parallel
+    // Fetch historical prices for all symbols in parallel
     await Promise.all(symbols.map(async (symbol) => {
       try {
         const candlesResult = await getCandles(symbol, chartRange)
@@ -187,10 +175,44 @@ export async function GET(req: NextRequest) {
       }
     }))
     
-    // Helper function to get price at a specific timestamp (forward fill)
-    const getPriceAtTime = (symbol: string, timestamp: number): number => {
-      const prices = historicalPricesMap.get(symbol) || []
-      if (prices.length === 0) return 0
+    // Fetch current real-time prices for all symbols (for recent points)
+    const currentPricesMap = new Map<string, number>()
+    try {
+      await Promise.all(symbols.map(async (symbol) => {
+        try {
+          const quote = await getQuoteWithFallback(symbol)
+          if (quote && quote.price > 0) {
+            currentPricesMap.set(symbol.toUpperCase(), quote.price)
+          }
+        } catch (error: any) {
+          // If quote fails, we'll use historical prices
+        }
+      }))
+    } catch (error: any) {
+      console.error('[Timeseries Calculated] Failed to fetch current prices:', error.message)
+    }
+    
+    // Helper function to get price at a specific timestamp
+    // Always uses historical prices for the timestamp - no interpolation or current price substitution
+    // This ensures each point shows the actual price at that time, creating proper graph variation
+    const getPriceAtTime = (symbol: string, timestamp: number, useCurrentPrice: boolean = false): number => {
+      const symbolUpper = symbol.toUpperCase()
+      
+      // Only use current price if explicitly requested (for the last point)
+      if (useCurrentPrice) {
+        const currentPrice = currentPricesMap.get(symbolUpper)
+        if (currentPrice && currentPrice > 0) {
+          return currentPrice
+        }
+      }
+      
+      // Always use historical prices for historical timestamps
+      // This ensures the graph shows actual price movements over time
+      const prices = historicalPricesMap.get(symbolUpper) || []
+      if (prices.length === 0) {
+        // Fallback to current price only if no historical data available
+        return currentPricesMap.get(symbolUpper) || 0
+      }
       
       // Find the closest price at or before this timestamp
       let bestPrice = 0
@@ -202,7 +224,7 @@ export async function GET(req: NextRequest) {
         }
       }
       
-      // If no price found before timestamp, use first available price
+      // If no price found before timestamp, use first available price (backward fill)
       if (bestPrice === 0 && prices.length > 0) {
         bestPrice = prices[0].c
       }
@@ -210,7 +232,7 @@ export async function GET(req: NextRequest) {
       return bestPrice
     }
     
-    // Calculate positions at each time point
+    // Build time series: for each timestamp, calculate portfolio value
     const series: Array<{
       t: number
       portfolio: number
@@ -225,76 +247,34 @@ export async function GET(req: NextRequest) {
       overallReturnPct: number
     }> = []
     
-    // Track positions state as we iterate through time
-    const positionsState = new Map<string, { shares: number, avgPrice: number, totalCost: number }>()
-    let totalCostBasis = 0
-    
-    // Track which trades we've already applied
-    let lastAppliedTradeIndex = -1
-    
     // Process each time section
-    for (const sectionTime of sectionTimestamps) {
-      // Apply only new trades that happened since the last section time
-      for (let i = lastAppliedTradeIndex + 1; i < trades.length; i++) {
-        const trade = trades[i]
-        if (trade.timestamp <= sectionTime) {
-          const symbol = trade.symbol.toUpperCase()
-          const current = positionsState.get(symbol) || { shares: 0, avgPrice: 0, totalCost: 0 }
-          
-          if (trade.action === 'buy') {
-            const newShares = current.shares + trade.quantity
-            const newTotalCost = current.totalCost + (trade.price * trade.quantity)
-            const newAvgPrice = newShares > 0 ? newTotalCost / newShares : 0
-            
-            positionsState.set(symbol, {
-              shares: newShares,
-              avgPrice: newAvgPrice,
-              totalCost: newTotalCost
-            })
-          } else if (trade.action === 'sell') {
-            const newShares = Math.max(0, current.shares - trade.quantity)
-            const soldCost = current.avgPrice * trade.quantity
-            const newTotalCost = Math.max(0, current.totalCost - soldCost)
-            
-            if (newShares === 0) {
-              positionsState.delete(symbol)
-            } else {
-              positionsState.set(symbol, {
-                shares: newShares,
-                avgPrice: current.avgPrice, // Keep same avg price
-                totalCost: newTotalCost
-              })
-            }
-          }
-          
-          lastAppliedTradeIndex = i
-        } else {
-          // Trades are sorted by timestamp, so we can break here
-          break
-        }
-      }
+    // For each timestamp (x-axis), calculate portfolio value (y-axis) using prices at that time
+    for (let i = 0; i < sectionTimestamps.length; i++) {
+      const sectionTime = sectionTimestamps[i]
+      const isLastPoint = i === sectionTimestamps.length - 1
       
       // Calculate portfolio value at this time point
-      // Only include stocks that were bought by this time (positionsState already tracks this)
+      // Formula: portfolioValue = sum(shares_i * price_i_at_that_time) for all holdings
       let portfolioValue = 0
-      let costBasis = 0
       
-      for (const [symbol, position] of positionsState.entries()) {
-        // Only calculate if we have shares (stock was bought by this time)
-        if (position.shares > 0) {
-          const price = getPriceAtTime(symbol, sectionTime)
+      for (const holding of currentHoldings) {
+        if (holding.totalShares > 0) {
+          const symbol = holding.symbol.toUpperCase()
+          // For the last point, use current real-time price to show live updates
+          // For all other points, use historical price at that specific time
+          const price = getPriceAtTime(symbol, sectionTime, isLastPoint)
           if (price > 0) {
-            portfolioValue += price * position.shares
+            portfolioValue += price * holding.totalShares
           }
-          // Cost basis = total cost of all shares owned at this time
-          costBasis += position.totalCost
         }
       }
       
-      // Update total cost basis (use the latest calculated value)
-      totalCostBasis = costBasis
+      // If no price data available, skip this point (don't use cost basis as fallback for graph)
+      if (portfolioValue === 0) {
+        continue
+      }
       
-      // Calculate returns using dashboard formula: Total Return = Portfolio Value - Cost Basis
+      // Calculate returns
       const totalReturn = portfolioValue - costBasis
       const totalReturnPct = costBasis > 0 ? (totalReturn / costBasis) * 100 : 0
       
@@ -306,10 +286,10 @@ export async function GET(req: NextRequest) {
         : 0
       
       series.push({
-        t: sectionTime,
-        portfolio: portfolioValue,
+        t: sectionTime, // X-axis: timestamp
+        portfolio: portfolioValue, // Y-axis: portfolio value at this time
         portfolioAbs: portfolioValue,
-        costBasis: costBasis,
+        costBasis: costBasis, // Constant: sum(shares * avgPrice)
         costBasisAbs: costBasis,
         netInvested: costBasis,
         netInvestedAbs: costBasis,
@@ -320,11 +300,18 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Update the last point with current dashboard portfolio value for real-time updates
-    let finalPortfolioValue = series.length > 0 ? series[series.length - 1].portfolio : 0
-    const finalCostBasis = totalCostBasis
+    // Ensure series is sorted by timestamp
+    series.sort((a, b) => a.t - b.t)
     
-    // Try to get current portfolio value from /api/portfolio endpoint
+    // Get current portfolio totals from dashboard API (matches summary exactly)
+    let finalPortfolioValue = series.length > 0 ? series[series.length - 1].portfolio : 0
+    let dashboardTotals: {
+      tpv: number
+      costBasis: number
+      totalReturn: number
+      totalReturnPct: number
+    } | null = null
+    
     try {
       const protocol = req.headers.get('x-forwarded-proto') || 'http'
       const host = req.headers.get('host') || 'localhost:3000'
@@ -336,23 +323,32 @@ export async function GET(req: NextRequest) {
       })
       
       if (portfolioRes.ok) {
-        const currentData = await portfolioRes.json()
-        const currentTpv = currentData?.totals?.tpv || 0
+        const portfolioData = await portfolioRes.json()
+        dashboardTotals = portfolioData.totals || null
         
-        if (currentTpv > 0 && series.length > 0) {
-          // Update last point with current dashboard value
+        // Update the last point with current dashboard portfolio value
+        // This ensures the tooltip matches the dashboard summary exactly
+        if (dashboardTotals && series.length > 0) {
           const lastPoint = series[series.length - 1]
-          lastPoint.portfolio = currentTpv
-          lastPoint.portfolioAbs = currentTpv
-          lastPoint.overallReturn$ = currentTpv - finalCostBasis
-          lastPoint.overallReturnPct = finalCostBasis > 0 ? ((currentTpv - finalCostBasis) / finalCostBasis) * 100 : 0
-          lastPoint.t = endTime // Use current time
-          finalPortfolioValue = currentTpv
+          lastPoint.portfolio = dashboardTotals.tpv
+          lastPoint.portfolioAbs = dashboardTotals.tpv
+          lastPoint.overallReturn$ = dashboardTotals.totalReturn
+          lastPoint.overallReturnPct = dashboardTotals.totalReturnPct
+          lastPoint.t = endTime // Current time
+          finalPortfolioValue = dashboardTotals.tpv
         }
       }
     } catch (error: any) {
-      // If fetch fails, use calculated value
-      console.error('[Timeseries Calculated] Failed to fetch current portfolio:', error.message)
+      console.error('[Timeseries Calculated] Failed to fetch dashboard totals:', error.message)
+    }
+    
+    // Ensure we have at least 2 points for the graph to render
+    if (series.length === 1) {
+      const onlyPoint = series[0]
+      series.push({
+        ...onlyPoint,
+        t: onlyPoint.t + 60000 // Add 1 minute
+      })
     }
     
     return NextResponse.json({
@@ -362,11 +358,11 @@ export async function GET(req: NextRequest) {
       series,
       sections: sectionTimestamps,
       window: { startTime, endTime },
-      totals: {
+      totals: dashboardTotals || {
         tpv: finalPortfolioValue,
-        costBasis: finalCostBasis,
-        totalReturn: finalPortfolioValue - finalCostBasis,
-        totalReturnPct: finalCostBasis > 0 ? ((finalPortfolioValue - finalCostBasis) / finalCostBasis) * 100 : 0
+        costBasis: costBasis,
+        totalReturn: finalPortfolioValue - costBasis,
+        totalReturnPct: costBasis > 0 ? ((finalPortfolioValue - costBasis) / costBasis) * 100 : 0
       },
       meta: {
         symbols: Array.from(symbols),
@@ -384,4 +380,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-

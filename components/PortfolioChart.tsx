@@ -45,14 +45,14 @@ export function PortfolioChart() {
   // Get market session for refresh interval
   const sessionInfo = getMarketSession()
   const baseRefreshInterval = getRefreshInterval(sessionInfo.session)
-  // Fast refresh for real-time updates - refresh multiple times per second
+  // Fast refresh for real-time updates - refresh frequently to show market movements
   const refreshInterval = chartRange === '1h'
-    ? 500 // 500ms (2x per second) for 1H view - very fast updates
+    ? 2000 // 2 seconds for 1H view - shows real-time price movements
     : chartRange === '1d'
-      ? 1000 // 1 second for 1D view - fast updates
+      ? 5000 // 5 seconds for 1D view
       : chartRange === '3d'
-        ? 2000 // 2 seconds for 3D view
-        : 5000 // 5 seconds for longer ranges
+        ? 10000 // 10 seconds for 3D view
+        : 30000 // 30 seconds for longer ranges
   
   // Fetch timeseries data - use calculated endpoint that computes from trades and historical prices
   // This shows actual portfolio value over time based on when stocks were bought
@@ -154,44 +154,23 @@ export function PortfolioChart() {
     syncData()
   }, [mutatePf, mutateTimeseries])
   
-  // Use timeseries data from API as single source of truth
-  // Data comes from PostgreSQL portfolio_snapshots table via /api/portfolio/timeseries
-  // Each point has a different timestamp so the line moves up and down over time
+  // Use timeseries data from API - calculated from current holdings + prices
+  // Each point = (timestamp, portfolioValue) where portfolioValue = sum(shares * price_at_that_time)
   const points = useMemo(() => {
     if (!timeseriesData?.series || !Array.isArray(timeseriesData.series)) {
       return []
     }
     
-    // Get dashboard totals (most reliable source)
-    const dashboardTpv = pf?.totals?.tpv || 0
-    const dashboardCostBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || 0
-    
-    // Map timeseries data from PostgreSQL snapshots
-    // CRITICAL: Use ACTUAL snapshot values - DO NOT default to 0!
-    // Each point shows the portfolio value at that specific time (from database)
-    const mapped = timeseriesData.series.map((p: any, index: number) => {
-      // Get portfolio value - prioritize actual snapshot values
-      // p.portfolio is the ACTUAL portfolio value from the snapshot at that time
-      // CRITICAL: If p.portfolio is 0, check other fields, but NEVER default to 0 if we have costBasis
-      let portfolioVal = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
-      const costBasisVal = p.costBasis || p.costBasisAbs || p.netInvested || p.netInvestedAbs || dashboardCostBasis || 0
-      
-      // CRITICAL FIX: If portfolio value is 0 but we have costBasis, use costBasis
-      // This handles cases where snapshots were saved with tpv=0 (prices not loaded)
-      if (portfolioVal === 0 && costBasisVal > 0) {
-        portfolioVal = costBasisVal
-      }
-      
-      // CRITICAL: For the LAST point, always use current dashboard portfolio value
-      // This ensures the chart shows real-time updates
-      const isLastPoint = index === timeseriesData.series.length - 1
-      if (isLastPoint && dashboardTpv > 0) {
-        portfolioVal = dashboardTpv
-      }
+    // Map timeseries data - each point has timestamp (x-axis) and portfolio value (y-axis)
+    const mapped = timeseriesData.series.map((p: any) => {
+      // Use the portfolio value from the calculated timeseries
+      // This is calculated as: sum(shares_i * price_i_at_that_time) for all holdings
+      const portfolioVal = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
+      const costBasisVal = p.costBasis || p.costBasisAbs || p.netInvested || p.netInvestedAbs || 0
       
       return {
-        timestamp: p.t, // X-axis: timestamp (time) - different for each point
-        portfolioValue: portfolioVal, // Y-axis: ACTUAL portfolio value at this time (preserves historical movement)
+        timestamp: p.t, // X-axis: timestamp (time)
+        portfolioValue: portfolioVal, // Y-axis: portfolio value at this time
         costBasis: costBasisVal,
         netInvested: p.netInvested || p.netInvestedAbs || costBasisVal,
         deltaFromStart$: p.deltaFromStart$ || 0,
@@ -200,14 +179,13 @@ export function PortfolioChart() {
         overallReturnPct: p.overallReturnPct || 0,
         // Keep 't' and 'value' for backward compatibility
         t: p.t,
-        value: portfolioVal // ACTUAL snapshot value (or costBasis fallback, or dashboard value for last point)
+        value: portfolioVal
       }
     })
     
     const sorted = mapped.sort((a, b) => a.timestamp - b.timestamp)
 
-    // Recharts needs at least two points to render a line.
-    // Duplicate the point with a +1 minute offset to avoid a vertical line.
+    // Recharts needs at least two points to render a line
     if (sorted.length === 1) {
       const only = sorted[0]
       sorted.push({
@@ -218,7 +196,7 @@ export function PortfolioChart() {
     }
 
     return sorted
-  }, [timeseriesData, pf?.totals])
+  }, [timeseriesData])
 
   // Calculate portfolio return from cost basis to determine color (matches PortfolioSummary)
   // Use overall return percentage: (portfolioValue - costBasis) / costBasis * 100
@@ -232,57 +210,48 @@ export function PortfolioChart() {
   const isPositive = portfolioReturn >= 0
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   
-  // Calculate Y-axis domain - ±15% padding around portfolio value (centered, NOT from $0)
+  // Calculate Y-axis domain dynamically from actual portfolio value series data
+  // Uses min/max from the data with ~10% padding to show proper graph variation
   const yDomain = useMemo(() => {
-    // PRIORITY 1: Use dashboard portfolio value (most reliable, always available)
-    const dashboardTpv = pf?.totals?.tpv
-    if (dashboardTpv && typeof dashboardTpv === 'number' && dashboardTpv > 0) {
-      const padding = dashboardTpv * 0.15 // ±15%
-      const min = Math.max(0, dashboardTpv - padding)
-      const max = dashboardTpv + padding
-      return [min, max]
-    }
-    
-    // PRIORITY 2: Use API totals
-    const apiTpv = timeseriesData?.totals?.tpv
-    if (apiTpv && typeof apiTpv === 'number' && apiTpv > 0) {
-      const padding = apiTpv * 0.15 // ±15%
-      const min = Math.max(0, apiTpv - padding)
-      const max = apiTpv + padding
-      return [min, max]
-    }
-    
-    // PRIORITY 3: Use points data (including last point which has dashboard value)
-    if (points.length > 0) {
-      const portfolioValues = points
-        .map((p) => p.portfolioValue ?? p.value ?? 0)
-        .filter((v): v is number => typeof v === 'number' && !Number.isNaN(v) && v > 0)
-      
-      if (portfolioValues.length > 0) {
-        const minVal = Math.min(...portfolioValues)
-        const maxVal = Math.max(...portfolioValues)
-        const center = (minVal + maxVal) / 2
-        const range = maxVal - minVal
-        
-        // Use ±15% padding, but ensure we show all data points
-        const padding = Math.max(center * 0.15, range * 0.1)
-        const min = Math.max(0, center - padding)
-        const max = center + padding
-        return [min, max]
+    if (points.length === 0) {
+      // No data, use fallback based on dashboard totals
+      const dashboardTpv = pf?.totals?.tpv || timeseriesData?.totals?.tpv || 0
+      if (dashboardTpv > 0) {
+        const padding = dashboardTpv * 0.1 // 10% padding
+        return [Math.max(0, dashboardTpv - padding), dashboardTpv + padding]
       }
+      return [0, 1000000] // Minimal fallback
     }
     
-    // Last resort: use a reasonable default based on cost basis if available
-    const costBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || 0
-    if (costBasis > 0) {
-      const padding = costBasis * 0.15
-      const min = Math.max(0, costBasis - padding)
-      const max = costBasis + padding
-      return [min, max]
+    // Extract all portfolio values from the series
+    const portfolioValues = points
+      .map((p) => p.portfolioValue ?? p.value ?? 0)
+      .filter((v): v is number => typeof v === 'number' && !Number.isNaN(v) && v > 0)
+    
+    if (portfolioValues.length === 0) {
+      // No valid values, use fallback
+      const dashboardTpv = pf?.totals?.tpv || timeseriesData?.totals?.tpv || 0
+      if (dashboardTpv > 0) {
+        const padding = dashboardTpv * 0.1
+        return [Math.max(0, dashboardTpv - padding), dashboardTpv + padding]
+      }
+      return [0, 1000000]
     }
     
-    // Default range
-    return [0, 10000000]
+    // Calculate min and max from actual data
+    const minValue = Math.min(...portfolioValues)
+    const maxValue = Math.max(...portfolioValues)
+    const range = maxValue - minValue
+    
+    // Apply ~10% padding: lowerBound ≈ minValue * 0.9, upperBound ≈ maxValue * 1.1
+    // If min and max are very close, enforce minimum padding so line doesn't look flat
+    const minPadding = Math.max(range * 0.1, minValue * 0.1, 1000) // At least $1000 or 10% of range
+    const maxPadding = Math.max(range * 0.1, maxValue * 0.1, 1000) // At least $1000 or 10% of range
+    
+    const lowerBound = Math.max(0, minValue - minPadding)
+    const upperBound = maxValue + maxPadding
+    
+    return [lowerBound, upperBound]
   }, [points, timeseriesData?.totals, pf?.totals])
 
   const sectionTimeline = useMemo(() => {
@@ -521,18 +490,29 @@ export function PortfolioChart() {
                     hour12: true
                   }) + ' ET'
                   
-                  // Use the ACTUAL portfolio value at this specific time point from the calculated timeseries
-                  // This shows what the portfolio value was at that specific date/time
-                  const portfolioValue = data?.portfolioValue || data?.value || data?.portfolio || 0
-                  const costBasis = data?.costBasis || 0
+                  // Use the ACTUAL values at this specific time point from the chart data
+                  // For the last point, use dashboard totals (matches summary exactly)
+                  // For other points, use calculated values from that time
+                  const isLastPoint = data?.t === points[points.length - 1]?.timestamp
                   
-                  // Use dashboard's accurate total return calculation: Total Return = Portfolio Value - Cost Basis
-                  // This matches the dashboard summary exactly
-                  const totalReturn$ = portfolioValue - costBasis
-                  const totalReturnPct = costBasis > 0 ? (totalReturn$ / costBasis) * 100 : 0
+                  const portfolioValue = isLastPoint 
+                    ? (pf?.totals?.tpv || timeseriesData?.totals?.tpv || data?.portfolioValue || 0)
+                    : (data?.portfolioValue || data?.value || data?.portfolio || 0)
                   
-                  // For holdings count, we need to calculate how many positions existed at this time
-                  // For now, use current holdings count (could be enhanced to calculate from trades)
+                  const costBasis = isLastPoint
+                    ? (pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || data?.costBasis || 0)
+                    : (data?.costBasis || 0)
+                  
+                  // Calculate returns - use dashboard totals for last point, calculated for others
+                  const totalReturn$ = isLastPoint
+                    ? (pf?.totals?.totalReturn ?? timeseriesData?.totals?.totalReturn ?? (portfolioValue - costBasis))
+                    : (data?.overallReturn$ ?? (portfolioValue - costBasis))
+                  
+                  const totalReturnPct = isLastPoint
+                    ? (pf?.totals?.totalReturnPct ?? timeseriesData?.totals?.totalReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0))
+                    : (data?.overallReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0))
+                  
+                  // Get holdings count from current positions
                   const currentPositions = pf?.items || localItems || []
                   const holdingsCount = currentPositions.filter((p: any) => (p.totalShares || 0) > 0).length
                   
