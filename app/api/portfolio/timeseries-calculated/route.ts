@@ -207,10 +207,14 @@ export async function GET(req: NextRequest) {
     const positionsState = new Map<string, { shares: number, avgPrice: number, totalCost: number }>()
     let totalCostBasis = 0
     
+    // Track which trades we've already applied
+    let lastAppliedTradeIndex = -1
+    
     // Process each time section
     for (const sectionTime of sectionTimestamps) {
-      // Apply all trades up to this time point
-      for (const trade of trades) {
+      // Apply only new trades that happened since the last section time
+      for (let i = lastAppliedTradeIndex + 1; i < trades.length; i++) {
+        const trade = trades[i]
         if (trade.timestamp <= sectionTime) {
           const symbol = trade.symbol.toUpperCase()
           const current = positionsState.get(symbol) || { shares: 0, avgPrice: 0, totalCost: 0 }
@@ -240,6 +244,11 @@ export async function GET(req: NextRequest) {
               })
             }
           }
+          
+          lastAppliedTradeIndex = i
+        } else {
+          // Trades are sorted by timestamp, so we can break here
+          break
         }
       }
       
@@ -284,9 +293,40 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Get final totals from current portfolio state
-    const finalPortfolioValue = series.length > 0 ? series[series.length - 1].portfolio : 0
+    // Update the last point with current dashboard portfolio value for real-time updates
+    let finalPortfolioValue = series.length > 0 ? series[series.length - 1].portfolio : 0
     const finalCostBasis = totalCostBasis
+    
+    // Try to get current portfolio value from /api/portfolio endpoint
+    try {
+      const protocol = req.headers.get('x-forwarded-proto') || 'http'
+      const host = req.headers.get('host') || 'localhost:3000'
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${protocol}://${host}`
+      
+      const portfolioRes = await fetch(`${baseUrl}/api/portfolio?enrich=1`, {
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      if (portfolioRes.ok) {
+        const currentData = await portfolioRes.json()
+        const currentTpv = currentData?.totals?.tpv || 0
+        
+        if (currentTpv > 0 && series.length > 0) {
+          // Update last point with current dashboard value
+          const lastPoint = series[series.length - 1]
+          lastPoint.portfolio = currentTpv
+          lastPoint.portfolioAbs = currentTpv
+          lastPoint.overallReturn$ = currentTpv - finalCostBasis
+          lastPoint.overallReturnPct = finalCostBasis > 0 ? ((currentTpv - finalCostBasis) / finalCostBasis) * 100 : 0
+          lastPoint.t = endTime // Use current time
+          finalPortfolioValue = currentTpv
+        }
+      }
+    } catch (error: any) {
+      // If fetch fails, use calculated value
+      console.error('[Timeseries Calculated] Failed to fetch current portfolio:', error.message)
+    }
     
     return NextResponse.json({
       range: rawRange,

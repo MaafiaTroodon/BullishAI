@@ -54,10 +54,10 @@ export function PortfolioChart() {
         ? 2000 // 2 seconds for 3D view
         : 5000 // 5 seconds for longer ranges
   
-  // Fetch timeseries data - key includes range and gran for proper caching
-  // Refresh more frequently during market hours for real-time updates
+  // Fetch timeseries data - use calculated endpoint that computes from trades and historical prices
+  // This shows actual portfolio value over time based on when stocks were bought
   const { data: timeseriesData, error: timeseriesError, mutate: mutateTimeseries } = useSWR(
-    `/api/portfolio/timeseries?range=${apiRange}&gran=${gran}`,
+    `/api/portfolio/timeseries-calculated?range=${apiRange}`,
     safeJsonFetcher,
     { 
       refreshInterval: refreshInterval,
@@ -521,14 +521,15 @@ export function PortfolioChart() {
                     hour12: true
                   }) + ' ET'
                   
-                  // ALWAYS use dashboard totals for portfolio value and cost basis (matches dashboard display)
-                  // This ensures consistency between dashboard summary and chart tooltip
-                  const portfolioValue = pf?.totals?.tpv || timeseriesData?.totals?.tpv || data?.value || data?.portfolioValue || 0
-                  const costBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || data?.costBasis || 0
-                  const totalReturn$ = pf?.totals?.totalReturn ?? timeseriesData?.totals?.totalReturn ?? (portfolioValue - costBasis)
-                  const totalReturnPct = pf?.totals?.totalReturnPct ?? timeseriesData?.totals?.totalReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0)
+                  // Use the ACTUAL portfolio value at this specific time point from the calculated timeseries
+                  // This shows what the portfolio value was at that specific date/time
+                  const portfolioValue = data?.portfolioValue || data?.value || data?.portfolio || 0
+                  const costBasis = data?.costBasis || 0
+                  const totalReturn$ = data?.overallReturn$ ?? (portfolioValue - costBasis)
+                  const totalReturnPct = data?.overallReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0)
                   
-                  // Calculate holdings count from current positions (open holdings only)
+                  // For holdings count, we need to calculate how many positions existed at this time
+                  // For now, use current holdings count (could be enhanced to calculate from trades)
                   const currentPositions = pf?.items || localItems || []
                   const holdingsCount = currentPositions.filter((p: any) => (p.totalShares || 0) > 0).length
                   
