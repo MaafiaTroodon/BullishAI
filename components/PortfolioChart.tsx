@@ -525,8 +525,11 @@ export function PortfolioChart() {
                   // This shows what the portfolio value was at that specific date/time
                   const portfolioValue = data?.portfolioValue || data?.value || data?.portfolio || 0
                   const costBasis = data?.costBasis || 0
-                  const totalReturn$ = data?.overallReturn$ ?? (portfolioValue - costBasis)
-                  const totalReturnPct = data?.overallReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0)
+                  
+                  // Use dashboard's accurate total return calculation: Total Return = Portfolio Value - Cost Basis
+                  // This matches the dashboard summary exactly
+                  const totalReturn$ = portfolioValue - costBasis
+                  const totalReturnPct = costBasis > 0 ? (totalReturn$ / costBasis) * 100 : 0
                   
                   // For holdings count, we need to calculate how many positions existed at this time
                   // For now, use current holdings count (could be enhanced to calculate from trades)

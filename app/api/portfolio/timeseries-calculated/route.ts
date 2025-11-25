@@ -55,52 +55,19 @@ export async function GET(req: NextRequest) {
     }
     const apiRange = rangeMap[rawRange.toLowerCase()] || '1d'
     
-    // Calculate time window
-    const now = Date.now()
-    let startTime: number
-    let endTime: number = now
-    
-    if (apiRange === '1h') {
-      startTime = now - (60 * 60 * 1000)
-    } else if (apiRange === '1d') {
-      startTime = now - (24 * 60 * 60 * 1000)
-    } else if (apiRange === '3d') {
-      startTime = now - (3 * 24 * 60 * 60 * 1000)
-    } else if (apiRange === '1week') {
-      startTime = now - (7 * 24 * 60 * 60 * 1000)
-    } else if (apiRange === '1m') {
-      startTime = now - (30 * 24 * 60 * 60 * 1000)
-    } else if (apiRange === '3m') {
-      startTime = now - (90 * 24 * 60 * 60 * 1000)
-    } else if (apiRange === '6m') {
-      startTime = now - (180 * 24 * 60 * 60 * 1000)
-    } else if (apiRange === '1y') {
-      startTime = now - (365 * 24 * 60 * 60 * 1000)
-    } else {
-      // For 'all', get first trade timestamp
-      const portfolioData = await loadPortfolioFromDB(userId)
-      if (portfolioData.transactions.length > 0) {
-        const firstTrade = portfolioData.transactions.reduce((earliest, tx) => 
-          tx.timestamp < earliest.timestamp ? tx : earliest
-        )
-        startTime = firstTrade.timestamp
-      } else {
-        startTime = now - (30 * 24 * 60 * 60 * 1000)
-      }
-    }
-    
-    // Get all trades from DB
+    // Get all trades from DB FIRST to find earliest purchase
     const portfolioData = await loadPortfolioFromDB(userId)
     const trades = portfolioData.transactions.sort((a, b) => a.timestamp - b.timestamp) // Sort ascending
     
     if (trades.length === 0) {
       // No trades, return empty series
-      const sections = getSectionsForRange(apiRange, startTime, endTime)
+      const now = Date.now()
+      const sections = getSectionsForRange(apiRange, now - (30 * 24 * 60 * 60 * 1000), now)
       return NextResponse.json({
         range: rawRange,
         series: [],
         sections: sections.map(ts => Number(ts)),
-        window: { startTime, endTime },
+        window: { startTime: now - (30 * 24 * 60 * 60 * 1000), endTime: now },
         totals: {
           tpv: 0,
           costBasis: 0,
@@ -109,6 +76,61 @@ export async function GET(req: NextRequest) {
         }
       })
     }
+    
+    // Find the earliest BUY trade - that's when portfolio started
+    const buyTrades = trades.filter(t => t.action === 'buy')
+    if (buyTrades.length === 0) {
+      // No buy trades, return empty
+      const now = Date.now()
+      const sections = getSectionsForRange(apiRange, now - (30 * 24 * 60 * 60 * 1000), now)
+      return NextResponse.json({
+        range: rawRange,
+        series: [],
+        sections: sections.map(ts => Number(ts)),
+        window: { startTime: now - (30 * 24 * 60 * 60 * 1000), endTime: now },
+        totals: {
+          tpv: 0,
+          costBasis: 0,
+          totalReturn: 0,
+          totalReturnPct: 0
+        }
+      })
+    }
+    
+    const earliestBuyTrade = buyTrades.reduce((earliest, tx) => 
+      tx.timestamp < earliest.timestamp ? tx : earliest
+    )
+    const portfolioStartTime = earliestBuyTrade.timestamp
+    
+    // Calculate time window - start from when first stock was bought
+    const now = Date.now()
+    let requestedStartTime: number
+    let endTime: number = now
+    
+    if (apiRange === '1h') {
+      requestedStartTime = now - (60 * 60 * 1000)
+    } else if (apiRange === '1d') {
+      requestedStartTime = now - (24 * 60 * 60 * 1000)
+    } else if (apiRange === '3d') {
+      requestedStartTime = now - (3 * 24 * 60 * 60 * 1000)
+    } else if (apiRange === '1week') {
+      requestedStartTime = now - (7 * 24 * 60 * 60 * 1000)
+    } else if (apiRange === '1m') {
+      requestedStartTime = now - (30 * 24 * 60 * 60 * 1000)
+    } else if (apiRange === '3m') {
+      requestedStartTime = now - (90 * 24 * 60 * 60 * 1000)
+    } else if (apiRange === '6m') {
+      requestedStartTime = now - (180 * 24 * 60 * 60 * 1000)
+    } else if (apiRange === '1y') {
+      requestedStartTime = now - (365 * 24 * 60 * 60 * 1000)
+    } else {
+      // For 'all', use portfolio start time
+      requestedStartTime = portfolioStartTime
+    }
+    
+    // CRITICAL: Start time should be the later of: requested range start OR when portfolio actually started
+    // This ensures we only show data from when stocks were actually bought
+    const startTime = Math.max(requestedStartTime, portfolioStartTime)
     
     // Get time sections for the chart
     const sections = getSectionsForRange(apiRange, startTime, endTime)
@@ -253,21 +275,26 @@ export async function GET(req: NextRequest) {
       }
       
       // Calculate portfolio value at this time point
+      // Only include stocks that were bought by this time (positionsState already tracks this)
       let portfolioValue = 0
       let costBasis = 0
       
       for (const [symbol, position] of positionsState.entries()) {
-        const price = getPriceAtTime(symbol, sectionTime)
-        if (price > 0 && position.shares > 0) {
-          portfolioValue += price * position.shares
+        // Only calculate if we have shares (stock was bought by this time)
+        if (position.shares > 0) {
+          const price = getPriceAtTime(symbol, sectionTime)
+          if (price > 0) {
+            portfolioValue += price * position.shares
+          }
+          // Cost basis = total cost of all shares owned at this time
+          costBasis += position.totalCost
         }
-        costBasis += position.totalCost
       }
       
       // Update total cost basis (use the latest calculated value)
       totalCostBasis = costBasis
       
-      // Calculate returns
+      // Calculate returns using dashboard formula: Total Return = Portfolio Value - Cost Basis
       const totalReturn = portfolioValue - costBasis
       const totalReturnPct = costBasis > 0 ? (totalReturn / costBasis) * 100 : 0
       
