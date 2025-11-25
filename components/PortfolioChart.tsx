@@ -162,6 +162,10 @@ export function PortfolioChart() {
       return []
     }
     
+    // Get dashboard totals (most reliable source)
+    const dashboardTpv = pf?.totals?.tpv || 0
+    const dashboardCostBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || 0
+    
     // Map timeseries data from PostgreSQL snapshots
     // CRITICAL: Use ACTUAL snapshot values - DO NOT default to 0!
     // Each point shows the portfolio value at that specific time (from database)
@@ -170,39 +174,19 @@ export function PortfolioChart() {
       // p.portfolio is the ACTUAL portfolio value from the snapshot at that time
       // CRITICAL: If p.portfolio is 0, check other fields, but NEVER default to 0 if we have costBasis
       let portfolioVal = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
-      const costBasisVal = p.costBasis || p.costBasisAbs || p.netInvested || p.netInvestedAbs || 0
+      const costBasisVal = p.costBasis || p.costBasisAbs || p.netInvested || p.netInvestedAbs || dashboardCostBasis || 0
       
       // CRITICAL FIX: If portfolio value is 0 but we have costBasis, use costBasis
       // This handles cases where snapshots were saved with tpv=0 (prices not loaded)
       if (portfolioVal === 0 && costBasisVal > 0) {
         portfolioVal = costBasisVal
-        // Only log first few fallbacks to avoid spam
-        if (index < 3) {
-          console.warn(`[Chart Points] Point ${index} at ${new Date(p.t).toISOString()} has portfolio=0, using costBasis=${costBasisVal} as fallback`)
-        }
       }
       
-      // CRITICAL VALIDATION: If portfolio value is still 0, log error
-      if (portfolioVal === 0 && index < timeseriesData.series.length - 1) {
-        console.error(`[Chart Points] ERROR: Point ${index} at ${new Date(p.t).toISOString()} has portfolio value = 0!`, {
-          p,
-          portfolio: p.portfolio,
-          portfolioAbs: p.portfolioAbs,
-          portfolioValue: p.portfolioValue,
-          value: p.value,
-          costBasis: costBasisVal
-        })
-      }
-      
-      // Debug logging for first, middle, and last points
-      if (index === 0 || index === Math.floor(timeseriesData.series.length / 2) || index === timeseriesData.series.length - 1) {
-        console.log(`[Chart Points] Point ${index}/${timeseriesData.series.length - 1}:`, {
-          timestamp: new Date(p.t).toISOString(),
-          portfolio: p.portfolio,
-          portfolioAbs: p.portfolioAbs,
-          finalPortfolioVal: portfolioVal,
-          costBasis: costBasisVal
-        })
+      // CRITICAL: For the LAST point, always use current dashboard portfolio value
+      // This ensures the chart shows real-time updates
+      const isLastPoint = index === timeseriesData.series.length - 1
+      if (isLastPoint && dashboardTpv > 0) {
+        portfolioVal = dashboardTpv
       }
       
       return {
@@ -210,59 +194,17 @@ export function PortfolioChart() {
         portfolioValue: portfolioVal, // Y-axis: ACTUAL portfolio value at this time (preserves historical movement)
         costBasis: costBasisVal,
         netInvested: p.netInvested || p.netInvestedAbs || costBasisVal,
-      deltaFromStart$: p.deltaFromStart$ || 0,
-      deltaFromStartPct: p.deltaFromStartPct || 0,
-      overallReturn$: p.overallReturn$ || 0,
+        deltaFromStart$: p.deltaFromStart$ || 0,
+        deltaFromStartPct: p.deltaFromStartPct || 0,
+        overallReturn$: p.overallReturn$ || 0,
         overallReturnPct: p.overallReturnPct || 0,
         // Keep 't' and 'value' for backward compatibility
         t: p.t,
-        value: portfolioVal // ACTUAL snapshot value (or costBasis fallback)
+        value: portfolioVal // ACTUAL snapshot value (or costBasis fallback, or dashboard value for last point)
       }
     })
     
-    // Debug: Log summary of mapped points
-    if (mapped.length > 0) {
-      // Check original API data (before fallback) to see what we actually got
-      const originalData = timeseriesData.series || []
-      const actualPortfolioValues = originalData.filter((p: any) => {
-        const rawPortfolio = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
-        return rawPortfolio > 0
-      }).length
-      
-      const usingCostBasisFallback = originalData.filter((p: any) => {
-        const rawPortfolio = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
-        const costBasis = p.costBasis || p.costBasisAbs || p.netInvested || p.netInvestedAbs || 0
-        return rawPortfolio === 0 && costBasis > 0
-      }).length
-      
-      console.log(`[Chart Points] Total points: ${mapped.length}, Actual portfolio values from API: ${actualPortfolioValues}, Using costBasis fallback: ${usingCostBasisFallback}`)
-      
-      if (actualPortfolioValues === 0 && mapped.length > 0) {
-        console.warn('[Chart Points] WARNING: All portfolio values from API are 0! Using costBasis as fallback for all points.', {
-          samplePoint: originalData[0] || mapped[0],
-          apiTotals: timeseriesData?.totals,
-          dashboardTotals: pf?.totals,
-          note: 'This means snapshots in DB have tpv=0. Backend needs to save snapshots with actual portfolio values when prices are loaded.'
-        })
-      }
-    }
-    
     const sorted = mapped.sort((a, b) => a.timestamp - b.timestamp)
-
-    // Use summary totals (from dashboard) for return calculations - these are accurate and stored in DB
-    const summaryTpv = pf?.totals?.tpv || timeseriesData?.totals?.tpv || 0
-    const summaryCostBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || 0
-    const summaryTotalReturn = pf?.totals?.totalReturn || timeseriesData?.totals?.totalReturn || 0
-    const summaryTotalReturnPct = pf?.totals?.totalReturnPct || timeseriesData?.totals?.totalReturnPct || 0
-    
-    // CRITICAL: DO NOT overwrite historical snapshot values!
-    // Each point already has the ACTUAL portfolio value from the database at that time
-    // The API (/api/portfolio/timeseries) already handles updating only the last point
-    // We preserve ALL historical values here - 12:00 PM shows value at 12:00 PM from DB, forever
-    
-    // NO OVERWRITING - all points keep their DB snapshot values
-    // The API already updated the last point if it was recent, so we don't need to do anything here
-    // This ensures the chart shows actual history: $8,001,000 at 12:00, $8,000,000 at 12:05, etc.
 
     // Recharts needs at least two points to render a line.
     // Duplicate the point with a +1 minute offset to avoid a vertical line.
@@ -296,47 +238,37 @@ export function PortfolioChart() {
     const dashboardTpv = pf?.totals?.tpv
     if (dashboardTpv && typeof dashboardTpv === 'number' && dashboardTpv > 0) {
       const padding = dashboardTpv * 0.15 // ±15%
-      const min = dashboardTpv - padding
+      const min = Math.max(0, dashboardTpv - padding)
       const max = dashboardTpv + padding
-      console.log(`[Chart Y-axis] Using dashboard TPV: $${dashboardTpv.toLocaleString()}, domain: [$${min.toLocaleString()}, $${max.toLocaleString()}]`)
-      return [Math.max(0, min), max]
+      return [min, max]
     }
     
     // PRIORITY 2: Use API totals
     const apiTpv = timeseriesData?.totals?.tpv
     if (apiTpv && typeof apiTpv === 'number' && apiTpv > 0) {
       const padding = apiTpv * 0.15 // ±15%
-      const min = apiTpv - padding
+      const min = Math.max(0, apiTpv - padding)
       const max = apiTpv + padding
-      console.log(`[Chart Y-axis] Using API TPV: $${apiTpv.toLocaleString()}, domain: [$${min.toLocaleString()}, $${max.toLocaleString()}]`)
-      return [Math.max(0, min), max]
+      return [min, max]
     }
     
-    // PRIORITY 3: Try to get from points data (only if we have ACTUAL portfolio values, not costBasis fallbacks)
+    // PRIORITY 3: Use points data (including last point which has dashboard value)
     if (points.length > 0) {
-      // Filter to only actual portfolio values (not costBasis fallbacks)
       const portfolioValues = points
-        .map((p) => {
-          const rawPortfolio = p.portfolioValue ?? p.value ?? 0
-          const costBasis = p.costBasis ?? 0
-          // Only use if it's an actual portfolio value, not costBasis fallback
-          if (rawPortfolio > 0 && Math.abs(rawPortfolio - costBasis) > 0.01) {
-            return rawPortfolio
-          }
-          return null
-        })
+        .map((p) => p.portfolioValue ?? p.value ?? 0)
         .filter((v): v is number => typeof v === 'number' && !Number.isNaN(v) && v > 0)
       
       if (portfolioValues.length > 0) {
-        const center = portfolioValues.reduce((a, b) => a + b, 0) / portfolioValues.length
-        const padding = center * 0.15 // ±15%
-        const min = center - padding
+        const minVal = Math.min(...portfolioValues)
+        const maxVal = Math.max(...portfolioValues)
+        const center = (minVal + maxVal) / 2
+        const range = maxVal - minVal
+        
+        // Use ±15% padding, but ensure we show all data points
+        const padding = Math.max(center * 0.15, range * 0.1)
+        const min = Math.max(0, center - padding)
         const max = center + padding
-        console.log(`[Chart Y-axis] Using points average (actual portfolio values): $${center.toLocaleString()}, domain: [$${min.toLocaleString()}, $${max.toLocaleString()}]`)
-        return [Math.max(0, min), max]
-      } else {
-        // All points are using costBasis fallback - don't use them for Y-axis
-        console.log(`[Chart Y-axis] All points are using costBasis fallback, skipping points-based Y-axis calculation`)
+        return [min, max]
       }
     }
     
@@ -344,13 +276,12 @@ export function PortfolioChart() {
     const costBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || 0
     if (costBasis > 0) {
       const padding = costBasis * 0.15
-      const min = costBasis - padding
+      const min = Math.max(0, costBasis - padding)
       const max = costBasis + padding
-      console.log(`[Chart Y-axis] Using cost basis fallback: $${costBasis.toLocaleString()}, domain: [$${min.toLocaleString()}, $${max.toLocaleString()}]`)
-      return [Math.max(0, min), max]
+      return [min, max]
     }
     
-    console.warn('[Chart Y-axis] No portfolio value found, using default range')
+    // Default range
     return [0, 10000000]
   }, [points, timeseriesData?.totals, pf?.totals])
 
@@ -590,21 +521,12 @@ export function PortfolioChart() {
                     hour12: true
                   }) + ' ET'
                   
-                  // Use the ACTUAL portfolio value from this specific point (data.payload)
-                  // This shows what the portfolio value was at that specific time (6pm, 10pm, etc.)
-                  // Only use dashboard totals for the LAST point (most recent)
-                  const isLastPoint = data?.t === points[points.length - 1]?.timestamp
-                  const portfolioValue = isLastPoint 
-                    ? (pf?.totals?.tpv || timeseriesData?.totals?.tpv || data?.value || 0) // Last point: use current dashboard value
-                    : (data?.value || data?.portfolioValue || data?.portfolio || 0) // Other points: use actual snapshot value at that time
-                  
-                  const costBasis = data?.costBasis || pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || 0
-                  const totalReturn$ = isLastPoint
-                    ? (pf?.totals?.totalReturn ?? timeseriesData?.totals?.totalReturn ?? (portfolioValue - costBasis))
-                    : (data?.overallReturn$ ?? (portfolioValue - costBasis))
-                  const totalReturnPct = isLastPoint
-                    ? (pf?.totals?.totalReturnPct ?? timeseriesData?.totals?.totalReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0))
-                    : (data?.overallReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0))
+                  // ALWAYS use dashboard totals for portfolio value and cost basis (matches dashboard display)
+                  // This ensures consistency between dashboard summary and chart tooltip
+                  const portfolioValue = pf?.totals?.tpv || timeseriesData?.totals?.tpv || data?.value || data?.portfolioValue || 0
+                  const costBasis = pf?.totals?.costBasis || timeseriesData?.totals?.costBasis || data?.costBasis || 0
+                  const totalReturn$ = pf?.totals?.totalReturn ?? timeseriesData?.totals?.totalReturn ?? (portfolioValue - costBasis)
+                  const totalReturnPct = pf?.totals?.totalReturnPct ?? timeseriesData?.totals?.totalReturnPct ?? (costBasis > 0 ? ((portfolioValue - costBasis) / costBasis) * 100 : 0)
                   
                   // Calculate holdings count from current positions (open holdings only)
                   const currentPositions = pf?.items || localItems || []
