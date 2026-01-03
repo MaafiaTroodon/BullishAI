@@ -161,8 +161,21 @@ export function PortfolioChart() {
       return []
     }
     
+    type TimeseriesPoint = {
+      timestamp: number
+      portfolioValue: number
+      costBasis: number
+      netInvested: number
+      deltaFromStart$: number
+      deltaFromStartPct: number
+      overallReturn$: number
+      overallReturnPct: number
+      t: number
+      value: number
+    }
+
     // Map timeseries data - each point has timestamp (x-axis) and portfolio value (y-axis)
-    const mapped = timeseriesData.series.map((p: any) => {
+    const mapped: TimeseriesPoint[] = timeseriesData.series.map((p: any) => {
       // Use the portfolio value from the calculated timeseries
       // This is calculated as: sum(shares_i * price_i_at_that_time) for all holdings
       const portfolioVal = p.portfolio || p.portfolioAbs || p.portfolioValue || p.value || 0
