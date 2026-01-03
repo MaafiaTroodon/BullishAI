@@ -171,7 +171,7 @@ export async function getPortfolioSnapshots(
       [userId, startTime, endTime]
     )
 
-    let snapshots = result.rows.map((row: any) => {
+    let snapshots: PortfolioSnapshot[] = result.rows.map((row: any) => {
       let parsedDetails = row.details
       if (parsedDetails && typeof parsedDetails === 'string') {
         try {
@@ -562,4 +562,3 @@ function alignUp(timestamp: number, bucketMs: number): number {
   if (bucketMs <= 0) return Math.floor(timestamp)
   return Math.ceil(timestamp / bucketMs) * bucketMs
 }
-
