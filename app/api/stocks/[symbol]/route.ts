@@ -171,7 +171,7 @@ type CandlePoint = {
   o?: number
   h?: number
   l?: number
-  v?: number
+  v?: number | null
 }
 
 function buildQuoteFromCandles(candles: CandlePoint[] | undefined | null) {
