@@ -34,6 +34,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [lastPresetId, setLastPresetId] = useState<string | null>(null)
   const [lastFollowUpContext, setLastFollowUpContext] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Load chat history from localStorage
@@ -68,9 +69,11 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     }
   }, [messages])
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom (within chat container only)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messagesContainerRef.current
+    if (!container) return
+    container.scrollTo({ top: container.scrollHeight, behavior: 'auto' })
   }, [messages])
 
   // Auto-expand and set focus symbol if provided
@@ -327,7 +330,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/30">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/30">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -541,4 +544,3 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     </div>
   )
 }
-

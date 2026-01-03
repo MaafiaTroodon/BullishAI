@@ -76,6 +76,13 @@ export default function Home() {
     }
   }, [])
 
+  // Always start at the top of the homepage on load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
+  }, [])
+
 
   // Handle search with suggestions
   const handleSearchChange = async (value: string) => {
