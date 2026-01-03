@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { Zap, ArrowLeft, TrendingUp } from 'lucide-react'
+import { AIGate } from '@/components/AIGate'
 
 export default function QuickInsightsPage() {
   const [data, setData] = useState<any>(null)
@@ -40,8 +41,9 @@ export default function QuickInsightsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 py-12">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <AIGate title="Quick Insights">
+      <div className="min-h-screen bg-slate-900 py-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal variant="fade">
           <Link href="/ai" className="text-blue-400 hover:text-blue-300 mb-6 inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
@@ -163,8 +165,8 @@ export default function QuickInsightsPage() {
             </Reveal>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </AIGate>
   )
 }
-

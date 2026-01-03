@@ -3,43 +3,11 @@
 import { Reveal } from '@/components/anim/Reveal'
 import Image from 'next/image'
 
-const teamMembers = [
-  {
-    name: 'Sarah Chen',
-    role: 'CEO & Co-Founder',
-    bio: 'Former VP at Goldman Sachs with 15+ years in fintech. Led AI initiatives at major financial institutions.',
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80',
-  },
-  {
-    name: 'Marcus Rodriguez',
-    role: 'CTO & Co-Founder',
-    bio: 'Ex-Google engineer specializing in real-time systems and machine learning. Built trading platforms handling billions in volume.',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
-  },
-  {
-    name: 'Priya Patel',
-    role: 'Head of AI Research',
-    bio: 'PhD in Machine Learning from MIT. Published 30+ papers on financial prediction models and algorithmic trading.',
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&q=80',
-  },
-  {
-    name: 'David Kim',
-    role: 'Head of Product',
-    bio: 'Product leader with experience at Robinhood and Coinbase. Passionate about making finance accessible to everyone.',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&q=80',
-  },
-  {
-    name: 'Emily Watson',
-    role: 'Head of Engineering',
-    bio: 'Full-stack architect with expertise in high-performance systems. Previously scaled infrastructure at Stripe.',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80',
-  },
-  {
-    name: 'James Thompson',
-    role: 'Head of Security',
-    bio: 'Cybersecurity expert with 20+ years protecting financial systems. Former security lead at JPMorgan Chase.',
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80',
-  },
+const founderHighlights = [
+  'Computer Science student at Dalhousie University with a strong focus on software engineering and applied AI.',
+  'Actively building real-world projects across full-stack development, systems, and data-driven applications.',
+  'Student Software & Application Developer passionate about AI-driven products and real-world problem solving.',
+  'Building full-stack platforms like BullishAI, blending engineering, data, and design to make investing smarter and more accessible.',
 ]
 
 export default function TeamPage() {
@@ -72,37 +40,44 @@ export default function TeamPage() {
         </div>
       </Reveal>
 
-      {/* Team Grid */}
+      {/* Team Spotlight */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <Reveal variant="fade">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Leadership</h2>
+            <h2 className="text-3xl font-bold text-white mb-4">Founder Spotlight</h2>
             <p className="text-slate-400 max-w-2xl mx-auto">
-              Our team brings together decades of experience from leading financial institutions, tech companies, and research labs.
+              The product vision and engineering leadership behind BullishAI.
             </p>
           </div>
         </Reveal>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {teamMembers.map((member, idx) => (
-            <Reveal key={member.name} variant="rise" delay={idx * 0.1}>
-              <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 hover:border-slate-600 transition-all hover:shadow-lg hover:shadow-blue-500/10">
-                <div className="relative w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden">
-                  <Image
-                    src={member.image}
-                    alt={member.name}
-                    fill
-                    className="object-cover"
-                    sizes="128px"
-                  />
-                </div>
-                <h3 className="text-xl font-semibold text-white text-center mb-1">{member.name}</h3>
-                <p className="text-blue-400 text-sm text-center mb-3">{member.role}</p>
-                <p className="text-slate-400 text-sm leading-relaxed text-center">{member.bio}</p>
+        <Reveal variant="rise">
+          <div className="bg-slate-800/60 rounded-2xl p-6 md:p-10 border border-slate-700 shadow-lg shadow-blue-500/10">
+            <div className="grid md:grid-cols-[280px_1fr] gap-8 items-center">
+              <div className="relative w-56 h-80 md:w-64 md:h-[22rem] mx-auto rounded-2xl overflow-hidden border border-slate-700 bg-slate-900/40">
+                <Image
+                  src="/configs/images/malhar-profile.jpg"
+                  alt="Malhar Mahajan"
+                  fill
+                  className="object-contain object-center"
+                  sizes="(max-width: 768px) 224px, 256px"
+                />
               </div>
-            </Reveal>
-          ))}
-        </div>
+              <div>
+                <h3 className="text-3xl font-semibold text-white mb-2">Malhar Mahajan</h3>
+                <p className="text-blue-400 text-base font-medium mb-5">Founder & Lead Developer</p>
+                <div className="space-y-3">
+                  {founderHighlights.map((point) => (
+                    <div key={point} className="flex gap-3 text-slate-300 leading-relaxed">
+                      <span className="mt-2 h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
+                      <p>{point}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Reveal>
 
         {/* Culture Section */}
         <Reveal variant="fade" delay={0.5}>
@@ -157,4 +132,3 @@ export default function TeamPage() {
     </div>
   )
 }
-

@@ -71,23 +71,64 @@ export async function GET(
       }
     }
 
-    // Try to get company name from quote summary
-    let companyName = null
+    // Fetch fundamentals and company profile from Yahoo
+    let companyName: string | null = null
+    let fundamentals: {
+      peRatio?: number | null
+      week52High?: number | null
+      week52Low?: number | null
+      dividendYield?: number | null
+      eps?: number | null
+      revenue?: number | null
+      marketCap?: number | null
+    } = {}
     try {
       const summaryResponse = await axios.get(
-        `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=summaryProfile`,
-        { timeout: 3000 }
+        `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=price,summaryDetail,defaultKeyStatistics,financialData`,
+        { timeout: 4000 }
       )
       
-      if (summaryResponse?.data?.quoteSummary?.result?.[0]?.summaryProfile) {
-        companyName = summaryResponse.data.quoteSummary.result[0].summaryProfile.longName || 
-                      summaryResponse.data.quoteSummary.result[0].summaryProfile.shortName || 
-                      symbol
+      const result = summaryResponse?.data?.quoteSummary?.result?.[0]
+      if (result) {
+        const price = result.price
+        const summaryDetail = result.summaryDetail
+        const keyStats = result.defaultKeyStatistics
+        const financialData = result.financialData
+
+        companyName =
+          price?.longName ||
+          price?.shortName ||
+          price?.symbol ||
+          symbol
+
+        fundamentals = {
+          peRatio:
+            summaryDetail?.trailingPE?.raw ??
+            keyStats?.trailingPE?.raw ??
+            null,
+          week52High: summaryDetail?.fiftyTwoWeekHigh?.raw ?? null,
+          week52Low: summaryDetail?.fiftyTwoWeekLow?.raw ?? null,
+          dividendYield: summaryDetail?.dividendYield?.raw != null
+            ? summaryDetail.dividendYield.raw * 100
+            : null,
+          eps:
+            financialData?.epsTrailingTwelveMonths?.raw ??
+            keyStats?.trailingEps?.raw ??
+            null,
+          revenue: financialData?.totalRevenue?.raw ?? null,
+          marketCap:
+            summaryDetail?.marketCap?.raw ??
+            price?.marketCap?.raw ??
+            null,
+        }
       }
     } catch (error: any) {
-      // If company name fetch fails, use symbol as fallback
       companyName = symbol
     }
+
+    const enrichedMarketCap = fundamentals.marketCap || marketCap
+    const enrichedMarketCapShort = enrichedMarketCap ? formatMarketCapShort(enrichedMarketCap) : marketCapShort
+    const enrichedMarketCapFull = enrichedMarketCap ? formatMarketCapFull(enrichedMarketCap) : marketCapFull
 
     return NextResponse.json({
       symbol,
@@ -101,15 +142,16 @@ export async function GET(
         low: quote.low,
         previousClose: quote.previousClose,
         volume: quote.volume,
-        marketCap: marketCap,
-        marketCapShort: marketCapShort,
-        marketCapFull: marketCapFull,
-        marketCapSource: marketCapResult.source,
+        marketCap: enrichedMarketCap,
+        marketCapShort: enrichedMarketCapShort,
+        marketCapFull: enrichedMarketCapFull,
+        marketCapSource: fundamentals.marketCap ? 'yahoo' : marketCapResult.source,
         currency: quote.currency || 'USD',
         fetchedAt: quote.fetchedAt,
         stale: !!quote.stale,
         source: quote.source,
       },
+      fundamentals,
       candles: candlesResult.data,
       chartSource: candlesResult.source,
       changePctOverRange,
@@ -176,4 +218,3 @@ function buildQuoteFromCandles(candles: CandlePoint[] | undefined | null) {
     source: 'candles-fallback',
   }
 }
-

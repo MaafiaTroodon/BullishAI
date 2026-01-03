@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { BarChart3, ArrowLeft, Search } from 'lucide-react'
 import useSWR from 'swr'
 import { useSearchParams } from 'next/navigation'
+import { AIGate } from '@/components/AIGate'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -286,8 +287,9 @@ function TechnicalContent() {
 export default function TechnicalPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
-      <TechnicalContent />
+      <AIGate title="Technical Analysis">
+        <TechnicalContent />
+      </AIGate>
     </Suspense>
   )
 }
-

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Reveal } from './anim/Reveal'
 import TiltedCard from './TiltedCard'
+import { authClient } from '@/lib/auth-client'
 
 const aiFeatures = [
   {
@@ -136,6 +137,10 @@ const gradientColors: Record<string, { from: string; to: string }> = {
 }
 
 export function AIMenu() {
+  const { data: session, isPending: sessionLoading } = authClient.useSession()
+  const isLoggedIn = !!session?.user
+  const showLockState = !isLoggedIn && !sessionLoading
+
   return (
     <div className="min-h-screen bg-slate-900 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -148,40 +153,82 @@ export function AIMenu() {
           </div>
         </Reveal>
 
+        {showLockState && (
+          <Reveal variant="fade" delay={0.15}>
+            <div className="mb-10 bg-slate-800/60 rounded-xl p-6 border border-slate-700 text-center">
+              <p className="text-slate-200 text-lg font-semibold mb-2">Sign in to unlock AI tools</p>
+              <p className="text-slate-400 mb-4">
+                Create an account or sign in to access all AI-powered analysis features.
+              </p>
+              <Link
+                href="/auth/signin"
+                className="inline-flex items-center px-5 py-2.5 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 transition-colors"
+              >
+                Sign In
+              </Link>
+            </div>
+          </Reveal>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {aiFeatures.map((feature, idx) => {
             const Icon = feature.icon
             const gradient = gradientColors[feature.color] || gradientColors.blue
+            const CardContent = (
+              <TiltedCard
+                containerHeight="100%"
+                scaleOnHover={1.05}
+                rotateAmplitude={12}
+                showMobileWarning={false}
+                showTooltip={false}
+                gradientFrom={gradient.from}
+                gradientTo={gradient.to}
+                className="h-full"
+              >
+                <div
+                  className={`relative bg-slate-800/50 rounded-xl p-6 border ${colorClasses[feature.color]} h-full ${
+                    showLockState ? 'opacity-70' : 'cursor-pointer group'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-lg ${colorClasses[feature.color]} flex-shrink-0`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition">
+                        {feature.title}
+                      </h3>
+                      <p className="text-sm text-slate-400 leading-relaxed">
+                        {feature.description}
+                      </p>
+                    </div>
+                  </div>
+                  {showLockState && (
+                    <div className="absolute inset-0 rounded-xl bg-slate-900/70 backdrop-blur-sm flex flex-col items-center justify-center text-center px-6">
+                      <p className="text-white font-semibold mb-2">Login required</p>
+                      <p className="text-slate-300 text-sm mb-3">
+                        Sign in to access this AI feature.
+                      </p>
+                      <Link
+                        href="/auth/signin"
+                        className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 transition-colors"
+                      >
+                        Sign In
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </TiltedCard>
+            )
             return (
               <Reveal key={feature.id} variant="rise" delay={idx * 0.05}>
-                <Link href={feature.href} className="block h-full">
-                  <TiltedCard
-                    containerHeight="100%"
-                    scaleOnHover={1.05}
-                    rotateAmplitude={12}
-                    showMobileWarning={false}
-                    showTooltip={false}
-                    gradientFrom={gradient.from}
-                    gradientTo={gradient.to}
-                    className="h-full"
-                  >
-                    <div className={`bg-slate-800/50 rounded-xl p-6 border ${colorClasses[feature.color]} cursor-pointer group h-full`}>
-                      <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-lg ${colorClasses[feature.color]} flex-shrink-0`}>
-                          <Icon className="w-6 h-6" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition">
-                            {feature.title}
-                          </h3>
-                          <p className="text-sm text-slate-400 leading-relaxed">
-                            {feature.description}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </TiltedCard>
-                </Link>
+                {showLockState ? (
+                  <div className="block h-full">{CardContent}</div>
+                ) : (
+                  <Link href={feature.href} className="block h-full">
+                    {CardContent}
+                  </Link>
+                )}
               </Reveal>
             )
           })}
@@ -221,4 +268,3 @@ export function AIMenu() {
     </div>
   )
 }
-

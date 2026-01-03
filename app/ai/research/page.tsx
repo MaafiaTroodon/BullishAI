@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Search as SearchIcon, ArrowLeft, ExternalLink, FileText } from 'lucide-react'
 import useSWR from 'swr'
 import { useSearchParams } from 'next/navigation'
+import { AIGate } from '@/components/AIGate'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -15,16 +16,31 @@ function ResearchContent() {
   const [symbol, setSymbol] = useState(searchParams.get('symbol')?.toUpperCase() || 'AAPL')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const { data: quote } = useSWR(`/api/quote?symbol=${symbol}`, fetcher, { refreshInterval: 30000 })
-  const { data: news } = useSWR(`/api/news?symbol=${symbol}`, fetcher, { refreshInterval: 60000 })
-  const { data: stockData } = useSWR(`/api/stocks?symbol=${symbol}`, fetcher, { refreshInterval: 300000 })
+  const { data: stockData } = useSWR(`/api/stocks/${symbol}`, fetcher, { refreshInterval: 300000 })
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (searchQuery.trim()) {
-      setSymbol(searchQuery.trim().toUpperCase())
+    const query = searchQuery.trim()
+    if (!query) return
+
+    try {
+      const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`)
+      const data = await res.json()
+      const match = data?.results?.[0]?.symbol
+      if (match) {
+        setSymbol(match.toUpperCase())
+        return
+      }
+    } catch (error) {
+      console.warn('Search lookup failed, falling back to raw input')
     }
+
+    setSymbol(query.toUpperCase())
   }
+
+  const quote = stockData?.quote
+  const fundamentals = stockData?.fundamentals
+  const newsItems = stockData?.news || []
 
   return (
     <div className="min-h-screen bg-slate-900 py-12">
@@ -74,15 +90,15 @@ function ResearchContent() {
                 <div className="flex items-start justify-between mb-6">
                   <div>
                     <h2 className="text-3xl font-bold text-white mb-2">{symbol}</h2>
-                    <p className="text-slate-400">{stockData?.name || quote?.name || 'Company Name'}</p>
+                    <p className="text-slate-400">{stockData?.companyName || 'Company Name'}</p>
                   </div>
                   {quote && (
                     <div className="text-right">
                       <div className="text-3xl font-bold text-white mb-1">
-                        ${quote.price?.toFixed(2)}
+                        {quote?.price ? `$${quote.price.toFixed(2)}` : '—'}
                       </div>
-                      <div className={`text-lg font-semibold ${quote.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {quote.changePercent >= 0 ? '+' : ''}{quote.changePercent?.toFixed(2)}%
+                      <div className={`text-lg font-semibold ${quote?.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {quote?.changePct >= 0 ? '+' : ''}{quote?.changePct?.toFixed(2)}%
                       </div>
                     </div>
                   )}
@@ -93,26 +109,26 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Market Cap</div>
                     <div className="text-lg font-semibold text-white">
-                      {quote?.marketCap ? `$${(quote.marketCap / 1e9).toFixed(1)}B` : 'N/A'}
+                      {quote?.marketCap ? `$${(quote.marketCap / 1e9).toFixed(2)}B` : 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">P/E Ratio</div>
                     <div className="text-lg font-semibold text-white">
-                      {quote?.peRatio || stockData?.pe || 'N/A'}
+                      {fundamentals?.peRatio || 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Volume</div>
                     <div className="text-lg font-semibold text-white">
-                      {quote?.volume ? (quote.volume / 1e6).toFixed(1) + 'M' : 'N/A'}
+                      {quote?.volume ? (quote.volume / 1e6).toFixed(2) + 'M' : 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">52W Range</div>
                     <div className="text-lg font-semibold text-white">
-                      {quote?.high52w && quote?.low52w 
-                        ? `$${quote.low52w.toFixed(2)} - $${quote.high52w.toFixed(2)}`
+                      {fundamentals?.week52High && fundamentals?.week52Low
+                        ? `$${fundamentals.week52Low.toFixed(2)} - $${fundamentals.week52High.toFixed(2)}`
                         : 'N/A'}
                     </div>
                   </div>
@@ -128,19 +144,19 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Revenue (TTM)</div>
                     <div className="text-lg font-semibold text-white">
-                      {stockData?.revenue ? `$${(stockData.revenue / 1e9).toFixed(1)}B` : 'N/A'}
+                      {fundamentals?.revenue ? `$${(fundamentals.revenue / 1e9).toFixed(2)}B` : 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">EPS</div>
                     <div className="text-lg font-semibold text-white">
-                      {stockData?.eps || quote?.eps || 'N/A'}
+                      {fundamentals?.eps || 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Dividend Yield</div>
                     <div className="text-lg font-semibold text-white">
-                      {stockData?.dividendYield ? `${stockData.dividendYield.toFixed(2)}%` : 'N/A'}
+                      {fundamentals?.dividendYield ? `${fundamentals.dividendYield.toFixed(2)}%` : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -148,15 +164,17 @@ function ResearchContent() {
             </Reveal>
 
             {/* Catalysts */}
-            {news?.items && news.items.length > 0 && (
+            {newsItems.length > 0 && (
               <Reveal variant="fade" delay={0.4}>
                 <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 mb-6">
                   <h3 className="text-xl font-semibold text-white mb-4">Recent Catalysts</h3>
                   <div className="space-y-3">
-                    {news.items.slice(0, 5).map((item: any, idx: number) => (
+                    {newsItems.slice(0, 5).map((item: any, idx: number) => (
                       <div key={idx} className="border-l-2 border-blue-500 pl-4">
-                        <div className="font-semibold text-white mb-1">{item.headline}</div>
-                        <div className="text-sm text-slate-400">{item.source} • {new Date(item.datetime).toLocaleDateString()}</div>
+                        <div className="font-semibold text-white mb-1">{item.headline || item.title}</div>
+                        <div className="text-sm text-slate-400">
+                          {item.source || 'News'} • {item.datetime ? new Date(item.datetime).toLocaleDateString() : 'Recent'}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -197,8 +215,9 @@ function ResearchContent() {
 export default function ResearchPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
-      <ResearchContent />
+      <AIGate title="Stock Research">
+        <ResearchContent />
+      </AIGate>
     </Suspense>
   )
 }
-

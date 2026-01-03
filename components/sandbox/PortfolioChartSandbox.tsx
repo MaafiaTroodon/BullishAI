@@ -115,18 +115,37 @@ export function PortfolioChartSandbox() {
   const strokeColor = isPositive ? '#10b981' : '#ef4444'
   const gradientId = `pfColor-${isPositive ? 'up' : 'down'}`
   
-  // Calculate Y-axis domain
+  // Calculate Y-axis domain dynamically from actual portfolio value series data
+  // Uses min/max from the data with ~10% padding to show proper graph variation
   const yDomain = useMemo(() => {
-    if (points.length === 0) return [0, 100]
-    const values = points.map((p: { value: number }) => p.value).filter((v: number) => v > 0)
-    const netDepositValues = points.map((p: { netDeposits: number }) => p.netDeposits).filter((v: number) => v > 0)
-    const allValues = [...values, ...netDepositValues]
-    if (allValues.length === 0) return [0, 100]
-    const min = Math.min(...allValues)
-    const max = Math.max(...allValues)
-    const range = max - min || max || 1
-    const padding = range * 0.06
-    return [Math.max(0, min - padding), max + padding]
+    if (points.length === 0) {
+      // No data, use minimal fallback
+      return [0, 1000000]
+    }
+    
+    // Extract all portfolio values from the series
+    const portfolioValues = points
+      .map((p: any) => p.value || p.portfolioValue || 0)
+      .filter((v: number) => typeof v === 'number' && !Number.isNaN(v) && v > 0)
+    
+    if (portfolioValues.length === 0) {
+      return [0, 1000000]
+    }
+    
+    // Calculate min and max from actual data
+    const minValue = Math.min(...portfolioValues)
+    const maxValue = Math.max(...portfolioValues)
+    const range = maxValue - minValue
+    
+    // Apply ~10% padding: lowerBound ≈ minValue * 0.9, upperBound ≈ maxValue * 1.1
+    // If min and max are very close, enforce minimum padding so line doesn't look flat
+    const minPadding = Math.max(range * 0.1, minValue * 0.1, 1000) // At least $1000 or 10% of range
+    const maxPadding = Math.max(range * 0.1, maxValue * 0.1, 1000) // At least $1000 or 10% of range
+    
+    const lowerBound = Math.max(0, minValue - minPadding)
+    const upperBound = maxValue + maxPadding
+    
+    return [lowerBound, upperBound]
   }, [points])
 
   const ranges = [

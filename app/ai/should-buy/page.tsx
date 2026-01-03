@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { HelpCircle, ArrowLeft, Search, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import useSWR from 'swr'
 import { useSearchParams } from 'next/navigation'
+import { AIGate } from '@/components/AIGate'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -209,8 +210,9 @@ function ShouldBuyContent() {
 export default function ShouldBuyPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
-      <ShouldBuyContent />
+      <AIGate title="Should I Buy?">
+        <ShouldBuyContent />
+      </AIGate>
     </Suspense>
   )
 }
-

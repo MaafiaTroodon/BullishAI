@@ -35,6 +35,44 @@ export default function AboutPage() {
 
       {/* Content Sections */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {/* Profile */}
+        <Reveal variant="fade" delay={0.05}>
+          <div className="mb-20">
+            <div className="grid md:grid-cols-2 gap-12 items-center">
+              <Reveal variant="slide-right" delay={0.15}>
+                <div className="relative h-64 md:h-80 rounded-xl overflow-hidden order-2 md:order-1">
+                  <Image
+                    src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=900&q=80"
+                    alt="Creative portfolio backdrop"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                </div>
+              </Reveal>
+              <div className="order-1 md:order-2">
+                <Reveal variant="slide-left">
+                  <h2 className="text-3xl font-bold text-white mb-3">Malhar Datta Mahajan</h2>
+                </Reveal>
+                <Reveal variant="fade" delay={0.1}>
+                  <p className="text-slate-300 text-lg mb-4">Software Developer • Halifax, NS</p>
+                  <p className="text-slate-400 leading-relaxed mb-6">
+                    Connect with me to learn more about my work, projects, and experience on my portfolio website.
+                  </p>
+                  <a
+                    href="https://portfoliomalhar.netlify.app/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center px-5 py-2.5 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 transition-colors"
+                  >
+                    View Portfolio
+                  </a>
+                </Reveal>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+
         {/* Mission */}
         <Reveal variant="fade" delay={0.1}>
           <div className="mb-20">
@@ -152,4 +190,3 @@ export default function AboutPage() {
     </div>
   )
 }
-

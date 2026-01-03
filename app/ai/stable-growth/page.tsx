@@ -6,6 +6,7 @@ import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { TrendingUp, ArrowLeft } from 'lucide-react'
 import useSWR from 'swr'
+import { AIGate } from '@/components/AIGate'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -25,8 +26,9 @@ export default function StableGrowthPage() {
   const displayStocks = stableStocks.length > 0 ? stableStocks : (data?.stocks || []).slice(0, 6)
 
   return (
-    <div className="min-h-screen bg-slate-900 py-12">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <AIGate title="Stable Growth Picks">
+      <div className="min-h-screen bg-slate-900 py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal variant="fade">
           <Link href="/ai" className="text-blue-400 hover:text-blue-300 mb-6 inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
@@ -128,8 +130,8 @@ export default function StableGrowthPage() {
             )}
           </>
         )}
+        </div>
       </div>
-    </div>
+    </AIGate>
   )
 }
-

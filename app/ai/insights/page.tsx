@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { Suspense } from 'react'
 import { AIInsightsToolbar } from '@/components/AIInsightsToolbar'
 import { useSearchParams } from 'next/navigation'
+import { AIGate } from '@/components/AIGate'
 
 function AIInsightsContent() {
   const searchParams = useSearchParams()
@@ -30,8 +31,9 @@ function AIInsightsContent() {
 export default function AIInsightsPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
-      <AIInsightsContent />
+      <AIGate title="AI Insights Dashboard">
+        <AIInsightsContent />
+      </AIGate>
     </Suspense>
   )
 }
-

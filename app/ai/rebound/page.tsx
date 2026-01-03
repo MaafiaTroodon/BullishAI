@@ -6,6 +6,7 @@ import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { Target, ArrowLeft } from 'lucide-react'
 import useSWR from 'swr'
+import { AIGate } from '@/components/AIGate'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -15,8 +16,9 @@ export default function ReboundPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-900 py-12">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <AIGate title="Undervalued Rebound">
+      <div className="min-h-screen bg-slate-900 py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal variant="fade">
           <Link href="/ai" className="text-blue-400 hover:text-blue-300 mb-6 inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
@@ -116,8 +118,8 @@ export default function ReboundPage() {
             </div>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </AIGate>
   )
 }
-

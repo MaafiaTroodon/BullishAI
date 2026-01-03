@@ -6,6 +6,7 @@ import { Reveal } from '@/components/anim/Reveal'
 import Link from 'next/link'
 import { Star, ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react'
 import useSWR from 'swr'
+import { AIGate } from '@/components/AIGate'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -24,8 +25,9 @@ export default function RecommendedPage() {
   const meta = data?.meta
 
   return (
-    <div className="min-h-screen bg-slate-900 py-12">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <AIGate title="Today's Recommended Stocks">
+      <div className="min-h-screen bg-slate-900 py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal variant="fade">
           <Link href="/ai" className="text-blue-400 hover:text-blue-300 mb-6 inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
@@ -138,8 +140,8 @@ export default function RecommendedPage() {
             </Reveal>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </AIGate>
   )
 }
-
