@@ -269,7 +269,9 @@ export function PortfolioChart() {
 
   const sectionTimeline = useMemo(() => {
     if (Array.isArray(timeseriesData?.sections) && timeseriesData.sections.length > 0) {
-      return timeseriesData.sections.map((ts: any) => Number(ts)).filter((n) => Number.isFinite(n))
+      return timeseriesData.sections
+        .map((ts: unknown) => Number(ts))
+        .filter((n: number) => Number.isFinite(n))
     }
     return points.map((p) => p.timestamp)
   }, [timeseriesData?.sections, points])
