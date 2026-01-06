@@ -17,6 +17,7 @@ import { StaggerGrid } from '@/components/anim/StaggerGrid'
 import { ParallaxImage } from '@/components/anim/ParallaxImage'
 import { Footer } from '@/components/Footer'
 import { authClient } from '@/lib/auth-client'
+import { getRecommendationState, groupRecommendations, recordSearchTicker } from '@/lib/recommendations'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -41,6 +42,10 @@ export default function Home() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusSymbol, setFocusSymbol] = useState<string | undefined>(undefined)
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([])
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
+  const [searchCount, setSearchCount] = useState(0)
+  const [recommendationPool, setRecommendationPool] = useState<string[]>([])
+  const [pricesByTicker, setPricesByTicker] = useState<Record<string, number>>({})
   const [hoveredSector, setHoveredSector] = useState<string | null>(null)
   
   // Get current stock list based on exchange
@@ -99,6 +104,19 @@ export default function Home() {
     } catch {}
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const refresh = () => {
+      const state = getRecommendationState()
+      setSearchHistory(state.searchHistory)
+      setSearchCount(state.searchCount)
+      setRecommendationPool(state.recommendationPool)
+    }
+    refresh()
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
+
   const recordViewedTicker = (symbol: string) => {
     if (typeof window === 'undefined') return
     try {
@@ -111,6 +129,37 @@ export default function Home() {
       setRecentlyViewed(next)
     } catch {}
   }
+
+  const recordSearch = (symbol: string) => {
+    const state = recordSearchTicker(symbol)
+    setSearchHistory(state.searchHistory)
+    setSearchCount(state.searchCount)
+    setRecommendationPool(state.recommendationPool)
+  }
+
+  useEffect(() => {
+    if (!recommendationPool.length) return
+    let active = true
+    const tickers = recommendationPool
+    const interval = setInterval(async () => {
+      try {
+        const data = await fetcher(`/api/quotes?symbols=${tickers.join(',')}`)
+        const next: Record<string, number> = {}
+        for (const quote of data?.quotes || []) {
+          if (quote?.symbol && Number.isFinite(Number(quote?.price))) {
+            next[String(quote.symbol).toUpperCase()] = Number(quote.price)
+          }
+        }
+        if (active) {
+          setPricesByTicker((prev) => ({ ...prev, ...next }))
+        }
+      } catch {}
+    }, 1000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [recommendationPool])
 
 
   // Handle search with suggestions
@@ -180,6 +229,7 @@ export default function Home() {
     if (searchQuery && searchQuery.length <= 5) {
       const symbol = searchQuery.toUpperCase()
       setSelectedSymbol(symbol)
+      recordSearch(symbol)
       recordViewedTicker(symbol)
     }
   }
@@ -404,13 +454,50 @@ export default function Home() {
 
   const viewedWidgetData = useMemo(() => {
     if (recentlyViewed.length === 0) return null
-    const base = recentlyViewed.slice(0, 2)
-    const suggestions = [
-      'Similar momentum stocks',
-      'Better valuation alternatives',
-      'Risk-reduced options',
+    const base = recentlyViewed.slice(0, 3)
+    const upper = base.map((t) => t.toUpperCase())
+    const isCanadian = upper.some((t) => t.endsWith('.TO') || ['BMO', 'TD', 'BNS', 'RY', 'CM', 'NA'].includes(t))
+
+    const groups = [
+      {
+        title: 'Canadian banks & insurers',
+        tickers: ['RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'MFC.TO'],
+      },
+      {
+        title: 'US money-center banks',
+        tickers: ['JPM', 'BAC', 'WFC', 'C', 'GS'],
+      },
+      {
+        title: 'AI & mega-cap tech',
+        tickers: ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'AMD'],
+      },
+      {
+        title: 'Platform & consumer tech',
+        tickers: ['GOOGL', 'META', 'AMZN', 'NFLX', 'TSLA'],
+      },
+      {
+        title: 'Defensive large caps',
+        tickers: ['JNJ', 'PG', 'COST', 'UNH', 'KO'],
+      },
     ]
-    return { base, suggestions }
+
+    const selectedGroups = groups.filter((group) => {
+      if (isCanadian) {
+        return group.title.includes('Canadian') || group.title.includes('US money-center')
+      }
+      return group.tickers.some((ticker) => upper.includes(ticker))
+    })
+
+    const fallbackGroups = isCanadian
+      ? groups.slice(0, 2)
+      : groups.slice(2, 4)
+
+    const finalGroups = (selectedGroups.length ? selectedGroups : fallbackGroups).map((group) => ({
+      ...group,
+      tickers: group.tickers.filter((ticker) => !upper.includes(ticker)).slice(0, 4),
+    }))
+
+    return { base, groups: finalGroups }
   }, [recentlyViewed])
 
   return (
@@ -1033,9 +1120,23 @@ export default function Home() {
                   Because you viewed <span className="text-white font-semibold">{viewedWidgetData.base.join(' & ')}</span>:
                 </div>
                 <div className="grid md:grid-cols-3 gap-3">
-                  {viewedWidgetData.suggestions.map((item) => (
-                    <div key={item} className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-sm text-slate-300">
-                      {item}
+                  {viewedWidgetData.groups.map((group) => (
+                    <div key={group.title} className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-sm text-slate-300">
+                      <div className="text-slate-200 font-semibold mb-2">{group.title}</div>
+                      <div className="flex flex-wrap gap-2">
+                        {group.tickers.map((ticker) => (
+                          <button
+                            key={ticker}
+                            onClick={() => window.location.assign(`/stocks/${ticker}`)}
+                            className="px-2 py-1 rounded-full text-xs border border-slate-700 text-slate-300 hover:border-blue-500/60 hover:text-white transition"
+                          >
+                            {ticker}
+                          </button>
+                        ))}
+                        {group.tickers.length === 0 && (
+                          <span className="text-xs text-slate-500">No more related tickers available.</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

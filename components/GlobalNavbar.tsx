@@ -134,6 +134,12 @@ export function GlobalNavbar() {
   }
 
   const handleSelectSuggestion = (symbol: string, name: string) => {
+    try {
+      const raw = localStorage.getItem('recentlyViewedTickers')
+      const existing = raw ? (JSON.parse(raw) as string[]) : []
+      const next = [symbol, ...existing.filter((t) => t !== symbol)].slice(0, 8)
+      localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
+    } catch {}
     router.push(`/stocks/${symbol}`)
     setSearchQuery('')
     setShowSuggestions(false)
@@ -143,7 +149,14 @@ export function GlobalNavbar() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery && searchQuery.length <= 5) {
-      router.push(`/stocks/${searchQuery.toUpperCase()}`)
+      const symbol = searchQuery.toUpperCase()
+      try {
+        const raw = localStorage.getItem('recentlyViewedTickers')
+        const existing = raw ? (JSON.parse(raw) as string[]) : []
+        const next = [symbol, ...existing.filter((t) => t !== symbol)].slice(0, 8)
+        localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
+      } catch {}
+      router.push(`/stocks/${symbol}`)
     }
   }
 
@@ -171,7 +184,14 @@ export function GlobalNavbar() {
                   }}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && searchQuery) {
-                      router.push(`/stocks/${searchQuery.toUpperCase()}`)
+                      const symbol = searchQuery.toUpperCase()
+                      try {
+                        const raw = localStorage.getItem('recentlyViewedTickers')
+                        const existing = raw ? (JSON.parse(raw) as string[]) : []
+                        const next = [symbol, ...existing.filter((t) => t !== symbol)].slice(0, 8)
+                        localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
+                      } catch {}
+                      router.push(`/stocks/${symbol}`)
                       setShowSuggestions(false)
                     }
                   }}
@@ -450,4 +470,3 @@ export function GlobalNavbar() {
     </>
   )
 }
-

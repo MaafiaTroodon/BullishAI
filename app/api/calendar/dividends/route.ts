@@ -19,16 +19,18 @@ export async function GET(req: NextRequest) {
     // Determine date range
     const now = new Date()
     const startDate = new Date(now)
+    const endDate = new Date(now)
     if (range === 'today') {
       startDate.setHours(0, 0, 0, 0)
+      endDate.setHours(23, 59, 59, 999)
     } else if (range === 'week') {
-      startDate.setDate(startDate.getDate() - 7)
+      endDate.setDate(endDate.getDate() + 7)
     } else {
-      startDate.setMonth(startDate.getMonth() - 1)
+      endDate.setDate(endDate.getDate() + 30)
     }
     
     const from = startDate.toISOString().split('T')[0]
-    const to = now.toISOString().split('T')[0]
+    const to = endDate.toISOString().split('T')[0]
 
     let items: any[] = []
 
@@ -175,4 +177,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-
