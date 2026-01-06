@@ -14,8 +14,9 @@ import { StockChart } from '@/components/charts/StockChart'
 import { MarketSessionBadge } from '@/components/MarketSessionBadge'
 import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
-import { showToast } from '@/components/Toast'
+import { showToast, showToastWithAction } from '@/components/Toast'
 import { authClient } from '@/lib/auth-client'
+import { recordSearchTicker } from '@/lib/recommendations'
 
 const fetcher = async (url: string) => {
   try {
@@ -63,6 +64,7 @@ export default function StockPage() {
       const next = [symbol, ...list.filter((t: string) => t !== symbol)].slice(0, 5)
       localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
     } catch {}
+    recordSearchTicker(symbol)
   }, [symbol])
 
   const { data, isLoading, error } = useSWR(`/api/stocks/${symbol}?range=${chartRange}`, fetcher, {
@@ -90,18 +92,26 @@ export default function StockPage() {
 
   // Load watchlist on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('watchlistItems')
-      if (saved) {
-        const items = JSON.parse(saved)
-        setWatchlistItems(items)
-        setIsInWatchlist(items.includes(symbol))
-      }
+    if (typeof window === 'undefined') return
+    if (!isLoggedIn) {
+      setWatchlistItems([])
+      setIsInWatchlist(false)
+      return
     }
-  }, [symbol])
+    const saved = localStorage.getItem('watchlistItems')
+    if (saved) {
+      const items = JSON.parse(saved)
+      setWatchlistItems(items)
+      setIsInWatchlist(items.includes(symbol))
+    }
+  }, [symbol, isLoggedIn])
 
   // Handle watchlist toggle
   const handleWatchlistToggle = () => {
+    if (!isLoggedIn) {
+      showToastWithAction('Please log in to use the watchlist.', 'warning', 'Log In', '/auth/signin')
+      return
+    }
     let newItems = [...watchlistItems]
     if (isInWatchlist) {
       newItems = newItems.filter(s => s !== symbol)

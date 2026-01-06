@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
     const [quotesRes, dividendsRes] = await Promise.all([
       fetch(`${baseUrl}/api/quotes?symbols=${symbols.join(',')}`, { cache: 'no-store' }),
-      fetch(`${baseUrl}/api/calendar/dividends?range=month`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/calendar/dividends?range=month&symbols=${symbols.join(',')}`, { cache: 'no-store' }),
     ])
 
     const quotesJson = await quotesRes.json().catch(() => ({ quotes: [] }))
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 
     const candleResults = await Promise.allSettled(
       symbols.map((symbol) =>
-        fetch(`${baseUrl}/api/chart?symbol=${symbol}&range=1m`, { cache: 'no-store' })
+        fetch(`${baseUrl}/api/chart?symbol=${symbol}&range=1y`, { cache: 'no-store' })
           .then((res) => res.json())
       )
     )
@@ -104,23 +104,31 @@ export async function GET(req: NextRequest) {
 
     for (const symbol of symbols) {
       const quote = quoteMap.get(symbol)
-      const price = safeNumber(quote?.price ?? quote?.c ?? quote?.close)
-      const high = safeNumber(quote?.high)
-      const low = safeNumber(quote?.low)
-      const changePercent = safeNumber(quote?.dp ?? quote?.changePercent)
+      const quoteData = quote?.data ?? quote ?? {}
+      const price = safeNumber(quoteData?.price ?? quoteData?.c ?? quoteData?.close)
+      const high = safeNumber(quoteData?.high)
+      const low = safeNumber(quoteData?.low)
+      const changePercent = safeNumber(quoteData?.dp ?? quoteData?.changePercent)
+      const marketCap = safeNumber(quoteData?.marketCap)
+      const exchange = symbol.endsWith('.TO') ? 'TSX' : symbol.includes('.') ? 'OTHER' : 'US'
       const quoteRange = price && high && low ? ((high - low) / price) * 100 : null
 
       const candles = candlesBySymbol.get(symbol) || []
-      const recentCandles = candles.slice(-6)
+      const normalizedCandles = candles
+        .map((c) => ({
+          close: safeNumber(c.c ?? c.close),
+          high: safeNumber(c.h ?? c.high),
+          low: safeNumber(c.l ?? c.low),
+        }))
+        .filter((c) => c.close && c.close > 0)
+      const closes = normalizedCandles.map((c) => c.close as number)
       const dailyRanges = []
       const dailyReturns = []
-      for (let i = 1; i < recentCandles.length; i += 1) {
-        const prev = recentCandles[i - 1]
-        const curr = recentCandles[i]
-        const prevClose = safeNumber(prev.c ?? prev.close)
-        const currClose = safeNumber(curr.c ?? curr.close)
-        const dayHigh = safeNumber(curr.h ?? curr.high)
-        const dayLow = safeNumber(curr.l ?? curr.low)
+      for (let i = 1; i < normalizedCandles.length; i += 1) {
+        const prevClose = normalizedCandles[i - 1]?.close
+        const currClose = normalizedCandles[i]?.close
+        const dayHigh = normalizedCandles[i]?.high
+        const dayLow = normalizedCandles[i]?.low
         if (currClose && prevClose) {
           dailyReturns.push(((currClose - prevClose) / prevClose) * 100)
         }
@@ -134,10 +142,25 @@ export async function GET(req: NextRequest) {
       const avgRange = dailyRanges.length
         ? dailyRanges.reduce((sum, v) => sum + v, 0) / dailyRanges.length
         : null
-      const lastReaction = dailyReturns.length ? dailyReturns[dailyReturns.length - 1] : null
+
+      const quarterStep = 63
+      const earningsSamples: number[] = []
+      for (let idx = closes.length - 1; earningsSamples.length < 4 && idx - quarterStep >= 0; idx -= quarterStep) {
+        const prev = closes[idx - quarterStep]
+        const curr = closes[idx]
+        if (prev && curr) {
+          earningsSamples.push(((curr - prev) / prev) * 100)
+        }
+      }
+      const sampleCount = earningsSamples.length
+      const lastReaction = earningsSamples.length ? earningsSamples[0] : null
+      const sampleAbs = earningsSamples.map((v) => Math.abs(v)).sort((a, b) => a - b)
+      const medianMove = sampleAbs.length >= 3 ? sampleAbs[Math.floor(sampleAbs.length / 2)] : null
 
       let typicalMove = null
-      if (avgRange && Number.isFinite(avgRange)) {
+      if (medianMove && Number.isFinite(medianMove)) {
+        typicalMove = medianMove
+      } else if (avgRange && Number.isFinite(avgRange)) {
         typicalMove = avgRange
       } else if (realizedVol && Number.isFinite(realizedVol)) {
         typicalMove = realizedVol * 1.2
@@ -145,6 +168,9 @@ export async function GET(req: NextRequest) {
         typicalMove = quoteRange
       } else if (changePercent && Number.isFinite(changePercent)) {
         typicalMove = Math.abs(changePercent)
+      }
+      if (typicalMove !== null && typicalMove > 30) {
+        typicalMove = null
       }
 
       const dividendCandidates = (dividendMap.get(symbol) || []).sort((a, b) => {
@@ -181,21 +207,34 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const eligible =
+        exchange !== 'OTHER' &&
+        (exchange === 'TSX' || exchange === 'US') &&
+        marketCap !== null &&
+        marketCap >= 100_000_000_000 &&
+        closes.length >= 200 &&
+        sampleCount >= 3 &&
+        realizedVol !== null
+
       items[symbol] = {
         symbol,
+        exchange,
+        marketCap,
         changePercent,
         price,
         typicalMove,
         realizedVol,
         lastReaction,
+        sampleCount,
         rangePercent: quoteRange,
-        dataQuality: typicalMove ? 'ok' : 'limited',
+        dataQuality: eligible ? 'ok' : 'limited',
+        eligible,
         dividend: {
-          status: dividendStatus,
-          exDate: upcoming?.exDate || null,
-          payDate: upcoming?.payDate || null,
-          yield: computedYield,
-          yieldEstimated,
+          status: eligible ? dividendStatus : 'Unknown',
+          exDate: eligible ? upcoming?.exDate || null : null,
+          payDate: eligible ? upcoming?.payDate || null : null,
+          yield: eligible ? computedYield : null,
+          yieldEstimated: eligible ? yieldEstimated : false,
         },
       }
     }

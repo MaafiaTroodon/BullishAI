@@ -7,6 +7,7 @@ import { Search, Bell, ChevronDown, ChevronRight, Settings, LogOut, TrendingUp, 
 import { DevStatus } from './DevStatus'
 import useSWR, { useSWRConfig } from 'swr'
 import { authClient } from '@/lib/auth-client'
+import { recordSearchTicker } from '@/lib/recommendations'
 
 export function GlobalNavbar() {
   const router = useRouter()
@@ -140,6 +141,7 @@ export function GlobalNavbar() {
       const next = [symbol, ...existing.filter((t) => t !== symbol)].slice(0, 8)
       localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
     } catch {}
+    recordSearchTicker(symbol)
     router.push(`/stocks/${symbol}`)
     setSearchQuery('')
     setShowSuggestions(false)
@@ -156,6 +158,7 @@ export function GlobalNavbar() {
         const next = [symbol, ...existing.filter((t) => t !== symbol)].slice(0, 8)
         localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
       } catch {}
+      recordSearchTicker(symbol)
       router.push(`/stocks/${symbol}`)
     }
   }
@@ -191,6 +194,7 @@ export function GlobalNavbar() {
                         const next = [symbol, ...existing.filter((t) => t !== symbol)].slice(0, 8)
                         localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
                       } catch {}
+                      recordSearchTicker(symbol)
                       router.push(`/stocks/${symbol}`)
                       setShowSuggestions(false)
                     }

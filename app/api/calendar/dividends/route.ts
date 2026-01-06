@@ -15,6 +15,15 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
     const range = url.searchParams.get('range') || 'week'
+    const symbolsParam = url.searchParams.get('symbols')
+    const symbolsFilter = symbolsParam
+      ? new Set(
+          symbolsParam
+            .split(',')
+            .map((s) => s.trim().toUpperCase())
+            .filter(Boolean)
+        )
+      : null
     
     // Determine date range
     const now = new Date()
@@ -163,11 +172,15 @@ export async function GET(req: NextRequest) {
       console.log('No dividends data from any provider, returning empty array')
     }
 
+    const filteredItems = symbolsFilter
+      ? items.filter((item) => symbolsFilter.has(String(item.symbol || '').toUpperCase()))
+      : items
+
     return NextResponse.json({
       type: 'dividends',
       range,
-      items: items.sort((a, b) => new Date(a.date || a.exDate).getTime() - new Date(b.date || b.exDate).getTime()),
-      count: items.length
+      items: filteredItems.sort((a, b) => new Date(a.date || a.exDate).getTime() - new Date(b.date || b.exDate).getTime()),
+      count: filteredItems.length
     })
   } catch (error: any) {
     console.error('Dividends calendar API error:', error)

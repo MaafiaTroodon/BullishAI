@@ -39,6 +39,14 @@ const FALLBACK_US = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'A
 const FALLBACK_CA = ['RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'MFC.TO', 'ENB.TO', 'SU.TO']
 
 const normalizeTicker = (ticker: string) => ticker.trim().toUpperCase()
+const canonicalTicker = (ticker: string) => {
+  const upper = normalizeTicker(ticker)
+  const canadianBase = ['RY', 'TD', 'BMO', 'BNS', 'CM', 'MFC', 'NA']
+  if (!upper.endsWith('.TO') && canadianBase.includes(upper)) {
+    return `${upper}.TO`
+  }
+  return upper
+}
 const uniq = (arr: string[]) => Array.from(new Set(arr))
 
 const loadState = (): RecommendationState => {
@@ -53,9 +61,9 @@ const loadState = (): RecommendationState => {
     const recommendationPool = poolRaw ? (JSON.parse(poolRaw) as string[]) : []
     const searchCount = countRaw ? Number(countRaw) : 0
     return {
-      searchHistory: Array.isArray(searchHistory) ? searchHistory.map(normalizeTicker) : [],
+      searchHistory: Array.isArray(searchHistory) ? uniq(searchHistory.map(canonicalTicker)) : [],
       searchCount: Number.isFinite(searchCount) ? searchCount : 0,
-      recommendationPool: Array.isArray(recommendationPool) ? recommendationPool.map(normalizeTicker) : [],
+      recommendationPool: Array.isArray(recommendationPool) ? recommendationPool.map(canonicalTicker) : [],
     }
   } catch {
     return { searchHistory: [], searchCount: 0, recommendationPool: [] }
@@ -72,7 +80,7 @@ const saveState = (state: RecommendationState) => {
 }
 
 const pickGroupForTicker = (ticker: string) => {
-  const upper = normalizeTicker(ticker)
+  const upper = canonicalTicker(ticker)
   return GROUPS.find((group) => group.tickers.includes(upper))
 }
 
@@ -95,7 +103,8 @@ const buildFreshRecommendations = (seed: string, history: string[], desiredCount
   combinedSeeds.forEach((ticker) => {
     pool.push(...pickRelatedTickers(ticker, pool, 3))
   })
-  const isCanadian = seed.endsWith('.TO') || ['BMO', 'TD', 'BNS', 'RY', 'CM', 'NA'].includes(seed)
+  const canonicalSeed = canonicalTicker(seed)
+  const isCanadian = canonicalSeed.endsWith('.TO') || ['BMO', 'TD', 'BNS', 'RY', 'CM', 'NA'].includes(seed)
   const fallback = isCanadian ? FALLBACK_CA : FALLBACK_US
   pool.push(...fallback.filter((ticker) => !pool.includes(ticker) && !combinedSeeds.includes(ticker)))
   return uniq(pool).slice(0, desiredCount)
@@ -106,14 +115,15 @@ const nudgeRecommendations = (prevPool: string[], seed: string, desiredCount: nu
   const additions = pickRelatedTickers(seed, cleaned, 2)
   const nudged = uniq([...additions, ...cleaned])
   if (nudged.length >= desiredCount) return nudged.slice(0, desiredCount)
-  const isCanadian = seed.endsWith('.TO') || ['BMO', 'TD', 'BNS', 'RY', 'CM', 'NA'].includes(seed)
+  const canonicalSeed = canonicalTicker(seed)
+  const isCanadian = canonicalSeed.endsWith('.TO') || ['BMO', 'TD', 'BNS', 'RY', 'CM', 'NA'].includes(seed)
   const fallback = isCanadian ? FALLBACK_CA : FALLBACK_US
   const fill = fallback.filter((ticker) => !nudged.includes(ticker) && ticker !== seed)
   return uniq([...nudged, ...fill]).slice(0, desiredCount)
 }
 
 export const recordSearchTicker = (newTickerRaw: string) => {
-  const newTicker = normalizeTicker(newTickerRaw)
+  const newTicker = canonicalTicker(newTickerRaw)
   const state = loadState()
   const searchCount = state.searchCount + 1
   const searchHistory = uniq([newTicker, ...state.searchHistory.filter((t) => t !== newTicker)]).slice(0, MAX_HISTORY)

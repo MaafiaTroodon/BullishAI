@@ -11,6 +11,7 @@ import TradingViewTopStories from '@/components/TradingViewTopStories'
 import { HeadlineRotator } from '@/components/HeadlineRotator'
 import { TiltCard } from '@/components/TiltCard'
 import TradingViewTickerTape from '@/components/TradingViewTickerTape'
+import TradingViewMiniChart from '@/components/TradingViewMiniChart'
 import useSWR from 'swr'
 import { Reveal } from '@/components/anim/Reveal'
 import { StaggerGrid } from '@/components/anim/StaggerGrid'
@@ -366,11 +367,25 @@ export default function Home() {
   const earningsItems = useMemo(() => {
     const items = earningsData?.items || []
     if (items.length === 0) return []
-    if (selectedExchange === 'CAN') {
-      return items.filter((item: any) => String(item.symbol || '').toUpperCase().includes('.TO')).slice(0, 10)
-    }
-    return items.filter((item: any) => !String(item.symbol || '').toUpperCase().includes('.TO')).slice(0, 10)
-  }, [earningsData, selectedExchange])
+    const filtered = selectedExchange === 'CAN'
+      ? items.filter((item: any) => String(item.symbol || '').toUpperCase().includes('.TO'))
+      : items.filter((item: any) => !String(item.symbol || '').toUpperCase().includes('.TO'))
+    const deduped = new Map<string, any>()
+    filtered.forEach((item: any) => {
+      const symbol = String(item.symbol || '').toUpperCase()
+      const insights = earningsInsights?.items?.[symbol]
+      if (!insights?.eligible) return
+      const exchange = insights?.exchange || (symbol.includes('.TO') ? 'TSX' : 'US')
+      const key = `${symbol}-${exchange}`
+      const existing = deduped.get(key)
+      if (!existing) {
+        deduped.set(key, item)
+      } else if ((insights?.sampleCount || 0) > (earningsInsights?.items?.[String(existing.symbol || '').toUpperCase()]?.sampleCount || 0)) {
+        deduped.set(key, item)
+      }
+    })
+    return Array.from(deduped.values()).slice(0, 10)
+  }, [earningsData, selectedExchange, earningsInsights])
 
   const earningsRiskLabels = useMemo(() => {
     if (earningsItems.length === 0) return new Map<string, { score: number | null; label: string }>()
@@ -453,52 +468,11 @@ export default function Home() {
   }, [marketPulse.label, marketPulse.components.volatilityProxy])
 
   const viewedWidgetData = useMemo(() => {
-    if (recentlyViewed.length === 0) return null
-    const base = recentlyViewed.slice(0, 3)
-    const upper = base.map((t) => t.toUpperCase())
-    const isCanadian = upper.some((t) => t.endsWith('.TO') || ['BMO', 'TD', 'BNS', 'RY', 'CM', 'NA'].includes(t))
-
-    const groups = [
-      {
-        title: 'Canadian banks & insurers',
-        tickers: ['RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'MFC.TO'],
-      },
-      {
-        title: 'US money-center banks',
-        tickers: ['JPM', 'BAC', 'WFC', 'C', 'GS'],
-      },
-      {
-        title: 'AI & mega-cap tech',
-        tickers: ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'AMD'],
-      },
-      {
-        title: 'Platform & consumer tech',
-        tickers: ['GOOGL', 'META', 'AMZN', 'NFLX', 'TSLA'],
-      },
-      {
-        title: 'Defensive large caps',
-        tickers: ['JNJ', 'PG', 'COST', 'UNH', 'KO'],
-      },
-    ]
-
-    const selectedGroups = groups.filter((group) => {
-      if (isCanadian) {
-        return group.title.includes('Canadian') || group.title.includes('US money-center')
-      }
-      return group.tickers.some((ticker) => upper.includes(ticker))
-    })
-
-    const fallbackGroups = isCanadian
-      ? groups.slice(0, 2)
-      : groups.slice(2, 4)
-
-    const finalGroups = (selectedGroups.length ? selectedGroups : fallbackGroups).map((group) => ({
-      ...group,
-      tickers: group.tickers.filter((ticker) => !upper.includes(ticker)).slice(0, 4),
-    }))
-
-    return { base, groups: finalGroups }
-  }, [recentlyViewed])
+    if (searchHistory.length === 0) return null
+    const base = Array.from(new Set(searchHistory)).slice(0, 3)
+    const groupList = groupRecommendations(recommendationPool)
+    return { base, groups: groupList }
+  }, [searchHistory, recommendationPool])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -1079,25 +1053,30 @@ export default function Home() {
                           <div className="text-xs text-slate-500 mt-2">
                             AI bias: <span className="text-slate-300">{bias}</span>
                           </div>
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                            <span
-                              className={`px-2 py-0.5 rounded-full border ${
-                                metrics.dividend?.status === 'Pays'
-                                  ? 'border-emerald-500/40 text-emerald-200'
-                                  : metrics.dividend?.status === 'No dividend'
-                                    ? 'border-slate-600/40 text-slate-400'
-                                    : 'border-slate-600/40 text-slate-400'
-                              }`}
-                              title="Dividend status for this ticker."
-                            >
-                              {metrics.dividend?.status === 'Pays' ? 'Dividend' : metrics.dividend?.status === 'No dividend' ? 'No Dividend' : 'Dividend: —'}
-                            </span>
-                            <span title="Next pay date (if available).">Pay: {metrics.dividend?.payDate || '—'}</span>
-                            <span title="Ex-dividend date (if available).">Ex: {metrics.dividend?.exDate || '—'}</span>
-                            <span title="Annualized yield estimate (if available).">
-                              Yield: {metrics.dividend?.yield && metrics.dividend?.yield > 0 ? `${metrics.dividend.yield.toFixed(2)}%${metrics.dividend.yieldEstimated ? ' est.' : ''}` : '—'}
-                            </span>
-                          </div>
+                          {metrics?.eligible && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                              {metrics.dividend?.status === 'Pays' && (
+                                <>
+                                  <span
+                                    className="px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-200"
+                                    title="Dividend status for this ticker."
+                                  >
+                                    Dividend
+                                  </span>
+                                  <span title="Next pay date (if available).">Pay: {metrics.dividend?.payDate || '—'}</span>
+                                  <span title="Ex-dividend date (if available).">Ex: {metrics.dividend?.exDate || '—'}</span>
+                                  <span title="Annualized yield estimate (if available).">
+                                    Yield: {metrics.dividend?.yield && metrics.dividend?.yield > 0 ? `${metrics.dividend.yield.toFixed(2)}%${metrics.dividend.yieldEstimated ? ' est.' : ''}` : '—'}
+                                  </span>
+                                </>
+                              )}
+                              {metrics.dividend?.status !== 'Pays' && (
+                                <span className="px-2 py-0.5 rounded-full border border-slate-600/40 text-slate-400">
+                                  Dividends: Not supported
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </button>
                       )
                     })}
@@ -1123,14 +1102,22 @@ export default function Home() {
                   {viewedWidgetData.groups.map((group) => (
                     <div key={group.title} className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-sm text-slate-300">
                       <div className="text-slate-200 font-semibold mb-2">{group.title}</div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid gap-3">
                         {group.tickers.map((ticker) => (
                           <button
                             key={ticker}
                             onClick={() => window.location.assign(`/stocks/${ticker}`)}
-                            className="px-2 py-1 rounded-full text-xs border border-slate-700 text-slate-300 hover:border-blue-500/60 hover:text-white transition"
+                            className="text-left rounded-xl border border-slate-700 bg-slate-950/60 p-3 hover:border-blue-500/60 transition"
                           >
-                            {ticker}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-semibold text-white">{ticker}</div>
+                              {pricesByTicker[ticker] !== undefined && (
+                                <div className="text-xs text-slate-400">${pricesByTicker[ticker].toFixed(2)}</div>
+                              )}
+                            </div>
+                            <div className="h-[160px] w-full overflow-hidden rounded-lg border border-slate-800">
+                              <TradingViewMiniChart symbol={ticker} />
+                            </div>
                           </button>
                         ))}
                         {group.tickers.length === 0 && (
