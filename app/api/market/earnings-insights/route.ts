@@ -73,6 +73,23 @@ export async function GET(req: NextRequest) {
       )
     )
 
+    const fundamentalsResults = await Promise.allSettled(
+      symbols.map((symbol) =>
+        fetch(`${baseUrl}/api/stocks/${symbol}`, { cache: 'no-store' })
+          .then((res) => res.json())
+      )
+    )
+    const dividendYieldBySymbol = new Map<string, number | null>()
+    fundamentalsResults.forEach((result, idx) => {
+      const symbol = symbols[idx]
+      if (result.status !== 'fulfilled') {
+        dividendYieldBySymbol.set(symbol, null)
+        return
+      }
+      const yieldValue = safeNumber(result.value?.dividendYield)
+      dividendYieldBySymbol.set(symbol, yieldValue)
+    })
+
     const candlesBySymbol = new Map<string, any[]>()
     candleResults.forEach((result, idx) => {
       if (result.status !== 'fulfilled') return
@@ -151,9 +168,18 @@ export async function GET(req: NextRequest) {
         yieldEstimated = true
       }
 
-      const dividendStatus = dividendCandidates.length > 0 || computedYield
-        ? 'Pays'
-        : 'Unknown'
+      let dividendStatus: 'Pays' | 'No dividend' | 'Unknown' = 'Unknown'
+      if (dividendCandidates.length > 0 || (computedYield && computedYield > 0)) {
+        dividendStatus = 'Pays'
+      } else {
+        const fundamentalYield = dividendYieldBySymbol.get(symbol)
+        if (fundamentalYield === 0) {
+          dividendStatus = 'No dividend'
+        } else if (fundamentalYield && fundamentalYield > 0) {
+          dividendStatus = 'Pays'
+          if (!computedYield) computedYield = fundamentalYield
+        }
+      }
 
       items[symbol] = {
         symbol,

@@ -915,21 +915,31 @@ export default function Home() {
                     {earningsItems.map((item: any, index: number) => {
                       const volatilityProxy = Number(marketPulse.components.volatilityProxy || 0)
                       const volatilityLabel = volatilityProxy >= 2.5 ? 'High' : volatilityProxy >= 1.2 ? 'Med' : 'Low'
-                      const lastMove = item.pastReactionPct !== undefined ? Number(item.pastReactionPct) : null
-                      const lastMoveAbs = lastMove !== null && Number.isFinite(lastMove) ? Math.abs(lastMove) : null
-                      const typicalMove = lastMoveAbs !== null
-                        ? (lastMoveAbs * 0.7 + volatilityProxy * 0.3)
-                        : (volatilityProxy > 0.05 ? volatilityProxy * 1.1 : null)
-                      const riskScore = (lastMoveAbs ?? 0) + volatilityProxy * 1.2
-                      const riskLabel = riskScore >= 4 ? 'High Risk' : riskScore >= 2 ? 'Medium Risk' : 'Low Risk'
-                      const riskColor = riskLabel === 'High Risk' ? 'bg-red-500/20 text-red-300 border-red-500/40' : riskLabel === 'Medium Risk' ? 'bg-yellow-500/15 text-yellow-200 border-yellow-500/40' : 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
-                      const bias = riskLabel === 'High Risk'
-                        ? 'High uncertainty'
-                        : marketPulse.label === 'Bullish'
-                          ? 'Slightly bullish setup'
-                          : marketPulse.label === 'Risk-Off'
-                            ? 'Bearish expectations priced in'
-                            : 'Balanced expectations'
+                      const symbol = String(item.symbol || '').toUpperCase()
+                      const metrics = earningsInsights?.items?.[symbol] || {}
+                      const lastMove = metrics.lastReaction !== undefined && metrics.lastReaction !== null ? Number(metrics.lastReaction) : null
+                      const typicalMove = metrics.typicalMove !== undefined && metrics.typicalMove !== null ? Number(metrics.typicalMove) : null
+                      const realizedVol = metrics.realizedVol !== undefined && metrics.realizedVol !== null ? Number(metrics.realizedVol) : null
+                      const changePercent = metrics.changePercent !== undefined && metrics.changePercent !== null ? Number(metrics.changePercent) : null
+                      const riskMeta = earningsRiskLabels.get(symbol) || { score: null, label: '—' }
+                      const riskLabel = riskMeta.label
+                      const riskColor = riskLabel === 'High Risk'
+                        ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                        : riskLabel === 'Medium Risk'
+                          ? 'bg-yellow-500/15 text-yellow-200 border-yellow-500/40'
+                          : riskLabel === 'Low Risk'
+                            ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
+                            : 'bg-slate-700/40 text-slate-400 border-slate-600/40'
+                      let bias = 'Mixed expectations'
+                      if (riskLabel === 'High Risk') {
+                        bias = changePercent && changePercent > 0.5 ? 'High volatility setup' : 'Caution: uncertainty elevated'
+                      } else if (riskLabel === 'Low Risk') {
+                        bias = changePercent && changePercent > 0 ? 'Stable setup' : 'Defensive posture'
+                      } else if (riskLabel === 'Medium Risk') {
+                        bias = changePercent && changePercent > 0.3 ? 'Mixed expectations' : 'Balanced expectations'
+                      } else {
+                        bias = 'Limited data'
+                      }
                       const timeLabel = String(item.time || 'BMO')
                       const timeTag = timeLabel.toLowerCase().includes('after') || timeLabel.toLowerCase().includes('pm') || timeLabel.toLowerCase().includes('amc') ? 'AMC' : 'BMO'
                       const eventDate = item.date ? new Date(`${item.date}T${timeTag === 'AMC' ? '16:00:00' : '09:00:00'}`) : null
@@ -958,12 +968,17 @@ export default function Home() {
                           className={`min-w-[220px] bg-slate-900 border rounded-lg p-4 text-left hover:border-blue-500/60 transition ${highlightToday ? 'border-amber-400/60 shadow-[0_0_0_1px_rgba(251,191,36,0.35)]' : 'border-slate-700'}`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-white font-semibold">{item.symbol}</span>
+                            <span className="text-white font-semibold">{symbol}</span>
                             <span className="text-xs text-slate-400">{countdownLabel}</span>
                           </div>
                           <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                             <span>{item.date}</span>
-                            <span className={`px-2 py-0.5 rounded-full border text-[11px] ${riskColor}`}>{riskLabel}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full border text-[11px] ${riskColor}`}
+                              title={riskLabel === '—' ? 'Limited data' : `Risk score: ${riskMeta.score?.toFixed(0) ?? '—'}`}
+                            >
+                              {riskLabel === '—' ? 'Risk: —' : riskLabel}
+                            </span>
                           </div>
                           <div className="text-sm text-slate-300">
                             Volatility: <span className="text-white">{volatilityLabel}</span>
@@ -976,6 +991,25 @@ export default function Home() {
                           </div>
                           <div className="text-xs text-slate-500 mt-2">
                             AI bias: <span className="text-slate-300">{bias}</span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                            <span
+                              className={`px-2 py-0.5 rounded-full border ${
+                                metrics.dividend?.status === 'Pays'
+                                  ? 'border-emerald-500/40 text-emerald-200'
+                                  : metrics.dividend?.status === 'No dividend'
+                                    ? 'border-slate-600/40 text-slate-400'
+                                    : 'border-slate-600/40 text-slate-400'
+                              }`}
+                              title="Dividend status for this ticker."
+                            >
+                              {metrics.dividend?.status === 'Pays' ? 'Dividend' : metrics.dividend?.status === 'No dividend' ? 'No Dividend' : 'Dividend: —'}
+                            </span>
+                            <span title="Next pay date (if available).">Pay: {metrics.dividend?.payDate || '—'}</span>
+                            <span title="Ex-dividend date (if available).">Ex: {metrics.dividend?.exDate || '—'}</span>
+                            <span title="Annualized yield estimate (if available).">
+                              Yield: {metrics.dividend?.yield && metrics.dividend?.yield > 0 ? `${metrics.dividend.yield.toFixed(2)}%${metrics.dividend.yieldEstimated ? ' est.' : ''}` : '—'}
+                            </span>
                           </div>
                         </button>
                       )
