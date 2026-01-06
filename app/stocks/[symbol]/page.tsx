@@ -200,19 +200,35 @@ export default function StockPage() {
             </div>
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">Volume</div>
-              <div className="text-white font-semibold text-lg">{quote.volume ? (quote.volume / 1000000).toFixed(1) + 'M' : 'N/A'}</div>
+              <div className="text-white font-semibold text-lg">
+                {quote.volume !== null && quote.volume !== undefined
+                  ? (quote.volume / 1000000).toFixed(1) + 'M'
+                  : 'N/A'}
+              </div>
             </div>
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">P/E Ratio</div>
-              <div className="text-white font-semibold text-lg">{quote.peRatio?.toFixed(2) || 'N/A'}</div>
+              <div className="text-white font-semibold text-lg">
+                {quote.peRatio !== null && quote.peRatio !== undefined
+                  ? quote.peRatio.toFixed(2)
+                  : 'N/A'}
+              </div>
             </div>
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">52W High</div>
-              <div className="text-white font-semibold text-lg">{quote.week52High?.toFixed(2) ? `$${quote.week52High?.toFixed(2)}` : 'N/A'}</div>
+              <div className="text-white font-semibold text-lg">
+                {quote.week52High !== null && quote.week52High !== undefined
+                  ? `$${quote.week52High.toFixed(2)}`
+                  : 'N/A'}
+              </div>
             </div>
             <div className="bg-slate-700/30 rounded-lg p-4">
               <div className="text-slate-400 mb-2 text-sm">52W Low</div>
-              <div className="text-white font-semibold text-lg">{quote.week52Low?.toFixed(2) ? `$${quote.week52Low?.toFixed(2)}` : 'N/A'}</div>
+              <div className="text-white font-semibold text-lg">
+                {quote.week52Low !== null && quote.week52Low !== undefined
+                  ? `$${quote.week52Low.toFixed(2)}`
+                  : 'N/A'}
+              </div>
             </div>
           </div>
         </div>
@@ -322,4 +338,3 @@ export default function StockPage() {
     </div>
   )
 }
-

@@ -10,6 +10,8 @@ export interface Toast {
   message: string
   type: ToastType
   duration?: number
+  actionLabel?: string
+  actionHref?: string
 }
 
 let toastListeners: Array<(toasts: Toast[]) => void> = []
@@ -22,6 +24,27 @@ function notify() {
 export function showToast(message: string, type: ToastType = 'info', duration = 4000) {
   const id = Math.random().toString(36).substring(7)
   const toast: Toast = { id, message, type, duration }
+  toasts.push(toast)
+  notify()
+
+  if (duration > 0) {
+    setTimeout(() => {
+      removeToast(id)
+    }, duration)
+  }
+
+  return id
+}
+
+export function showToastWithAction(
+  message: string,
+  type: ToastType,
+  actionLabel: string,
+  actionHref: string,
+  duration = 6000
+) {
+  const id = Math.random().toString(36).substring(7)
+  const toast: Toast = { id, message, type, duration, actionLabel, actionHref }
   toasts.push(toast)
   notify()
 
@@ -76,7 +99,20 @@ export function ToastContainer() {
             className={`${colorClasses} border rounded-lg shadow-lg px-4 py-3 min-w-[300px] max-w-[400px] flex items-start gap-3 pointer-events-auto animate-in slide-in-from-right-full fade-in`}
           >
             <Icon className="h-5 w-5 text-white flex-shrink-0 mt-0.5" />
-            <p className="text-white text-sm font-medium flex-1">{toast.message}</p>
+            <div className="flex-1">
+              <p className="text-white text-sm font-medium">{toast.message}</p>
+              {toast.actionLabel && toast.actionHref && (
+                <button
+                  onClick={() => {
+                    removeToast(toast.id)
+                    window.location.href = toast.actionHref as string
+                  }}
+                  className="mt-2 text-white text-xs font-semibold underline underline-offset-2"
+                >
+                  {toast.actionLabel}
+                </button>
+              )}
+            </div>
             <button
               onClick={() => removeToast(toast.id)}
               className="text-white/80 hover:text-white flex-shrink-0"
@@ -89,4 +125,3 @@ export function ToastContainer() {
     </div>
   )
 }
-

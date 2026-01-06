@@ -157,8 +157,9 @@ export default function WalletPage() {
   }
 
   return (
-    <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+    <div className="min-h-screen bg-slate-900">
+      <main className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
         <h1 className="text-2xl font-bold text-white mb-4">Demo Wallet</h1>
         <div className="text-slate-300 mb-6">
           Balance: <span className="text-white font-semibold text-xl">${balance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span> 
@@ -226,9 +227,9 @@ export default function WalletPage() {
             </span>
           </div>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </div>
   )
 }
-
 

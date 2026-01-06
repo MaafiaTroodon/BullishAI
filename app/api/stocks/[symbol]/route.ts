@@ -9,6 +9,9 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 10
 
+const FINNHUB_KEY = process.env.FINNHUB_API_KEY
+let loggedMetrics = false
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
@@ -126,9 +129,50 @@ export async function GET(
       companyName = symbol
     }
 
+    // Fetch Finnhub metrics for P/E and 52W range (fallbacks)
+    let finnhubMetrics: {
+      peRatio?: number | null
+      week52High?: number | null
+      week52Low?: number | null
+      avgVolume?: number | null
+    } = {}
+    if (FINNHUB_KEY) {
+      try {
+        const metricsResponse = await axios.get(
+          `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${FINNHUB_KEY}`,
+          { timeout: 4000 }
+        )
+        const metric = metricsResponse?.data?.metric || {}
+        finnhubMetrics = {
+          peRatio: metric.peTTM ?? metric.peBasicExclExtraTTM ?? null,
+          week52High: metric['52WeekHigh'] ?? metric['52WeekHighWithDate'] ?? null,
+          week52Low: metric['52WeekLow'] ?? metric['52WeekLowWithDate'] ?? null,
+          avgVolume: metric['10DayAverageTradingVolume'] ?? metric['3MonthAverageTradingVolume'] ?? null,
+        }
+
+        if (process.env.NODE_ENV !== 'production' && !loggedMetrics) {
+          loggedMetrics = true
+          console.log('[stocks] Metrics sample', {
+            symbol,
+            peRatio: finnhubMetrics.peRatio,
+            week52High: finnhubMetrics.week52High,
+            week52Low: finnhubMetrics.week52Low,
+            volume: quote.volume ?? finnhubMetrics.avgVolume,
+          })
+        }
+      } catch (error: any) {
+        console.warn(`Finnhub metrics failed for ${symbol}:`, error?.message || error)
+      }
+    }
+
     const enrichedMarketCap = fundamentals.marketCap || marketCap
     const enrichedMarketCapShort = enrichedMarketCap ? formatMarketCapShort(enrichedMarketCap) : marketCapShort
     const enrichedMarketCapFull = enrichedMarketCap ? formatMarketCapFull(enrichedMarketCap) : marketCapFull
+
+    const enrichedPeRatio = fundamentals.peRatio ?? finnhubMetrics.peRatio ?? null
+    const enrichedWeek52High = fundamentals.week52High ?? finnhubMetrics.week52High ?? null
+    const enrichedWeek52Low = fundamentals.week52Low ?? finnhubMetrics.week52Low ?? null
+    const enrichedVolume = quote.volume ?? finnhubMetrics.avgVolume ?? null
 
     return NextResponse.json({
       symbol,
@@ -141,7 +185,10 @@ export async function GET(
         high: quote.high,
         low: quote.low,
         previousClose: quote.previousClose,
-        volume: quote.volume,
+        volume: enrichedVolume,
+        peRatio: enrichedPeRatio,
+        week52High: enrichedWeek52High,
+        week52Low: enrichedWeek52Low,
         marketCap: enrichedMarketCap,
         marketCapShort: enrichedMarketCapShort,
         marketCapFull: enrichedMarketCapFull,

@@ -120,7 +120,7 @@ export async function loadPortfolioFromDB(userId: string) {
       amount: parseFloat(row.amount) || 0,
       timestamp: row.timestamp.getTime(),
       method: row.method || 'Manual',
-      resultingBalance: 0, // Will be calculated
+      resultingBalance: undefined, // Calculated client-side if needed
     }))
 
     return {
@@ -321,4 +321,3 @@ export async function syncPositionsToDB(
     client.release()
   }
 }
-

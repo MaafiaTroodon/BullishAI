@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
     }
     const apiRange = rangeMap[rawRange.toLowerCase()] || '1d'
     
+    // Load portfolio data once for this request
+    const portfolioData = await loadPortfolioFromDB(userId)
+
     // Calculate time window
     const now = Date.now()
     let startTime: number
@@ -81,7 +84,6 @@ export async function GET(req: NextRequest) {
       startTime = now - (365 * 24 * 60 * 60 * 1000)
     } else {
       // For 'all', get first trade timestamp
-      const portfolioData = await loadPortfolioFromDB(userId)
       if (portfolioData.transactions.length > 0) {
         const firstTrade = portfolioData.transactions.reduce((earliest, tx) => 
           tx.timestamp < earliest.timestamp ? tx : earliest
@@ -94,32 +96,24 @@ export async function GET(req: NextRequest) {
     
     // Get CURRENT holdings from DB (positions table)
     // These are the actual stocks we own RIGHT NOW with their shares and avg prices
-    const portfolioData = await loadPortfolioFromDB(userId)
     const currentHoldings = portfolioData.positions.filter(p => p.totalShares > 0)
-    
-    if (currentHoldings.length === 0) {
-      // No holdings, return empty series
-      const sections = getSectionsForRange(apiRange, startTime, endTime)
-      return NextResponse.json({
-        range: rawRange,
-        series: [],
-        sections: sections.map(ts => Number(ts)),
-        window: { startTime, endTime },
-        totals: {
-          tpv: 0,
-          costBasis: 0,
-          totalReturn: 0,
-          totalReturnPct: 0
-        }
-      })
-    }
-    
-    // Calculate cost basis from current holdings (constant for all time points)
-    // costBasis = sum(shares_i * avgPrice_i) for all holdings
-    const costBasis = currentHoldings.reduce((sum, h) => {
+
+    const walletTransactions = portfolioData.walletTransactions || []
+    const tradeTransactions = portfolioData.transactions || []
+
+    // Calculate cost basis and net deposits
+    const holdingsCostBasis = currentHoldings.reduce((sum, h) => {
       return sum + (h.totalCost || (h.avgPrice * h.totalShares) || 0)
     }, 0)
-    
+    const netDeposits = walletTransactions.reduce((sum, t) => {
+      return sum + (t.action === 'deposit' ? (t.amount || 0) : -(t.amount || 0))
+    }, 0)
+    const normalizedNetDeposits = Math.max(0, netDeposits)
+    const inferredDeposits = normalizedNetDeposits > 0
+      ? normalizedNetDeposits
+      : (portfolioData.walletBalance > 0 ? portfolioData.walletBalance : 0)
+    const costBasis = inferredDeposits > 0 ? inferredDeposits : holdingsCostBasis
+
     // Get symbols from current holdings
     const symbols = currentHoldings.map(h => h.symbol.toUpperCase())
     
@@ -130,6 +124,24 @@ export async function GET(req: NextRequest) {
       .filter((ts: number) => Number.isFinite(ts))
       .sort((a: number, b: number) => a - b)
     
+    // Build cash timeline events from wallet transactions + trades
+    const cashEvents: Array<{ timestamp: number; delta: number }> = []
+    for (const tx of walletTransactions) {
+      const delta = tx.action === 'deposit' ? (tx.amount || 0) : -(tx.amount || 0)
+      cashEvents.push({ timestamp: tx.timestamp || 0, delta })
+    }
+    for (const tx of tradeTransactions) {
+      if (!tx?.timestamp) continue
+      const tradeDelta = (tx.action === 'buy' ? -1 : 1) * (tx.price || 0) * (tx.quantity || 0)
+      if (tradeDelta !== 0) {
+        cashEvents.push({ timestamp: tx.timestamp, delta: tradeDelta })
+      }
+    }
+
+    cashEvents.sort((a, b) => a.timestamp - b.timestamp)
+    const totalCashDelta = cashEvents.reduce((sum, e) => sum + e.delta, 0)
+    const baseCashBalance = (portfolioData.walletBalance || 0) - totalCashDelta
+
     // Fetch historical prices for all symbols
     // Map: symbol -> array of {t: timestamp, c: close_price}
     const historicalPricesMap = new Map<string, Array<{t: number, c: number}>>()
@@ -151,45 +163,49 @@ export async function GET(req: NextRequest) {
     }
     
     // Fetch historical prices for all symbols in parallel
-    await Promise.all(symbols.map(async (symbol) => {
-      try {
-        const candlesResult = await getCandles(symbol, chartRange)
-        if (candlesResult.data && candlesResult.data.length > 0) {
-          const prices = candlesResult.data
-            .filter((c: any) => {
-              const t = c.t || c.timestamp || 0
-              return t >= startTime && t <= endTime
-            })
-            .map((c: any) => ({
-              t: c.t || c.timestamp || 0,
-              c: c.c ?? c.close ?? c.price ?? 0
-            }))
-            .filter((p: any) => p.c > 0 && p.t > 0)
-            .sort((a: any, b: any) => a.t - b.t)
-          
-          historicalPricesMap.set(symbol, prices)
+    if (symbols.length > 0) {
+      await Promise.all(symbols.map(async (symbol) => {
+        try {
+          const candlesResult = await getCandles(symbol, chartRange)
+          if (candlesResult.data && candlesResult.data.length > 0) {
+            const prices = candlesResult.data
+              .filter((c: any) => {
+                const t = c.t || c.timestamp || 0
+                return t >= startTime && t <= endTime
+              })
+              .map((c: any) => ({
+                t: c.t || c.timestamp || 0,
+                c: c.c ?? c.close ?? c.price ?? 0
+              }))
+              .filter((p: any) => p.c > 0 && p.t > 0)
+              .sort((a: any, b: any) => a.t - b.t)
+            
+            historicalPricesMap.set(symbol, prices)
+          }
+        } catch (error: any) {
+          console.error(`[Timeseries Calculated] Failed to fetch prices for ${symbol}:`, error.message)
+          historicalPricesMap.set(symbol, [])
         }
-      } catch (error: any) {
-        console.error(`[Timeseries Calculated] Failed to fetch prices for ${symbol}:`, error.message)
-        historicalPricesMap.set(symbol, [])
-      }
-    }))
+      }))
+    }
     
     // Fetch current real-time prices for all symbols (for recent points)
     const currentPricesMap = new Map<string, number>()
-    try {
-      await Promise.all(symbols.map(async (symbol) => {
-        try {
-          const quote = await getQuoteWithFallback(symbol)
-          if (quote && quote.price > 0) {
-            currentPricesMap.set(symbol.toUpperCase(), quote.price)
+    if (symbols.length > 0) {
+      try {
+        await Promise.all(symbols.map(async (symbol) => {
+          try {
+            const quote = await getQuoteWithFallback(symbol)
+            if (quote && quote.price > 0) {
+              currentPricesMap.set(symbol.toUpperCase(), quote.price)
+            }
+          } catch (error: any) {
+            // If quote fails, we'll use historical prices
           }
-        } catch (error: any) {
-          // If quote fails, we'll use historical prices
-        }
-      }))
-    } catch (error: any) {
-      console.error('[Timeseries Calculated] Failed to fetch current prices:', error.message)
+        }))
+      } catch (error: any) {
+        console.error('[Timeseries Calculated] Failed to fetch current prices:', error.message)
+      }
     }
     
     // Helper function to get price at a specific timestamp
@@ -249,10 +265,18 @@ export async function GET(req: NextRequest) {
     
     // Process each time section
     // For each timestamp (x-axis), calculate portfolio value (y-axis) using prices at that time
+    let cashBalance = baseCashBalance
+    let cashIndex = 0
+
     for (let i = 0; i < sectionTimestamps.length; i++) {
       const sectionTime = sectionTimestamps[i]
       const isLastPoint = i === sectionTimestamps.length - 1
       
+      while (cashIndex < cashEvents.length && cashEvents[cashIndex].timestamp <= sectionTime) {
+        cashBalance += cashEvents[cashIndex].delta
+        cashIndex += 1
+      }
+
       // Calculate portfolio value at this time point
       // Formula: portfolioValue = sum(shares_i * price_i_at_that_time) for all holdings
       let portfolioValue = 0
@@ -269,7 +293,10 @@ export async function GET(req: NextRequest) {
         }
       }
       
-      // If no price data available, skip this point (don't use cost basis as fallback for graph)
+      // Include cash balance (deposits/withdrawals/trades) in total portfolio value
+      portfolioValue += cashBalance
+
+      // If no price data available and no cash, skip this point (don't use cost basis as fallback for graph)
       if (portfolioValue === 0) {
         continue
       }
@@ -311,6 +338,7 @@ export async function GET(req: NextRequest) {
       totalReturn: number
       totalReturnPct: number
     } | null = null
+    let dashboardWalletBalance = portfolioData.walletBalance || 0
     
     try {
       const protocol = req.headers.get('x-forwarded-proto') || 'http'
@@ -323,19 +351,24 @@ export async function GET(req: NextRequest) {
       })
       
       if (portfolioRes.ok) {
-        const portfolioData = await portfolioRes.json()
-        dashboardTotals = portfolioData.totals || null
+        const portfolioResponse = await portfolioRes.json()
+        dashboardTotals = portfolioResponse.totals || null
+        dashboardWalletBalance = portfolioResponse?.wallet?.balance ?? dashboardWalletBalance
         
-        // Update the last point with current dashboard portfolio value
-        // This ensures the tooltip matches the dashboard summary exactly
-        if (dashboardTotals && series.length > 0) {
+        // Update the last point with current portfolio value (holdings + cash)
+        if (series.length > 0) {
           const lastPoint = series[series.length - 1]
-          lastPoint.portfolio = dashboardTotals.tpv
-          lastPoint.portfolioAbs = dashboardTotals.tpv
-          lastPoint.overallReturn$ = dashboardTotals.totalReturn
-          lastPoint.overallReturnPct = dashboardTotals.totalReturnPct
+          const dashboardTpv = (dashboardTotals?.tpv || 0) + (dashboardWalletBalance || 0)
+          const dashboardCostBasis = costBasis > 0 ? costBasis : (dashboardTotals?.costBasis || 0)
+          const dashboardReturn = dashboardTpv - dashboardCostBasis
+          const dashboardReturnPct = dashboardCostBasis > 0 ? (dashboardReturn / dashboardCostBasis) * 100 : 0
+          
+          lastPoint.portfolio = dashboardTpv
+          lastPoint.portfolioAbs = dashboardTpv
+          lastPoint.overallReturn$ = dashboardReturn
+          lastPoint.overallReturnPct = dashboardReturnPct
           lastPoint.t = endTime // Current time
-          finalPortfolioValue = dashboardTotals.tpv
+          finalPortfolioValue = dashboardTpv
         }
       }
     } catch (error: any) {
@@ -358,7 +391,7 @@ export async function GET(req: NextRequest) {
       series,
       sections: sectionTimestamps,
       window: { startTime, endTime },
-      totals: dashboardTotals || {
+      totals: {
         tpv: finalPortfolioValue,
         costBasis: costBasis,
         totalReturn: finalPortfolioValue - costBasis,

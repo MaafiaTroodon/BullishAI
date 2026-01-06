@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { showToast } from '@/components/Toast'
+import { showToast, showToastWithAction } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { useUserId, getUserStorageKey } from '@/hooks/useUserId'
 import { authClient } from '@/lib/auth-client'
 
@@ -27,6 +27,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const router = useRouter()
   const userId = useUserId()
   const { data: session } = authClient.useSession()
+  const { mutate: globalMutate } = useSWRConfig()
   const positionsStorageKey = getUserStorageKey('bullish_pf_positions', userId)
   const transactionsStorageKey = getUserStorageKey('bullish_transactions', userId)
   
@@ -112,9 +113,15 @@ export function DemoTradeBox({ symbol, price }: Props) {
     if (!currentPrice || estShares<=0) return 0
     return orderType==='dollars' ? amount : estShares * currentPrice
   }, [amount, orderType, currentPrice, estShares])
+  const walletBalance = portfolioData?.wallet?.balance ?? 0
+  const insufficientFunds = mode === 'buy' && estCost > 0 && walletBalance < estCost
 
   async function submit() {
     if (!currentPrice || estShares<=0) return
+    if (insufficientFunds) {
+      showToastWithAction('Not enough balance. Please deposit funds to your wallet.', 'error', 'Deposit', '/wallet')
+      return
+    }
     // For sell mode, validate we have enough shares
     if (mode === 'sell') {
       if (!pos || pos.totalShares <= 0) {
@@ -135,8 +142,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
       const j = await res.json()
       if (!res.ok) {
         if (j?.error === 'insufficient_funds') {
-          showToast('Insufficient wallet balance. Top up your wallet and try again.', 'error')
-          try { window.location.href = '/wallet' } catch {}
+          showToastWithAction('Not enough balance. Please deposit funds to your wallet.', 'error', 'Deposit', '/wallet')
         } else if (j?.error === 'insufficient_shares') {
           showToast(`Not enough shares to sell. You have ${pos?.totalShares?.toFixed(4) || 0} shares.`, 'error')
         } else {
@@ -214,6 +220,7 @@ export function DemoTradeBox({ symbol, price }: Props) {
         
         // Then revalidate in background to ensure consistency
         mutate()
+        globalMutate('/api/wallet')
         
         try {
           // Trigger global events for other components (navbar, wallet page, etc.)
@@ -445,7 +452,8 @@ export function DemoTradeBox({ symbol, price }: Props) {
           isSubmitting || 
           !currentPrice || 
           estShares<=0 || 
-          (mode === 'sell' && (!pos || pos.totalShares <= 0))
+          (mode === 'sell' && (!pos || pos.totalShares <= 0)) ||
+          insufficientFunds
         } 
         className={`w-full py-2 rounded-lg font-semibold transition ${mode==='buy' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white disabled:opacity-50 disabled:cursor-not-allowed`}
       >
@@ -476,5 +484,3 @@ export function DemoTradeBox({ symbol, price }: Props) {
     </div>
   )
 }
-
-

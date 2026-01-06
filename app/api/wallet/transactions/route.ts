@@ -15,6 +15,10 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
+
+    // Ensure in-memory store is hydrated from DB for accurate balances
+    const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
+    await ensurePortfolioLoaded(userId)
     
     // User-specific cookie name to prevent cross-user data sharing
     const cookieName = `bullish_wallet_${userId}`
@@ -80,4 +84,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-
