@@ -23,12 +23,13 @@ export async function GET(req: NextRequest) {
 
     const sectors = Object.entries(SECTOR_ETFS).map(([name, symbol]) => {
       const quote = quotes.quotes?.find((q: any) => q.symbol === symbol)
+      const changePercent = parseFloat(quote?.dp ?? quote?.changePercent ?? 0)
       return {
         name,
         symbol,
-        change: parseFloat(quote?.change || 0),
-        changePercent: parseFloat(quote?.changePercent || 0),
-        strength: Math.abs(parseFloat(quote?.changePercent || 0)),
+        change: parseFloat(quote?.change ?? 0),
+        changePercent,
+        strength: Math.abs(changePercent),
       }
     }).sort((a, b) => b.strength - a.strength)
 
@@ -44,4 +45,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-

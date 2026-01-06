@@ -41,6 +41,7 @@ export default function Home() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [focusSymbol, setFocusSymbol] = useState<string | undefined>(undefined)
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([])
+  const [hoveredSector, setHoveredSector] = useState<string | null>(null)
   
   // Get current stock list based on exchange
   const currentStocks = selectedExchange === 'USA' ? US_STOCKS : CANADIAN_STOCKS
@@ -164,6 +165,15 @@ export default function Home() {
     { refreshInterval: 180000 }
   )
   const { data: earningsData } = useSWR('/api/calendar/earnings?range=week', fetcher, { refreshInterval: 60000 })
+  const earningsSymbols = useMemo(() => {
+    const items = earningsData?.items || []
+    return Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 12)
+  }, [earningsData])
+  const { data: earningsInsights } = useSWR(
+    earningsSymbols.length ? `/api/market/earnings-insights?symbols=${earningsSymbols.join(',')}` : null,
+    fetcher,
+    { refreshInterval: 90000 }
+  )
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -196,6 +206,113 @@ export default function Home() {
 
   const sectorWheel = signalsData?.sectors || []
 
+  const sectorInfo: Record<string, { includes: string[]; why: string }> = {
+    Technology: {
+      includes: ['AAPL', 'MSFT', 'NVDA'],
+      why: 'Growth engine and innovation proxy.',
+    },
+    Healthcare: {
+      includes: ['UNH', 'JNJ', 'PFE'],
+      why: 'Defensive demand with steady cash flows.',
+    },
+    Financials: {
+      includes: ['JPM', 'BAC', 'GS'],
+      why: 'Credit cycle and rate sensitivity.',
+    },
+    'Consumer Discretionary': {
+      includes: ['AMZN', 'TSLA', 'HD'],
+      why: 'Spending and confidence gauge.',
+    },
+    'Communication Services': {
+      includes: ['META', 'GOOGL', 'NFLX'],
+      why: 'Ad cycles + media trends; strong in bull markets.',
+    },
+    Energy: {
+      includes: ['XOM', 'CVX', 'ENPH'],
+      why: 'Inflation hedge; tied to commodities and geopolitics.',
+    },
+    Industrials: {
+      includes: ['BA', 'LMT', 'CAT'],
+      why: 'Economic growth signal and infrastructure proxy.',
+    },
+    'Consumer Staples': {
+      includes: ['WMT', 'PG', 'KO'],
+      why: 'Defensive sector; resilient in downturns.',
+    },
+    Utilities: {
+      includes: ['NEE', 'DUK', 'SO'],
+      why: 'Stable cash flows; defensive yield proxy.',
+    },
+    'Real Estate': {
+      includes: ['PLD', 'AMT', 'O'],
+      why: 'Rate-sensitive income and property cycle barometer.',
+    },
+    Materials: {
+      includes: ['LIN', 'APD', 'FCX'],
+      why: 'Commodity and manufacturing demand signal.',
+    },
+  }
+
+  const sectorColorMap: Record<string, string> = {
+    Technology: '#4f8bff',
+    Healthcare: '#35c3a5',
+    Financials: '#f2b84b',
+    'Consumer Discretionary': '#ff7a7a',
+    'Consumer Staples': '#9ad66f',
+    'Communication Services': '#8f6bff',
+    Energy: '#ff9a3d',
+    Industrials: '#4fc1ff',
+    Utilities: '#7cc0ff',
+    'Real Estate': '#b68bff',
+    Materials: '#ffb86b',
+  }
+
+  const rotationLabelForChange = (change: number) => {
+    if (change >= 0.3) return { label: 'Rotating In', color: 'text-emerald-400', icon: '🟢' }
+    if (change <= -0.3) return { label: 'Rotating Out', color: 'text-red-400', icon: '🔴' }
+    return { label: 'Neutral', color: 'text-slate-400', icon: '🟡' }
+  }
+
+  const sectorSegments = useMemo(() => {
+    if (!sectorWheel.length) return []
+    const weights = sectorWheel.map((s: any) => {
+      const raw = Math.abs(Number(s.changePercent ?? s.strength ?? 0))
+      return raw > 0 ? raw : 0.3
+    })
+    const total = weights.reduce((sum, w) => sum + w, 0) || 1
+    let angle = 0
+    return sectorWheel.map((sector: any, idx: number) => {
+      const value = weights[idx]
+      const sweep = (value / total) * 360
+      const start = angle
+      const end = angle + sweep
+      angle = end
+      const change = Number(sector.changePercent ?? sector.strength ?? 0)
+      return {
+        name: sector.name,
+        changePercent: change,
+        startAngle: start,
+        endAngle: end,
+        color: sectorColorMap[sector.name] || `hsl(${210 + idx * 28}, 70%, 55%)`,
+      }
+    })
+  }, [sectorWheel])
+
+  const hoveredSectorDetails = hoveredSector ? sectorInfo[hoveredSector] : null
+  const hoveredSectorData = hoveredSector
+    ? sectorWheel.find((sector: any) => sector.name === hoveredSector)
+    : null
+
+  const moneyFlowSummary = useMemo(() => {
+    if (!sectorWheel.length) return null
+    const sorted = [...sectorWheel].sort((a: any, b: any) => Math.abs(b.changePercent ?? b.strength ?? 0) - Math.abs(a.changePercent ?? a.strength ?? 0))
+    const gainers = sorted.filter((s: any) => (s.changePercent ?? s.strength ?? 0) > 0).slice(0, 2)
+    const losers = sorted.filter((s: any) => (s.changePercent ?? s.strength ?? 0) < 0).slice(0, 2)
+    const gainText = gainers.length ? gainers.map((s: any) => s.name).join(' & ') : 'Mixed'
+    const lossText = losers.length ? losers.map((s: any) => s.name).join(' & ') : 'Stable'
+    return { gainText, lossText }
+  }, [sectorWheel])
+
   const earningsItems = useMemo(() => {
     const items = earningsData?.items || []
     if (items.length === 0) return []
@@ -204,6 +321,86 @@ export default function Home() {
     }
     return items.filter((item: any) => !String(item.symbol || '').toUpperCase().includes('.TO')).slice(0, 10)
   }, [earningsData, selectedExchange])
+
+  const earningsRiskLabels = useMemo(() => {
+    if (earningsItems.length === 0) return new Map<string, { score: number | null; label: string }>()
+    const scores = earningsItems.map((item: any) => {
+      const symbol = String(item.symbol || '').toUpperCase()
+      const metrics = earningsInsights?.items?.[symbol] || {}
+      const typicalMove = Number(metrics.typicalMove ?? 0)
+      const realizedVol = Number(metrics.realizedVol ?? 0)
+      const hasData = Number.isFinite(typicalMove) && typicalMove > 0 || Number.isFinite(realizedVol) && realizedVol > 0
+      if (!hasData) {
+        return { symbol, score: null }
+      }
+      const normalizedTypical = Math.min(Math.abs(typicalMove) / 6, 1)
+      const normalizedVol = Math.min(Math.abs(realizedVol) / 4, 1)
+      let score = normalizedTypical * 45 + normalizedVol * 45
+      if (marketPulse.label === 'Risk-Off') score += 6
+      if (marketPulse.label === 'Bullish') score -= 3
+      if (item.date) {
+        const eventDate = new Date(item.date)
+        const diffMs = eventDate.getTime() - Date.now()
+        if (diffMs <= 86400000 && diffMs >= 0) score += 8
+      }
+      score = Math.max(0, Math.min(100, score))
+      return { symbol, score }
+    })
+    const scored = scores.filter((s) => s.score !== null) as Array<{ symbol: string; score: number }>
+    const map = new Map<string, { score: number | null; label: string }>()
+    if (scored.length === 0) {
+      scores.forEach((s) => map.set(s.symbol, { score: null, label: '—' }))
+      return map
+    }
+    const mediumCount = scored.filter((s) => s.score >= 34 && s.score <= 66).length
+    const useRanking = mediumCount / scored.length > 0.7
+    if (useRanking) {
+      const sorted = [...scored].sort((a, b) => b.score - a.score)
+      const highCutoff = Math.max(1, Math.ceil(sorted.length * 0.2))
+      const lowCutoff = Math.max(1, Math.floor(sorted.length * 0.2))
+      sorted.forEach((s, idx) => {
+        if (idx < highCutoff) {
+          map.set(s.symbol, { score: s.score, label: 'High Risk' })
+        } else if (idx >= sorted.length - lowCutoff) {
+          map.set(s.symbol, { score: s.score, label: 'Low Risk' })
+        } else {
+          map.set(s.symbol, { score: s.score, label: 'Medium Risk' })
+        }
+      })
+    } else {
+      scored.forEach((s) => {
+        const label = s.score >= 67 ? 'High Risk' : s.score >= 34 ? 'Medium Risk' : 'Low Risk'
+        map.set(s.symbol, { score: s.score, label })
+      })
+    }
+    scores.forEach((s) => {
+      if (!map.has(s.symbol)) {
+        map.set(s.symbol, { score: s.score, label: '—' })
+      }
+    })
+    return map
+  }, [earningsItems, earningsInsights, marketPulse.label])
+
+  const sectorLeaders = useMemo(() => {
+    if (!sectorWheel.length) return 'Mixed'
+    const leaders = [...sectorWheel]
+      .filter((s: any) => (s.changePercent ?? s.strength ?? 0) > 0)
+      .sort((a: any, b: any) => (b.changePercent ?? b.strength ?? 0) - (a.changePercent ?? a.strength ?? 0))
+      .slice(0, 2)
+      .map((s: any) => s.name)
+    return leaders.length ? leaders.join(', ') : 'Mixed'
+  }, [sectorWheel])
+
+  const marketMeaning = useMemo(() => {
+    const volatility = Number(marketPulse.components.volatilityProxy || 0)
+    if (marketPulse.label === 'Bullish' && volatility < 1.5) {
+      return 'Momentum favors selective risk-taking in leading sectors.'
+    }
+    if (marketPulse.label === 'Risk-Off' || volatility >= 2.5) {
+      return 'Caution bias: volatility argues for tighter risk and shorter horizons.'
+    }
+    return 'Balanced conditions favor selective positioning over broad risk-taking.'
+  }, [marketPulse.label, marketPulse.components.volatilityProxy])
 
   const viewedWidgetData = useMemo(() => {
     if (recentlyViewed.length === 0) return null
@@ -548,14 +745,27 @@ export default function Home() {
                   <div className="animate-pulse space-y-3">
                     <div className="h-6 bg-slate-700 rounded w-2/3" />
                     <div className="h-4 bg-slate-700 rounded w-full" />
+                    <div className="h-4 bg-slate-700 rounded w-5/6" />
                   </div>
                 ) : (
-                  <div className="flex items-center gap-4">
-                    <div className="text-4xl motion-safe:animate-[pulse_6s_ease-in-out_infinite]">{marketWeather.icon}</div>
-                    <div>
-                      <div className="text-lg font-semibold text-white">{marketWeather.headline}</div>
-                      <p className="text-sm text-slate-400">{marketWeather.detail}</p>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="text-4xl motion-safe:animate-[pulse_6s_ease-in-out_infinite]">{marketWeather.icon}</div>
+                      <div>
+                        <div className="text-lg font-semibold text-white">{marketWeather.headline}</div>
+                        <p className="text-sm text-slate-400">{marketWeather.detail}</p>
+                      </div>
                     </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Today’s Key Signals</div>
+                      <div className="space-y-1 text-sm text-slate-400">
+                        <div>📊 Market Breadth: {marketPulse.components.breadthPct.toFixed(1)}% stocks advancing</div>
+                        <div>🌡️ Volatility Level: {marketPulse.components.volatilityProxy >= 2.5 ? 'High' : marketPulse.components.volatilityProxy >= 1.2 ? 'Moderate' : 'Low'} ({marketPulse.components.volatilityProxy.toFixed(2)}%)</div>
+                        <div>🔄 Sector Leadership: {sectorLeaders}</div>
+                        <div>⚠️ Risk Mode: {marketPulse.label}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500">What this means: {marketMeaning}</div>
                   </div>
                 )}
               </div>
@@ -569,27 +779,120 @@ export default function Home() {
                   </div>
                   <span className="text-slate-500 text-sm" title="Approximation using sector ETF momentum.">ⓘ</span>
                 </div>
-                <div className="flex items-center gap-5">
-                  <div
-                    className="h-28 w-28 rounded-full motion-safe:animate-[spin_18s_linear_infinite]"
-                    style={{
-                      background: `conic-gradient(${sectorWheel.map((s, idx) => {
-                        const base = idx * (360 / sectorWheel.length)
-                        const hue = 200 + idx * 25
-                        return `hsl(${hue}, 70%, 55%) ${base}deg ${base + 360 / sectorWheel.length}deg`
-                      }).join(',')})`
-                    }}
-                  />
-                  <div className="space-y-2 text-sm text-slate-300">
-                  {sectorWheel.slice(0, 4).map((sector) => (
-                    <div key={sector.name} className="flex items-center justify-between gap-4">
-                      <span>{sector.name}</span>
-                      <span className="text-slate-400">{Number(sector.changePercent ?? sector.strength ?? 0).toFixed(2)}%</span>
+                {moneyFlowSummary && (
+                  <div className="text-xs text-slate-400 mb-4">
+                    Money Flow Today:{' '}
+                    <span className="text-emerald-400">🟢 {moneyFlowSummary.gainText}</span>{' '}
+                    <span className="text-slate-500">/</span>{' '}
+                    <span className="text-red-400">🔴 {moneyFlowSummary.lossText}</span>
+                  </div>
+                )}
+                {!signalsData || sectorWheel.length === 0 ? (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-28 w-28 rounded-full bg-slate-700" />
+                    <div className="h-4 bg-slate-700 rounded w-2/3" />
+                    <div className="h-4 bg-slate-700 rounded w-1/2" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-5">
+                    <div className="relative">
+                      <svg
+                        viewBox="0 0 120 120"
+                        className="h-28 w-28 motion-safe:animate-[spin_18s_linear_infinite]"
+                        onMouseLeave={() => setHoveredSector(null)}
+                      >
+                        {sectorSegments.map((seg) => {
+                          const startRad = (Math.PI / 180) * (seg.startAngle - 90)
+                          const endRad = (Math.PI / 180) * (seg.endAngle - 90)
+                          const radius = 50
+                          const x1 = 60 + radius * Math.cos(startRad)
+                          const y1 = 60 + radius * Math.sin(startRad)
+                          const x2 = 60 + radius * Math.cos(endRad)
+                          const y2 = 60 + radius * Math.sin(endRad)
+                          const largeArc = seg.endAngle - seg.startAngle > 180 ? 1 : 0
+                          const d = `M60,60 L${x1},${y1} A${radius},${radius} 0 ${largeArc} 1 ${x2},${y2} Z`
+                          const isHovered = hoveredSector === seg.name
+                          const rotation = rotationLabelForChange(seg.changePercent)
+                          return (
+                            <path
+                              key={seg.name}
+                              d={d}
+                              fill={seg.color}
+                              opacity={hoveredSector && !isHovered ? 0.35 : 1}
+                              stroke="rgba(15,23,42,0.9)"
+                              strokeWidth={1}
+                              onMouseEnter={() => setHoveredSector(seg.name)}
+                              title={`${seg.name}: ${seg.changePercent >= 0 ? '+' : ''}${seg.changePercent.toFixed(2)}% • ${rotation.label}`}
+                            />
+                          )
+                        })}
+                        <circle cx="60" cy="60" r="30" fill="#0f172a" />
+                      </svg>
+                      {hoveredSector && (
+                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-slate-300 bg-slate-900/90 border border-slate-700 px-2 py-1 rounded">
+                          {hoveredSector}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-2 text-sm text-slate-300">
+                      {sectorWheel.map((sector) => {
+                        const info = sectorInfo[sector.name]
+                        const includes = info?.includes?.join(', ')
+                        const change = Number(sector.changePercent ?? sector.strength ?? 0)
+                        const rotation = rotationLabelForChange(change)
+                        const arrow = change >= 0 ? '↑' : '↓'
+                        return (
+                          <div
+                            key={sector.name}
+                            className={`flex items-center justify-between gap-4 rounded-md px-2 py-1 transition ${
+                              hoveredSector === sector.name ? 'bg-slate-700/60' : ''
+                            }`}
+                            onMouseEnter={() => setHoveredSector(sector.name)}
+                            onMouseLeave={() => setHoveredSector(null)}
+                            title={info ? `Includes: ${includes}. ${info.why}` : sector.name}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: sectorColorMap[sector.name] || '#64748b' }}
+                              />
+                              {sector.name}
+                            </span>
+                            <span className={`${change > 0.01 ? 'text-emerald-300' : change < -0.01 ? 'text-red-300' : 'text-slate-400'}`}>
+                              {(() => {
+                                if (change !== 0 && Math.abs(change) < 0.01) {
+                                  return `${arrow} ${change < 0 ? '-' : '+'}0.01%`
+                                }
+                                return `${arrow} ${change >= 0 ? '+' : ''}${change.toFixed(2)}%`
+                              })()}
+                            </span>
+                            <span className={`text-xs ${rotation.color}`}>
+                              {rotation.icon} {rotation.label}
+                            </span>
+                          </div>
+                        )
+                      })}
+                      {hoveredSectorDetails && (
+                        <div className="mt-2 text-xs text-slate-400">
+                          <div className="text-slate-200 font-semibold">{hoveredSector}</div>
+                          {hoveredSectorData && (
+                            <div>
+                              Today:{' '}
+                              <span className={Number(hoveredSectorData.changePercent ?? 0) >= 0 ? 'text-emerald-300' : 'text-red-300'}>
+                                {Number(hoveredSectorData.changePercent ?? 0) >= 0 ? '+' : ''}
+                                {Number(hoveredSectorData.changePercent ?? 0).toFixed(2)}%
+                              </span>{' '}
+                              • {rotationLabelForChange(Number(hoveredSectorData.changePercent ?? 0)).label}
+                            </div>
+                          )}
+                          <div>Includes: {hoveredSectorDetails.includes.join(', ')}</div>
+                          <div>{hoveredSectorDetails.why}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
             </div>
 
             {/* Row 3: Earnings Timeline */}
@@ -609,28 +912,70 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="flex gap-4 overflow-x-auto pb-2">
-                    {earningsItems.map((item: any) => {
+                    {earningsItems.map((item: any, index: number) => {
                       const volatilityProxy = Number(marketPulse.components.volatilityProxy || 0)
                       const volatilityLabel = volatilityProxy >= 2.5 ? 'High' : volatilityProxy >= 1.2 ? 'Med' : 'Low'
+                      const lastMove = item.pastReactionPct !== undefined ? Number(item.pastReactionPct) : null
+                      const lastMoveAbs = lastMove !== null && Number.isFinite(lastMove) ? Math.abs(lastMove) : null
+                      const typicalMove = lastMoveAbs !== null
+                        ? (lastMoveAbs * 0.7 + volatilityProxy * 0.3)
+                        : (volatilityProxy > 0.05 ? volatilityProxy * 1.1 : null)
+                      const riskScore = (lastMoveAbs ?? 0) + volatilityProxy * 1.2
+                      const riskLabel = riskScore >= 4 ? 'High Risk' : riskScore >= 2 ? 'Medium Risk' : 'Low Risk'
+                      const riskColor = riskLabel === 'High Risk' ? 'bg-red-500/20 text-red-300 border-red-500/40' : riskLabel === 'Medium Risk' ? 'bg-yellow-500/15 text-yellow-200 border-yellow-500/40' : 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
+                      const bias = riskLabel === 'High Risk'
+                        ? 'High uncertainty'
+                        : marketPulse.label === 'Bullish'
+                          ? 'Slightly bullish setup'
+                          : marketPulse.label === 'Risk-Off'
+                            ? 'Bearish expectations priced in'
+                            : 'Balanced expectations'
+                      const timeLabel = String(item.time || 'BMO')
+                      const timeTag = timeLabel.toLowerCase().includes('after') || timeLabel.toLowerCase().includes('pm') || timeLabel.toLowerCase().includes('amc') ? 'AMC' : 'BMO'
+                      const eventDate = item.date ? new Date(`${item.date}T${timeTag === 'AMC' ? '16:00:00' : '09:00:00'}`) : null
+                      const now = new Date()
+                      let countdownLabel = '—'
+                      if (eventDate && !Number.isNaN(eventDate.getTime())) {
+                        const diffMs = eventDate.getTime() - now.getTime()
+                        if (diffMs < -3600000) {
+                          countdownLabel = '—'
+                        } else {
+                        const diffHours = Math.max(0, Math.round(diffMs / 36e5))
+                        const diffDays = Math.floor(diffHours / 24)
+                        if (diffHours <= 24 && diffHours >= 0) {
+                          countdownLabel = diffHours <= 1 ? `Today (${timeTag})` : `Tomorrow (${timeTag})`
+                        } else {
+                          const hoursRemainder = diffHours - diffDays * 24
+                          countdownLabel = `In ${diffDays}d ${hoursRemainder}h`
+                        }
+                        }
+                      }
+                      const highlightToday = countdownLabel.startsWith('Today')
                       return (
                         <button
-                          key={`${item.symbol}-${item.date}`}
+                          key={`${item.symbol}-${item.date}-${item.time || 'time'}-${index}`}
                           onClick={() => window.location.assign(`/stocks/${item.symbol}`)}
-                          className="min-w-[220px] bg-slate-900 border border-slate-700 rounded-lg p-4 text-left hover:border-blue-500/60 transition"
+                          className={`min-w-[220px] bg-slate-900 border rounded-lg p-4 text-left hover:border-blue-500/60 transition ${highlightToday ? 'border-amber-400/60 shadow-[0_0_0_1px_rgba(251,191,36,0.35)]' : 'border-slate-700'}`}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-white font-semibold">{item.symbol}</span>
-                            <span className="text-xs text-slate-400">{item.time || 'BMO'}</span>
+                            <span className="text-xs text-slate-400">{countdownLabel}</span>
                           </div>
-                          <div className="text-xs text-slate-400 mb-2">{item.date}</div>
+                          <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                            <span>{item.date}</span>
+                            <span className={`px-2 py-0.5 rounded-full border text-[11px] ${riskColor}`}>{riskLabel}</span>
+                          </div>
                           <div className="text-sm text-slate-300">
                             Volatility: <span className="text-white">{volatilityLabel}</span>
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
-                            Past reaction: {item.pastReactionPct !== undefined ? `${item.pastReactionPct > 0 ? '↑' : '↓'} ${Math.abs(item.pastReactionPct).toFixed(1)}%` : '—'}
+                            Typical move: {typicalMove !== null && Number.isFinite(typicalMove) && Math.abs(typicalMove) >= 0.05 ? `±${typicalMove.toFixed(1)}%` : '—'}
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
-                            AI confidence: {item.aiConfidence || '—'}
+                            Last reaction: {lastMove !== null && Number.isFinite(lastMove) && Math.abs(lastMove) >= 0.05 ? `${lastMove > 0 ? '+' : ''}${lastMove.toFixed(1)}%` : '—'}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-2">
+                            AI bias: <span className="text-slate-300">{bias}</span>
                           </div>
                         </button>
                       )
