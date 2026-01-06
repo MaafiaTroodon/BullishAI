@@ -129,6 +129,19 @@ export async function GET(
       companyName = symbol
     }
 
+    const safeNumber = (value: any) => {
+      if (value === null || value === undefined) return null
+      if (typeof value === 'number' && Number.isFinite(value)) return value
+      if (typeof value === 'string') {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : null
+      }
+      if (typeof value === 'object' && 'value' in value) {
+        return safeNumber((value as any).value)
+      }
+      return null
+    }
+
     // Fetch Finnhub metrics for P/E and 52W range (fallbacks)
     let finnhubMetrics: {
       peRatio?: number | null
@@ -144,10 +157,10 @@ export async function GET(
         )
         const metric = metricsResponse?.data?.metric || {}
         finnhubMetrics = {
-          peRatio: metric.peTTM ?? metric.peBasicExclExtraTTM ?? null,
-          week52High: metric['52WeekHigh'] ?? metric['52WeekHighWithDate'] ?? null,
-          week52Low: metric['52WeekLow'] ?? metric['52WeekLowWithDate'] ?? null,
-          avgVolume: metric['10DayAverageTradingVolume'] ?? metric['3MonthAverageTradingVolume'] ?? null,
+          peRatio: safeNumber(metric.peTTM ?? metric.peBasicExclExtraTTM),
+          week52High: safeNumber(metric['52WeekHigh'] ?? metric['52WeekHighWithDate']),
+          week52Low: safeNumber(metric['52WeekLow'] ?? metric['52WeekLowWithDate']),
+          avgVolume: safeNumber(metric['10DayAverageTradingVolume'] ?? metric['3MonthAverageTradingVolume']),
         }
 
         if (process.env.NODE_ENV !== 'production' && !loggedMetrics) {
@@ -169,10 +182,40 @@ export async function GET(
     const enrichedMarketCapShort = enrichedMarketCap ? formatMarketCapShort(enrichedMarketCap) : marketCapShort
     const enrichedMarketCapFull = enrichedMarketCap ? formatMarketCapFull(enrichedMarketCap) : marketCapFull
 
-    const enrichedPeRatio = fundamentals.peRatio ?? finnhubMetrics.peRatio ?? null
-    const enrichedWeek52High = fundamentals.week52High ?? finnhubMetrics.week52High ?? null
-    const enrichedWeek52Low = fundamentals.week52Low ?? finnhubMetrics.week52Low ?? null
-    const enrichedVolume = quote.volume ?? finnhubMetrics.avgVolume ?? null
+    let enrichedPeRatio = fundamentals.peRatio ?? finnhubMetrics.peRatio ?? null
+    if (enrichedPeRatio === null && fundamentals.eps && quote.price) {
+      const calcPe = quote.price / fundamentals.eps
+      enrichedPeRatio = Number.isFinite(calcPe) ? calcPe : null
+    }
+
+    let enrichedWeek52High = fundamentals.week52High ?? finnhubMetrics.week52High ?? null
+    let enrichedWeek52Low = fundamentals.week52Low ?? finnhubMetrics.week52Low ?? null
+    let enrichedVolume = quote.volume ?? finnhubMetrics.avgVolume ?? null
+
+    if ((enrichedWeek52High === null || enrichedWeek52Low === null) || enrichedVolume === null) {
+      try {
+        const oneYearCandles = await getCandles(symbol, '1y')
+        const candleData = oneYearCandles.data || []
+        if (candleData.length) {
+          const highs = candleData.map((c: any) => safeNumber(c.h)).filter((n: number | null) => n !== null) as number[]
+          const lows = candleData.map((c: any) => safeNumber(c.l)).filter((n: number | null) => n !== null) as number[]
+          if (enrichedWeek52High === null && highs.length) {
+            enrichedWeek52High = Math.max(...highs)
+          }
+          if (enrichedWeek52Low === null && lows.length) {
+            enrichedWeek52Low = Math.min(...lows)
+          }
+          if (enrichedVolume === null) {
+            const volumes = candleData.map((c: any) => safeNumber(c.v)).filter((n: number | null) => n !== null) as number[]
+            if (volumes.length) {
+              enrichedVolume = volumes[volumes.length - 1]
+            }
+          }
+        }
+      } catch (error: any) {
+        console.warn(`1y candles fallback failed for ${symbol}:`, error?.message || error)
+      }
+    }
 
     return NextResponse.json({
       symbol,

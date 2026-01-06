@@ -222,19 +222,9 @@ export default function Home() {
   )
   const { data: earningsData } = useSWR('/api/calendar/earnings?range=month', fetcher, { refreshInterval: 60000 })
   const { data: dividendsData } = useSWR(
-    !isLoggedIn ? `/api/calendar/dividends?range=quarter` : null,
+    `/api/calendar/dividends?range=month`,
     fetcher,
     { refreshInterval: 3600000 }
-  )
-  const dividendQuoteSymbols = useMemo(() => {
-    const items = dividendsData?.items || []
-    const symbols = Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 60)
-    return symbols.join(',')
-  }, [dividendsData])
-  const { data: dividendQuotes } = useSWR(
-    !isLoggedIn && dividendQuoteSymbols.length ? `/api/quotes?symbols=${dividendQuoteSymbols}` : null,
-    fetcher,
-    { refreshInterval: 120000 }
   )
   const earningsSymbols = useMemo(() => {
     const items = earningsData?.items || []
@@ -508,65 +498,16 @@ export default function Home() {
     return change >= 0.3 ? 'Mixed expectations' : 'Balanced expectations'
   }
 
-  const freqToMultiplier = (frequency?: string) => {
-    const value = (frequency || '').toLowerCase()
-    if (value.includes('quarter')) return 4
-    if (value.includes('semi')) return 2
-    if (value.includes('month')) return 12
-    if (value.includes('week')) return 52
-    if (value.includes('annual')) return 1
-    return null
-  }
-
   const upcomingDividends = useMemo(() => {
     const items = dividendsData?.items || []
-    const marketCapMap = new Map<string, number>()
-    const priceMap = new Map<string, number>()
-    for (const quote of dividendQuotes?.quotes || []) {
-      if (quote?.symbol && Number.isFinite(Number(quote?.data?.marketCap))) {
-        marketCapMap.set(String(quote.symbol).toUpperCase(), Number(quote.data.marketCap))
-      }
-      if (quote?.symbol && Number.isFinite(Number(quote?.data?.price))) {
-        priceMap.set(String(quote.symbol).toUpperCase(), Number(quote.data.price))
-      }
-    }
-    const filtered = items.map((item: any) => {
-      const symbol = String(item.symbol || '').toUpperCase()
-      const rawYield = Number(item.yield || 0)
-      const marketCap = marketCapMap.get(symbol)
-      const price = priceMap.get(symbol)
-      const amount = item.amount ? Number(item.amount) : null
-      const multiplier = freqToMultiplier(item.frequency)
-      let computedYield = Number.isFinite(rawYield) && rawYield > 0 ? rawYield : null
-      if (!computedYield && amount && price && multiplier) {
-        computedYield = (amount * multiplier * 100) / price
-      }
-      return {
-        ...item,
-        symbol,
-        computedYield,
-        marketCap,
-      }
-    }).filter((item: any) => {
-      return item.marketCap !== undefined && item.marketCap >= 100_000_000_000 && item.computedYield && item.computedYield > 0
-    })
-    filtered.sort((a: any, b: any) => {
+    if (!items.length) return []
+    const sorted = [...items].sort((a: any, b: any) => {
       const dateA = new Date(a.exDate || a.payDate || a.date || 0).getTime()
       const dateB = new Date(b.exDate || b.payDate || b.date || 0).getTime()
       return dateA - dateB
     })
-    const now = Date.now()
-    const weekAhead = new Date()
-    weekAhead.setDate(weekAhead.getDate() + 7)
-    const weekEnd = weekAhead.getTime()
-    const inWeek = filtered.filter((item: any) => {
-      const date = new Date(item.exDate || item.payDate || item.date || 0).getTime()
-      return Number.isFinite(date) && date >= now && date <= weekEnd
-    })
-    if (inWeek.length >= 7) return inWeek.slice(0, 7)
-    const remaining = filtered.filter((item: any) => !inWeek.includes(item))
-    return [...inWeek, ...remaining].slice(0, 7)
-  }, [dividendsData, dividendQuotes])
+    return sorted.slice(0, 5)
+  }, [dividendsData])
 
   const formatCountdown = (dateString?: string, timeTag?: string) => {
     if (!dateString) return '—'
@@ -1304,9 +1245,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* Row 5: Upcoming Earnings & Dividends (logged-out only) */}
-            {!isLoggedIn && (
-              <div className="mt-6 grid lg:grid-cols-2 gap-4">
+            {/* Row 5: Upcoming Earnings & Dividends */}
+            <div className="mt-6 grid lg:grid-cols-2 gap-4">
                 <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
                   <div className="flex items-center justify-between mb-3">
                     <Link href="/calendar?tab=earnings" className="text-lg font-semibold text-white hover:underline">
@@ -1326,10 +1266,10 @@ export default function Home() {
                       <div className="h-4 bg-slate-700 rounded w-1/2" />
                     </div>
                   ) : upcomingEarnings.length === 0 ? (
-                    <div className="text-sm text-slate-400">No major earnings in the next 7 days.</div>
+                    <div className="text-sm text-slate-400">No major earnings in the next 30 days.</div>
                   ) : (
                     <div className="space-y-2">
-                      {upcomingEarnings.slice(0, 7).map((item: any) => {
+                      {upcomingEarnings.slice(0, 5).map((item: any) => {
                         const symbol = String(item.symbol || '').toUpperCase()
                         const timeTag = String(item.time || 'BMO').toLowerCase().includes('after') || String(item.time || '').toLowerCase().includes('pm') || String(item.time || '').toLowerCase().includes('amc')
                           ? 'AMC'
@@ -1384,21 +1324,17 @@ export default function Home() {
                       <div className="h-4 bg-slate-700 rounded w-1/2" />
                     </div>
                   ) : upcomingDividends.length === 0 ? (
-                    <div className="text-sm text-slate-400">Data unavailable.</div>
+                    <div className="text-sm text-slate-400">No dividends in the next 30 days.</div>
                   ) : (
                     <div className="space-y-2">
-                      {upcomingDividends.slice(0, 7).map((item: any) => {
+                      {upcomingDividends.slice(0, 5).map((item: any) => {
                         const symbol = String(item.symbol || '').toUpperCase()
-                        const yieldPct = Number(item.computedYield || item.yield || 0)
                         const exDate = item.exDate || item.date || null
+                        const recordDate = item.recordDate || null
                         const payDate = item.payDate || null
+                        const declarationDate = item.declarationDate || null
                         const amount = item.amount ? Number(item.amount) : null
-                        const label = exDate ? `Ex-div ${formatCountdown(exDate, 'BMO')}` : payDate ? `Pays ${formatCountdown(payDate, 'BMO')}` : '—'
-                        const note = yieldPct >= 3
-                          ? 'AI note: income strength is elevated.'
-                          : yieldPct >= 1
-                            ? 'AI note: steady dividend profile.'
-                            : 'AI note: yield is modest; watch payout timing.'
+                        const yieldPct = Number(item.yield || 0)
                         return (
                           <button
                             key={`${symbol}-${exDate || payDate}`}
@@ -1408,13 +1344,11 @@ export default function Home() {
                             <div>
                               <div className="text-white font-semibold">{symbol}</div>
                               <div className="text-xs text-slate-400">
-                                Yield: {yieldPct > 0 ? `${yieldPct.toFixed(2)}%` : '—'} • Ex: {exDate || '—'} • Pay: {payDate || '—'}
+                                Ex: {exDate || '—'} • Record: {recordDate || '—'} • Pay: {payDate || '—'}
                               </div>
-                              <div className="text-[11px] text-slate-500 mt-1">{note}</div>
-                            </div>
-                            <div className="text-xs text-slate-400">
-                              {amount ? `$${amount.toFixed(2)}` : '—'}
-                              <div className="text-[10px] text-slate-500">{label}</div>
+                              <div className="text-xs text-slate-400">
+                                Declared: {declarationDate || '—'} • Amount: {amount ? `$${amount.toFixed(2)}` : '—'} • Yield: {yieldPct ? `${yieldPct.toFixed(2)}%` : '—'}
+                              </div>
                             </div>
                           </button>
                         )
@@ -1422,8 +1356,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+            </div>
 
             {/* Row 6: Portfolio Simulation Preview (logged-out only) */}
             {!isLoggedIn && (

@@ -195,7 +195,7 @@ function CalendarPageContent() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredItems.map((item: any, idx: number) => {
+            {(activeTab === 'earnings' ? filteredItems.slice(0, 15) : filteredItems.slice(0, 15)).map((item: any, idx: number) => {
               const symbol = (item.symbol || '').toString().toUpperCase()
               const company = item.company || item.name || symbol
 
