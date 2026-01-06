@@ -18,7 +18,7 @@ import { StaggerGrid } from '@/components/anim/StaggerGrid'
 import { ParallaxImage } from '@/components/anim/ParallaxImage'
 import { Footer } from '@/components/Footer'
 import { authClient } from '@/lib/auth-client'
-import { getRecommendationState, groupRecommendations, recordSearchTicker } from '@/lib/recommendations'
+import { canonicalizeTicker, getRecommendationState, groupRecommendations, recordSearchTicker } from '@/lib/recommendations'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -33,6 +33,11 @@ const fetcher = async (url: string) => {
 
 const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
 const CANADIAN_STOCKS = ['CLS.TO', 'BMO.TO', 'TD.TO', 'DOL.TO', 'L.TO'] // Celestica, BMO, TD, Dollarama, Loblaw
+const GOOD_DIVIDEND_TICKERS = [
+  'AAPL', 'MSFT', 'JNJ', 'PG', 'KO', 'PEP', 'COST', 'UNH', 'XOM', 'CVX', 'JPM', 'BAC', 'WFC', 'V', 'MA',
+  'SPY', 'VYM', 'SCHD', 'DVY',
+  'RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'MFC.TO', 'ENB.TO', 'SU.TO', 'TRP.TO',
+]
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -99,7 +104,7 @@ export default function Home() {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
-          setRecentlyViewed(parsed.map((t) => String(t).toUpperCase()))
+          setRecentlyViewed(parsed.map((t) => canonicalizeTicker(String(t))))
         }
       }
     } catch {}
@@ -125,7 +130,8 @@ export default function Home() {
       const raw = localStorage.getItem('recentlyViewedTickers')
       const existing = raw ? JSON.parse(raw) : []
       const list = Array.isArray(existing) ? existing.map((t: string) => String(t).toUpperCase()) : []
-      const next = [normalized, ...list.filter((t: string) => t !== normalized)].slice(0, 5)
+      const canonical = canonicalizeTicker(normalized)
+      const next = [canonical, ...list.filter((t: string) => canonicalizeTicker(t) !== canonical)].slice(0, 5)
       localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
       setRecentlyViewed(next)
     } catch {}
@@ -215,6 +221,22 @@ export default function Home() {
     { refreshInterval: 180000 }
   )
   const { data: earningsData } = useSWR('/api/calendar/earnings?range=week', fetcher, { refreshInterval: 60000 })
+  const dividendSymbols = useMemo(() => GOOD_DIVIDEND_TICKERS.join(','), [])
+  const { data: dividendsData } = useSWR(
+    !isLoggedIn ? `/api/calendar/dividends?range=month&symbols=${dividendSymbols}` : null,
+    fetcher,
+    { refreshInterval: 300000 }
+  )
+  const { data: dividendCandidates } = useSWR(
+    !isLoggedIn ? `/api/market/dividend-candidates?symbols=${dividendSymbols}` : null,
+    fetcher,
+    { refreshInterval: 300000 }
+  )
+  const { data: dividendQuotes } = useSWR(
+    !isLoggedIn ? `/api/quotes?symbols=${dividendSymbols}` : null,
+    fetcher,
+    { refreshInterval: 120000 }
+  )
   const earningsSymbols = useMemo(() => {
     const items = earningsData?.items || []
     return Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 12)
@@ -387,6 +409,62 @@ export default function Home() {
     return Array.from(deduped.values()).slice(0, 10)
   }, [earningsData, selectedExchange, earningsInsights])
 
+  const upcomingDividends = useMemo(() => {
+    const items = dividendsData?.items || []
+    if (!items.length) return []
+    const allowed = new Set(GOOD_DIVIDEND_TICKERS.map((t) => t.toUpperCase()))
+    const marketCapMap = new Map<string, number>()
+    for (const quote of dividendQuotes?.quotes || []) {
+      if (quote?.symbol && Number.isFinite(Number(quote?.data?.marketCap))) {
+        marketCapMap.set(String(quote.symbol).toUpperCase(), Number(quote.data.marketCap))
+      }
+    }
+    const filtered = items.filter((item: any) => {
+      const symbol = String(item.symbol || '').toUpperCase()
+      const y = Number(item.yield || 0)
+      const marketCap = marketCapMap.get(symbol)
+      return allowed.has(symbol) && Number.isFinite(y) && y > 0 && marketCap !== undefined && marketCap >= 100_000_000_000
+    })
+    filtered.sort((a: any, b: any) => {
+      const dateA = new Date(a.exDate || a.payDate || a.date || 0).getTime()
+      const dateB = new Date(b.exDate || b.payDate || b.date || 0).getTime()
+      return dateA - dateB
+    })
+    return filtered.slice(0, 8)
+  }, [dividendsData])
+
+  const formatCountdown = (dateString?: string, timeTag?: string) => {
+    if (!dateString) return '—'
+    const now = new Date()
+    const base = new Date(dateString)
+    if (Number.isNaN(base.getTime())) return '—'
+    const tag = timeTag || 'BMO'
+    const event = new Date(`${dateString}T${tag === 'AMC' ? '16:00:00' : '09:00:00'}`)
+    const diffMs = event.getTime() - now.getTime()
+    if (diffMs < 0) return '—'
+    const diffHours = Math.round(diffMs / 36e5)
+    if (diffHours <= 24) {
+      return diffHours <= 6 ? `Today (${tag})` : `Tomorrow (${tag})`
+    }
+    const diffDays = Math.floor(diffHours / 24)
+    const hoursRemainder = diffHours - diffDays * 24
+    return `In ${diffDays}d ${hoursRemainder}h`
+  }
+
+  const earningsBiasLabel = (symbol: string) => {
+    const insights = earningsInsights?.items?.[symbol]
+    if (!insights?.eligible) return 'Limited data'
+    const riskMeta = earningsRiskLabels.get(symbol)
+    const change = Number(insights.changePercent ?? 0)
+    if (riskMeta?.label === 'High Risk') {
+      return change >= 0.5 ? 'High volatility setup' : 'Caution: uncertainty elevated'
+    }
+    if (riskMeta?.label === 'Low Risk') {
+      return change >= 0 ? 'Stable setup' : 'Defensive posture'
+    }
+    return change >= 0.3 ? 'Mixed expectations' : 'Balanced expectations'
+  }
+
   const earningsRiskLabels = useMemo(() => {
     if (earningsItems.length === 0) return new Map<string, { score: number | null; label: string }>()
     const scores = earningsItems.map((item: any) => {
@@ -445,6 +523,24 @@ export default function Home() {
     })
     return map
   }, [earningsItems, earningsInsights, marketPulse.label])
+
+  const upcomingEarnings = useMemo(() => {
+    const items = earningsData?.items || []
+    const now = new Date()
+    const sevenDays = new Date(now)
+    sevenDays.setDate(sevenDays.getDate() + 7)
+    const filtered = items.filter((item: any) => {
+      if (!item.date) return false
+      const d = new Date(item.date)
+      if (!(d >= now && d <= sevenDays)) return false
+      const symbol = String(item.symbol || '').toUpperCase()
+      const insights = earningsInsights?.items?.[symbol]
+      if (!insights?.eligible) return false
+      const riskMeta = earningsRiskLabels.get(symbol)
+      return riskMeta && riskMeta.label !== '—'
+    })
+    return filtered.slice(0, 8)
+  }, [earningsData, earningsInsights, earningsRiskLabels])
 
   const sectorLeaders = useMemo(() => {
     if (!sectorWheel.length) return 'Mixed'
@@ -1130,7 +1226,119 @@ export default function Home() {
               </div>
             )}
 
-            {/* Row 5: Portfolio Simulation Preview (logged-out only) */}
+            {/* Row 5: Upcoming Earnings & Dividends (logged-out only) */}
+            {!isLoggedIn && (
+              <div className="mt-6 grid lg:grid-cols-2 gap-4">
+                <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <Link href="/calendar?tab=earnings" className="text-lg font-semibold text-white hover:underline">
+                      Earnings
+                    </Link>
+                    <Link href="/calendar?tab=earnings" className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                      View calendar <span>›</span>
+                    </Link>
+                  </div>
+                  {!earningsData ? (
+                    <div className="animate-pulse space-y-2">
+                      <div className="h-4 bg-slate-700 rounded w-3/4" />
+                      <div className="h-4 bg-slate-700 rounded w-2/3" />
+                      <div className="h-4 bg-slate-700 rounded w-1/2" />
+                    </div>
+                  ) : upcomingEarnings.length === 0 ? (
+                    <div className="text-sm text-slate-400">No major earnings in the next 7 days.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {upcomingEarnings.slice(0, 8).map((item: any) => {
+                        const symbol = String(item.symbol || '').toUpperCase()
+                        const timeTag = String(item.time || 'BMO').toLowerCase().includes('after') || String(item.time || '').toLowerCase().includes('pm') || String(item.time || '').toLowerCase().includes('amc')
+                          ? 'AMC'
+                          : 'BMO'
+                        const countdown = formatCountdown(item.date, timeTag)
+                        const riskMeta = earningsRiskLabels.get(symbol) || { label: '—' }
+                        const riskLabel = riskMeta.label
+                        const riskColor = riskLabel === 'High Risk'
+                          ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                          : riskLabel === 'Medium Risk'
+                            ? 'bg-yellow-500/15 text-yellow-200 border-yellow-500/40'
+                            : riskLabel === 'Low Risk'
+                              ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
+                              : 'bg-slate-700/40 text-slate-400 border-slate-600/40'
+                        const bias = earningsBiasLabel(symbol)
+                        return (
+                          <button
+                            key={`${symbol}-${item.date}`}
+                            onClick={() => window.location.assign(`/stocks/${symbol}`)}
+                            className="w-full text-left flex items-center justify-between text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+                          >
+                            <div>
+                              <div className="text-white font-semibold">{symbol}</div>
+                              <div className="text-xs text-slate-400">{item.date} • {timeTag}</div>
+                              <div className="text-[11px] text-slate-500 mt-1">{bias}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400">{countdown}</span>
+                              <span className={`px-2 py-0.5 rounded-full border text-[11px] ${riskColor}`}>
+                                {riskLabel.replace(' Risk', '')}
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <Link href="/calendar?tab=dividends" className="text-lg font-semibold text-white hover:underline">
+                      Dividends
+                    </Link>
+                    <Link href="/calendar?tab=dividends" className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                      View calendar <span>›</span>
+                    </Link>
+                  </div>
+                  {!dividendsData ? (
+                    <div className="animate-pulse space-y-2">
+                      <div className="h-4 bg-slate-700 rounded w-3/4" />
+                      <div className="h-4 bg-slate-700 rounded w-2/3" />
+                      <div className="h-4 bg-slate-700 rounded w-1/2" />
+                    </div>
+                  ) : upcomingDividends.length === 0 ? (
+                    <div className="text-sm text-slate-400">Data unavailable.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {upcomingDividends.slice(0, 8).map((item: any) => {
+                        const symbol = String(item.symbol || '').toUpperCase()
+                        const yieldPct = Number(item.yield || 0)
+                        const exDate = item.exDate || item.date || null
+                        const payDate = item.payDate || null
+                        const amount = item.amount ? Number(item.amount) : null
+                        const label = exDate ? `Ex-div ${formatCountdown(exDate, 'BMO')}` : payDate ? `Pays ${formatCountdown(payDate, 'BMO')}` : '—'
+                        return (
+                          <button
+                            key={`${symbol}-${exDate || payDate}`}
+                            onClick={() => window.location.assign(`/stocks/${symbol}`)}
+                            className="w-full text-left flex items-center justify-between text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+                          >
+                            <div>
+                              <div className="text-white font-semibold">{symbol}</div>
+                              <div className="text-xs text-slate-400">
+                                Yield: {yieldPct > 0 ? `${yieldPct.toFixed(2)}%` : '—'} • Ex: {exDate || '—'} • Pay: {payDate || '—'}
+                              </div>
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {amount ? `$${amount.toFixed(2)}` : '—'}
+                              <div className="text-[10px] text-slate-500">{label}</div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Row 6: Portfolio Simulation Preview (logged-out only) */}
             {!isLoggedIn && (
               <div className="mt-6 bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
                 <div className="flex items-start justify-between mb-4">

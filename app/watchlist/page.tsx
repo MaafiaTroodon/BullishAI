@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 import TradingViewMiniChart from '@/components/TradingViewMiniChart'
-import { showToast } from '@/components/Toast'
+import { showToast, showToastWithAction } from '@/components/Toast'
 import { Reveal } from '@/components/anim/Reveal'
 import { StaggerGrid } from '@/components/anim/StaggerGrid'
+import { authClient } from '@/lib/auth-client'
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -29,6 +30,8 @@ export default function WatchlistPage() {
   const [newSymbol, setNewSymbol] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestions, setSuggestions] = useState<any[]>([])
+  const { data: session } = authClient.useSession()
+  const isLoggedIn = !!session?.user
 
   // Load from localStorage on client mount
   useEffect(() => {
@@ -67,6 +70,10 @@ export default function WatchlistPage() {
 
   const handleAddSymbol = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isLoggedIn) {
+      showToastWithAction('Please log in to add to your watchlist.', 'warning', 'Log In', '/auth/signin')
+      return
+    }
     if (newSymbol && !watchlistItems.includes(newSymbol.toUpperCase())) {
       const newSymbols = newSymbol.split(/[,\s\n]+/).filter(s => s.trim())
       const validSymbols = newSymbols.map(s => s.toUpperCase()).filter(s => s.length <= 5)
@@ -81,6 +88,10 @@ export default function WatchlistPage() {
   }
 
   const handleRemoveSymbol = (symbol: string) => {
+    if (!isLoggedIn) {
+      showToastWithAction('Please log in to manage your watchlist.', 'warning', 'Log In', '/auth/signin')
+      return
+    }
     const newItems = watchlistItems.filter(s => s !== symbol)
     setWatchlistItems(newItems)
     if (selectedSymbol === symbol && newItems.length > 0) {
@@ -113,6 +124,10 @@ export default function WatchlistPage() {
   }
 
   const handleSelectSuggestion = (symbol: string) => {
+    if (!isLoggedIn) {
+      showToastWithAction('Please log in to add to your watchlist.', 'warning', 'Log In', '/auth/signin')
+      return
+    }
     if (!watchlistItems.includes(symbol)) {
       setWatchlistItems([...watchlistItems, symbol])
       showToast(`${symbol} added to watchlist`, 'success')
@@ -122,6 +137,10 @@ export default function WatchlistPage() {
   }
 
   const handleStarToggle = (symbol: string) => {
+    if (!isLoggedIn) {
+      showToastWithAction('Please log in to star watchlist items.', 'warning', 'Log In', '/auth/signin')
+      return
+    }
     setStarredItems(prev => {
       if (prev.includes(symbol)) {
         return prev.filter(s => s !== symbol)
@@ -161,6 +180,11 @@ export default function WatchlistPage() {
           </div>
           </div>
         </Reveal>
+        {!isLoggedIn && (
+          <div className="mb-6 rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-3 text-sm text-slate-300">
+            Log in to save and manage your watchlist.
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-12 gap-6">
           {/* Watchlist Table */}
@@ -174,7 +198,8 @@ export default function WatchlistPage() {
                     value={newSymbol}
                     onChange={(e) => handleSearchChange(e.target.value)}
                     placeholder="Add ticker symbol (e.g., AAPL, TSLA or paste multiple: AAPL\nMSFT\nGOOGL)"
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={!isLoggedIn}
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   {showSuggestions && suggestions.length > 0 && (
                     <div className="absolute z-10 w-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
@@ -194,7 +219,8 @@ export default function WatchlistPage() {
                 </div>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  disabled={!isLoggedIn}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add
                 </button>
@@ -239,7 +265,8 @@ export default function WatchlistPage() {
                                   e.stopPropagation()
                                   handleStarToggle(symbol)
                                 }}
-                                className="hover:text-yellow-500 transition"
+                                disabled={!isLoggedIn}
+                                className="hover:text-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Star className={`h-5 w-5 ${isStarred ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
                               </button>
@@ -307,7 +334,8 @@ export default function WatchlistPage() {
                                   e.stopPropagation()
                                   handleRemoveSymbol(symbol)
                                 }}
-                                className="text-red-500 hover:text-red-400 transition"
+                                disabled={!isLoggedIn}
+                                className="text-red-500 hover:text-red-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -343,5 +371,3 @@ export default function WatchlistPage() {
     </div>
   )
 }
-
-

@@ -16,7 +16,7 @@ import { TrendingUp, TrendingDown, Star } from 'lucide-react'
 import useSWR from 'swr'
 import { showToast, showToastWithAction } from '@/components/Toast'
 import { authClient } from '@/lib/auth-client'
-import { recordSearchTicker } from '@/lib/recommendations'
+import { canonicalizeTicker, recordSearchTicker } from '@/lib/recommendations'
 
 const fetcher = async (url: string) => {
   try {
@@ -61,7 +61,8 @@ export default function StockPage() {
       const raw = localStorage.getItem('recentlyViewedTickers')
       const existing = raw ? JSON.parse(raw) : []
       const list = Array.isArray(existing) ? existing.map((t: string) => String(t).toUpperCase()) : []
-      const next = [symbol, ...list.filter((t: string) => t !== symbol)].slice(0, 5)
+      const canonical = canonicalizeTicker(symbol)
+      const next = [canonical, ...list.filter((t: string) => canonicalizeTicker(t) !== canonical)].slice(0, 5)
       localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
     } catch {}
     recordSearchTicker(symbol)
