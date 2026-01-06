@@ -64,6 +64,11 @@ function CalendarPageContent() {
     safeJsonFetcher,
     { refreshInterval: 15 * 60 * 1000 } // 15 min cache
   )
+  const { data: dividendsFallback } = useSWR(
+    activeTab === 'dividends' && dateRange === 'week' ? '/api/calendar/dividends?range=month' : null,
+    safeJsonFetcher,
+    { refreshInterval: 15 * 60 * 1000 }
+  )
 
   const isLoading = activeTab === 'earnings' ? isLoadingEarnings : isLoadingDividends
   const error = activeTab === 'earnings' ? earningsError : dividendsError
@@ -72,8 +77,13 @@ function CalendarPageContent() {
     if (activeTab === 'earnings') {
       return earningsItems
     }
-    return Array.isArray(data?.items) ? data.items : []
-  }, [activeTab, earningsItems, data])
+    const primary = Array.isArray(data?.items) ? data.items : []
+    if (primary.length > 0) return primary
+    if (dateRange === 'week') {
+      return Array.isArray(dividendsFallback?.items) ? dividendsFallback.items : []
+    }
+    return []
+  }, [activeTab, earningsItems, data, dateRange, dividendsFallback])
   const filteredItems = useMemo(() => {
     if (activeTab !== 'dividends') {
       return rawItems
@@ -330,4 +340,3 @@ export default function CalendarPage() {
     </Suspense>
   )
 }
-

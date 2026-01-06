@@ -220,26 +220,25 @@ export default function Home() {
     fetcher,
     { refreshInterval: 180000 }
   )
-  const { data: earningsData } = useSWR('/api/calendar/earnings?range=week', fetcher, { refreshInterval: 60000 })
-  const dividendSymbols = useMemo(() => GOOD_DIVIDEND_TICKERS.join(','), [])
+  const { data: earningsData } = useSWR('/api/calendar/earnings?range=month', fetcher, { refreshInterval: 60000 })
   const { data: dividendsData } = useSWR(
-    !isLoggedIn ? `/api/calendar/dividends?range=month&symbols=${dividendSymbols}` : null,
+    !isLoggedIn ? `/api/calendar/dividends?range=quarter` : null,
     fetcher,
-    { refreshInterval: 300000 }
+    { refreshInterval: 3600000 }
   )
-  const { data: dividendCandidates } = useSWR(
-    !isLoggedIn ? `/api/market/dividend-candidates?symbols=${dividendSymbols}` : null,
-    fetcher,
-    { refreshInterval: 300000 }
-  )
+  const dividendQuoteSymbols = useMemo(() => {
+    const items = dividendsData?.items || []
+    const symbols = Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 60)
+    return symbols.join(',')
+  }, [dividendsData])
   const { data: dividendQuotes } = useSWR(
-    !isLoggedIn ? `/api/quotes?symbols=${dividendSymbols}` : null,
+    !isLoggedIn && dividendQuoteSymbols.length ? `/api/quotes?symbols=${dividendQuoteSymbols}` : null,
     fetcher,
     { refreshInterval: 120000 }
   )
   const earningsSymbols = useMemo(() => {
     const items = earningsData?.items || []
-    return Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 12)
+    return Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 30)
   }, [earningsData])
   const { data: earningsInsights } = useSWR(
     earningsSymbols.length ? `/api/market/earnings-insights?symbols=${earningsSymbols.join(',')}` : null,
@@ -409,81 +408,50 @@ export default function Home() {
     return Array.from(deduped.values()).slice(0, 10)
   }, [earningsData, selectedExchange, earningsInsights])
 
-  const upcomingDividends = useMemo(() => {
-    const items = dividendsData?.items || []
-    if (!items.length) return []
-    const allowed = new Set(GOOD_DIVIDEND_TICKERS.map((t) => t.toUpperCase()))
-    const marketCapMap = new Map<string, number>()
-    for (const quote of dividendQuotes?.quotes || []) {
-      if (quote?.symbol && Number.isFinite(Number(quote?.data?.marketCap))) {
-        marketCapMap.set(String(quote.symbol).toUpperCase(), Number(quote.data.marketCap))
-      }
-    }
-    const filtered = items.filter((item: any) => {
+  const earningsDateMap = useMemo(() => {
+    const map = new Map<string, string>()
+    const items = earningsData?.items || []
+    items.forEach((item: any) => {
       const symbol = String(item.symbol || '').toUpperCase()
-      const y = Number(item.yield || 0)
-      const marketCap = marketCapMap.get(symbol)
-      return allowed.has(symbol) && Number.isFinite(y) && y > 0 && marketCap !== undefined && marketCap >= 100_000_000_000
+      if (!symbol || !item.date) return
+      const existing = map.get(symbol)
+      if (!existing) {
+        map.set(symbol, item.date)
+        return
+      }
+      const currentTime = new Date(existing).getTime()
+      const incomingTime = new Date(item.date).getTime()
+      if (!Number.isNaN(incomingTime) && incomingTime < currentTime) {
+        map.set(symbol, item.date)
+      }
     })
-    filtered.sort((a: any, b: any) => {
-      const dateA = new Date(a.exDate || a.payDate || a.date || 0).getTime()
-      const dateB = new Date(b.exDate || b.payDate || b.date || 0).getTime()
-      return dateA - dateB
-    })
-    return filtered.slice(0, 8)
-  }, [dividendsData])
-
-  const formatCountdown = (dateString?: string, timeTag?: string) => {
-    if (!dateString) return '—'
-    const now = new Date()
-    const base = new Date(dateString)
-    if (Number.isNaN(base.getTime())) return '—'
-    const tag = timeTag || 'BMO'
-    const event = new Date(`${dateString}T${tag === 'AMC' ? '16:00:00' : '09:00:00'}`)
-    const diffMs = event.getTime() - now.getTime()
-    if (diffMs < 0) return '—'
-    const diffHours = Math.round(diffMs / 36e5)
-    if (diffHours <= 24) {
-      return diffHours <= 6 ? `Today (${tag})` : `Tomorrow (${tag})`
-    }
-    const diffDays = Math.floor(diffHours / 24)
-    const hoursRemainder = diffHours - diffDays * 24
-    return `In ${diffDays}d ${hoursRemainder}h`
-  }
-
-  const earningsBiasLabel = (symbol: string) => {
-    const insights = earningsInsights?.items?.[symbol]
-    if (!insights?.eligible) return 'Limited data'
-    const riskMeta = earningsRiskLabels.get(symbol)
-    const change = Number(insights.changePercent ?? 0)
-    if (riskMeta?.label === 'High Risk') {
-      return change >= 0.5 ? 'High volatility setup' : 'Caution: uncertainty elevated'
-    }
-    if (riskMeta?.label === 'Low Risk') {
-      return change >= 0 ? 'Stable setup' : 'Defensive posture'
-    }
-    return change >= 0.3 ? 'Mixed expectations' : 'Balanced expectations'
-  }
+    return map
+  }, [earningsData])
 
   const earningsRiskLabels = useMemo(() => {
-    if (earningsItems.length === 0) return new Map<string, { score: number | null; label: string }>()
-    const scores = earningsItems.map((item: any) => {
-      const symbol = String(item.symbol || '').toUpperCase()
-      const metrics = earningsInsights?.items?.[symbol] || {}
+    const insightsItems = earningsInsights?.items || {}
+    const symbols = Object.keys(insightsItems)
+    if (symbols.length === 0) return new Map<string, { score: number | null; label: string }>()
+    const scores = symbols.map((symbol) => {
+      const metrics = insightsItems[symbol] || {}
       const typicalMove = Number(metrics.typicalMove ?? 0)
       const realizedVol = Number(metrics.realizedVol ?? 0)
-      const hasData = Number.isFinite(typicalMove) && typicalMove > 0 || Number.isFinite(realizedVol) && realizedVol > 0
+      const rangePercent = Number(metrics.rangePercent ?? 0)
+      const changePercent = Number(metrics.changePercent ?? 0)
+      const hasData = [typicalMove, realizedVol, rangePercent, changePercent].some((v) => Number.isFinite(v) && Math.abs(v) > 0)
       if (!hasData) {
         return { symbol, score: null }
       }
-      const normalizedTypical = Math.min(Math.abs(typicalMove) / 6, 1)
-      const normalizedVol = Math.min(Math.abs(realizedVol) / 4, 1)
+      const proxyTypical = typicalMove || rangePercent || Math.abs(changePercent) * 1.2 || realizedVol * 1.1
+      const proxyVol = realizedVol || rangePercent || Math.abs(changePercent)
+      const normalizedTypical = Math.min(Math.abs(proxyTypical) / 6, 1)
+      const normalizedVol = Math.min(Math.abs(proxyVol) / 4, 1)
       let score = normalizedTypical * 45 + normalizedVol * 45
       if (marketPulse.label === 'Risk-Off') score += 6
       if (marketPulse.label === 'Bullish') score -= 3
-      if (item.date) {
-        const eventDate = new Date(item.date)
-        const diffMs = eventDate.getTime() - Date.now()
+      const eventDate = earningsDateMap.get(symbol)
+      if (eventDate) {
+        const diffMs = new Date(eventDate).getTime() - Date.now()
         if (diffMs <= 86400000 && diffMs >= 0) score += 8
       }
       score = Math.max(0, Math.min(100, score))
@@ -522,25 +490,135 @@ export default function Home() {
       }
     })
     return map
-  }, [earningsItems, earningsInsights, marketPulse.label])
+  }, [earningsInsights, marketPulse.label, earningsDateMap])
+
+  const earningsBiasLabel = (symbol: string) => {
+    const insights = earningsInsights?.items?.[symbol] || {}
+    const riskMeta = earningsRiskLabels.get(symbol)
+    const change = Number(insights.changePercent ?? 0)
+    if (riskMeta?.label === 'High Risk') {
+      return change >= 0.5 ? 'High volatility setup' : 'Caution: uncertainty elevated'
+    }
+    if (riskMeta?.label === 'Low Risk') {
+      return change >= 0 ? 'Stable setup' : 'Defensive posture'
+    }
+    if (!riskMeta || riskMeta.label === '—') {
+      return change >= 0 ? 'Mixed expectations' : 'Balanced expectations'
+    }
+    return change >= 0.3 ? 'Mixed expectations' : 'Balanced expectations'
+  }
+
+  const freqToMultiplier = (frequency?: string) => {
+    const value = (frequency || '').toLowerCase()
+    if (value.includes('quarter')) return 4
+    if (value.includes('semi')) return 2
+    if (value.includes('month')) return 12
+    if (value.includes('week')) return 52
+    if (value.includes('annual')) return 1
+    return null
+  }
+
+  const upcomingDividends = useMemo(() => {
+    const items = dividendsData?.items || []
+    const marketCapMap = new Map<string, number>()
+    const priceMap = new Map<string, number>()
+    for (const quote of dividendQuotes?.quotes || []) {
+      if (quote?.symbol && Number.isFinite(Number(quote?.data?.marketCap))) {
+        marketCapMap.set(String(quote.symbol).toUpperCase(), Number(quote.data.marketCap))
+      }
+      if (quote?.symbol && Number.isFinite(Number(quote?.data?.price))) {
+        priceMap.set(String(quote.symbol).toUpperCase(), Number(quote.data.price))
+      }
+    }
+    const filtered = items.map((item: any) => {
+      const symbol = String(item.symbol || '').toUpperCase()
+      const rawYield = Number(item.yield || 0)
+      const marketCap = marketCapMap.get(symbol)
+      const price = priceMap.get(symbol)
+      const amount = item.amount ? Number(item.amount) : null
+      const multiplier = freqToMultiplier(item.frequency)
+      let computedYield = Number.isFinite(rawYield) && rawYield > 0 ? rawYield : null
+      if (!computedYield && amount && price && multiplier) {
+        computedYield = (amount * multiplier * 100) / price
+      }
+      return {
+        ...item,
+        symbol,
+        computedYield,
+        marketCap,
+      }
+    }).filter((item: any) => {
+      return item.marketCap !== undefined && item.marketCap >= 100_000_000_000 && item.computedYield && item.computedYield > 0
+    })
+    filtered.sort((a: any, b: any) => {
+      const dateA = new Date(a.exDate || a.payDate || a.date || 0).getTime()
+      const dateB = new Date(b.exDate || b.payDate || b.date || 0).getTime()
+      return dateA - dateB
+    })
+    const now = Date.now()
+    const weekAhead = new Date()
+    weekAhead.setDate(weekAhead.getDate() + 7)
+    const weekEnd = weekAhead.getTime()
+    const inWeek = filtered.filter((item: any) => {
+      const date = new Date(item.exDate || item.payDate || item.date || 0).getTime()
+      return Number.isFinite(date) && date >= now && date <= weekEnd
+    })
+    if (inWeek.length >= 7) return inWeek.slice(0, 7)
+    const remaining = filtered.filter((item: any) => !inWeek.includes(item))
+    return [...inWeek, ...remaining].slice(0, 7)
+  }, [dividendsData, dividendQuotes])
+
+  const formatCountdown = (dateString?: string, timeTag?: string) => {
+    if (!dateString) return '—'
+    const now = new Date()
+    const base = new Date(dateString)
+    if (Number.isNaN(base.getTime())) return '—'
+    const tag = timeTag || 'BMO'
+    const event = new Date(`${dateString}T${tag === 'AMC' ? '16:00:00' : '09:00:00'}`)
+    const diffMs = event.getTime() - now.getTime()
+    if (diffMs < 0) return '—'
+    const diffHours = Math.round(diffMs / 36e5)
+    if (diffHours <= 24) {
+      return diffHours <= 6 ? `Today (${tag})` : `Tomorrow (${tag})`
+    }
+    const diffDays = Math.floor(diffHours / 24)
+    const hoursRemainder = diffHours - diffDays * 24
+    return `In ${diffDays}d ${hoursRemainder}h`
+  }
 
   const upcomingEarnings = useMemo(() => {
     const items = earningsData?.items || []
+    if (!items.length) return []
     const now = new Date()
     const sevenDays = new Date(now)
     sevenDays.setDate(sevenDays.getDate() + 7)
-    const filtered = items.filter((item: any) => {
+    const monthAhead = new Date(now)
+    monthAhead.setDate(monthAhead.getDate() + 30)
+    const allEligible = items.filter((item: any) => {
       if (!item.date) return false
       const d = new Date(item.date)
-      if (!(d >= now && d <= sevenDays)) return false
+      if (!(d >= now && d <= monthAhead)) return false
       const symbol = String(item.symbol || '').toUpperCase()
-      const insights = earningsInsights?.items?.[symbol]
-      if (!insights?.eligible) return false
+      const isCanadian = symbol.includes('.TO')
+      if (selectedExchange === 'CAN' && !isCanadian) return false
+      if (selectedExchange === 'USA' && isCanadian) return false
       const riskMeta = earningsRiskLabels.get(symbol)
       return riskMeta && riskMeta.label !== '—'
     })
-    return filtered.slice(0, 8)
-  }, [earningsData, earningsInsights, earningsRiskLabels])
+    const deduped = new Map<string, any>()
+    allEligible.forEach((item: any) => {
+      const symbol = String(item.symbol || '').toUpperCase()
+      if (!deduped.has(symbol)) deduped.set(symbol, item)
+    })
+    const unique = Array.from(deduped.values())
+    const inWeek = unique.filter((item: any) => {
+      const d = new Date(item.date)
+      return d >= now && d <= sevenDays
+    })
+    if (inWeek.length >= 7) return inWeek.slice(0, 7)
+    const remaining = unique.filter((item: any) => !inWeek.includes(item))
+    return [...inWeek, ...remaining].slice(0, 7)
+  }, [earningsData, earningsRiskLabels, selectedExchange])
 
   const sectorLeaders = useMemo(() => {
     if (!sectorWheel.length) return 'Mixed'
@@ -1238,6 +1316,9 @@ export default function Home() {
                       View calendar <span>›</span>
                     </Link>
                   </div>
+                  <div className="text-xs text-slate-500 mb-2">
+                    Risk = expected earnings volatility (High = larger swing, Medium = moderate, Low = smaller).
+                  </div>
                   {!earningsData ? (
                     <div className="animate-pulse space-y-2">
                       <div className="h-4 bg-slate-700 rounded w-3/4" />
@@ -1248,7 +1329,7 @@ export default function Home() {
                     <div className="text-sm text-slate-400">No major earnings in the next 7 days.</div>
                   ) : (
                     <div className="space-y-2">
-                      {upcomingEarnings.slice(0, 8).map((item: any) => {
+                      {upcomingEarnings.slice(0, 7).map((item: any) => {
                         const symbol = String(item.symbol || '').toUpperCase()
                         const timeTag = String(item.time || 'BMO').toLowerCase().includes('after') || String(item.time || '').toLowerCase().includes('pm') || String(item.time || '').toLowerCase().includes('amc')
                           ? 'AMC'
@@ -1273,7 +1354,7 @@ export default function Home() {
                             <div>
                               <div className="text-white font-semibold">{symbol}</div>
                               <div className="text-xs text-slate-400">{item.date} • {timeTag}</div>
-                              <div className="text-[11px] text-slate-500 mt-1">{bias}</div>
+                              <div className="text-[11px] text-slate-500 mt-1">AI expectations: {bias}</div>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-slate-400">{countdown}</span>
@@ -1306,13 +1387,18 @@ export default function Home() {
                     <div className="text-sm text-slate-400">Data unavailable.</div>
                   ) : (
                     <div className="space-y-2">
-                      {upcomingDividends.slice(0, 8).map((item: any) => {
+                      {upcomingDividends.slice(0, 7).map((item: any) => {
                         const symbol = String(item.symbol || '').toUpperCase()
-                        const yieldPct = Number(item.yield || 0)
+                        const yieldPct = Number(item.computedYield || item.yield || 0)
                         const exDate = item.exDate || item.date || null
                         const payDate = item.payDate || null
                         const amount = item.amount ? Number(item.amount) : null
                         const label = exDate ? `Ex-div ${formatCountdown(exDate, 'BMO')}` : payDate ? `Pays ${formatCountdown(payDate, 'BMO')}` : '—'
+                        const note = yieldPct >= 3
+                          ? 'AI note: income strength is elevated.'
+                          : yieldPct >= 1
+                            ? 'AI note: steady dividend profile.'
+                            : 'AI note: yield is modest; watch payout timing.'
                         return (
                           <button
                             key={`${symbol}-${exDate || payDate}`}
@@ -1324,6 +1410,7 @@ export default function Home() {
                               <div className="text-xs text-slate-400">
                                 Yield: {yieldPct > 0 ? `${yieldPct.toFixed(2)}%` : '—'} • Ex: {exDate || '—'} • Pay: {payDate || '—'}
                               </div>
+                              <div className="text-[11px] text-slate-500 mt-1">{note}</div>
                             </div>
                             <div className="text-xs text-slate-400">
                               {amount ? `$${amount.toFixed(2)}` : '—'}
