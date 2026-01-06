@@ -54,6 +54,16 @@ export default function StockPage() {
   
   // If symbol is a known Canadian stock without .TO, we'll handle it in the components
   // But keep the original symbol for API calls (they may need base symbol)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = localStorage.getItem('recentlyViewedTickers')
+      const existing = raw ? JSON.parse(raw) : []
+      const list = Array.isArray(existing) ? existing.map((t: string) => String(t).toUpperCase()) : []
+      const next = [symbol, ...list.filter((t: string) => t !== symbol)].slice(0, 5)
+      localStorage.setItem('recentlyViewedTickers', JSON.stringify(next))
+    } catch {}
+  }, [symbol])
 
   const { data, isLoading, error } = useSWR(`/api/stocks/${symbol}?range=${chartRange}`, fetcher, {
     refreshInterval: 15000,

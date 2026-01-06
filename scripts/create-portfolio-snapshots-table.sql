@@ -17,4 +17,3 @@ CREATE TABLE IF NOT EXISTS "portfolio_snapshots" (
 
 -- CreateIndex for efficient queries
 CREATE INDEX IF NOT EXISTS "portfolio_snapshots_userId_timestamp_idx" ON "portfolio_snapshots"("userId", "timestamp");
-
