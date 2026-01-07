@@ -42,6 +42,7 @@ type ChatIntent =
   | 'MARKET_DATA_INTENT'
   | 'TECHNICAL_ANALYSIS_INTENT'
   | 'PORTFOLIO_INTENT'
+  | 'PRODUCT_INFO_INTENT'
   | 'UNKNOWN'
 
 const SYMBOL_ALIASES: Record<string, string> = {
@@ -104,6 +105,7 @@ const MARKET_KEYWORDS = [
 ]
 
 const PORTFOLIO_KEYWORDS = ['wallet', 'portfolio', 'holdings', 'positions', 'p&l', 'balance']
+const PRODUCT_KEYWORDS = ['what is bullishai', 'what is this', 'what do you do', 'who are you', 'about bullishai', 'about this', 'platform', 'website']
 
 const TRADE_STOPWORDS = new Set([
   'BUY',
@@ -134,6 +136,7 @@ function classifyIntent(query: string, tickers: string[], previousContext?: Foll
   if (parseTradeIntent(query)) return 'TRADE_INTENT'
   if (previousContext && (previousContext as TradeFollowUpContext).type === 'trade') return 'TRADE_INTENT'
 
+  if (PRODUCT_KEYWORDS.some((phrase) => lower.includes(phrase))) return 'PRODUCT_INFO_INTENT'
   if (PORTFOLIO_KEYWORDS.some((word) => lower.includes(word))) return 'PORTFOLIO_INTENT'
   if (TECHNICAL_KEYWORDS.some((word) => lower.includes(word))) return 'TECHNICAL_ANALYSIS_INTENT'
   if (MARKET_KEYWORDS.some((word) => lower.includes(word)) || tickers.length > 0) return 'MARKET_DATA_INTENT'
@@ -440,7 +443,9 @@ export async function POST(req: NextRequest) {
         const now = new Date()
         const timeLabel = now.toLocaleString('en-US', { timeZone: 'America/New_York' })
         const totalCost = price * quantity
-        const summary = `${tradeIntent.action === 'buy' ? 'Bought' : 'Sold'} ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)} (${tradeIntent.amountType === 'dollars' ? `$${tradeIntent.amount.toFixed(2)}` : `${tradeIntent.amount} shares`}) on ${timeLabel} ET.`
+        const newBalance = Number(tradeJson?.wallet?.balance)
+        const balanceLine = Number.isFinite(newBalance) ? ` New wallet balance: $${newBalance.toFixed(2)}.` : ''
+        const summary = `${tradeIntent.action === 'buy' ? 'Bought' : 'Sold'} ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)} (${tradeIntent.amountType === 'dollars' ? `$${tradeIntent.amount.toFixed(2)}` : `${tradeIntent.amount} shares`}) on ${timeLabel} ET.${balanceLine}`
 
         return NextResponse.json({
           answer: buildUnifiedResponse({
@@ -467,6 +472,7 @@ export async function POST(req: NextRequest) {
             totalCost,
             timestamp: now.toISOString(),
             summary,
+            wallet: Number.isFinite(newBalance) ? { balance: newBalance } : undefined,
           },
         })
       } catch (error: any) {
@@ -486,9 +492,149 @@ export async function POST(req: NextRequest) {
     }
 
     const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
+
+    // 1. Recommended preset questions (top movers, news, earnings, etc.)
+    const recommendedCheck = isRecommendedQuestion(query)
+    let recommendedType: RecommendedType | null = null
+    if (followUp && previousContext?.type) {
+      recommendedType = previousContext.type
+    } else if (presetId && PRESET_TYPE_MAP[presetId]) {
+      recommendedType = PRESET_TYPE_MAP[presetId]
+    } else if (recommendedCheck.needsLiveData && recommendedCheck.type) {
+      recommendedType = recommendedCheck.type as RecommendedType
+    }
+
+    if (recommendedType && recommendedType !== 'technical') {
+      try {
+        const recommendedResult = await handleRecommendedQuery({
+          type: recommendedType,
+          origin: req.nextUrl.origin,
+          followUp,
+          previousContext,
+        })
+
+        const {
+          ragContext,
+          liveDataText,
+          dataSource,
+          dataTimestamp,
+          requiredPhrases,
+          domain,
+          followUpContext,
+          summaryInstruction,
+        } = recommendedResult
+
+        const systemPrompt = `You are BullishAI Market Analyst. You must use ONLY the BullishAI live data provided below.
+
+Rules:
+- Start with a confident, friendly one-sentence takeaway.
+- Mention specific numbers/tickers from the live data (no guessing).
+- Provide broader market context (sector themes, macro tone, catalysts).
+- Keep the tone optimistic, educational, and actionable.
+- Explicitly cite: Updated ${dataTimestamp} • Source: ${dataSource}.
+- Offer at least TWO follow-up options that users can trigger.
+- End with: "⚠️ This is for educational purposes only and not financial advice."
+
+Additional guidance: ${summaryInstruction}
+`
+        const userPrompt = `${query}
+
+Live BullishAI data to use:
+${liveDataText}
+
+Answer using the rules above.`
+
+        let answer = buildUnifiedResponse({
+          understood: query,
+          dataStamp: `Updated ${dataTimestamp} • Source: ${dataSource}`,
+          answer: liveDataText,
+          next: 'Want me to expand with more names or dig into a sector?',
+        })
+
+        const tickersFromData = (requiredPhrases || []).filter((item) =>
+          /^[A-Z]{1,5}(?:\.[A-Z]{1,3})?$/.test(item),
+        )
+
+        const payloadFollowUp: FollowUpContext = {
+          ...followUpContext,
+          presetId: presetId || previousContext?.presetId || undefined,
+        }
+
+        const recommendedBadge = dataSource
+
+        return NextResponse.json({
+          answer,
+          model: 'bullishai-data',
+          modelBadge: recommendedBadge,
+          latency: 0,
+          section: section || undefined,
+          tickers: tickersFromData.length > 0 ? tickersFromData : undefined,
+          followUpContext: payloadFollowUp,
+        })
+      } catch (error: any) {
+        if (error?.message === 'UPGRADES_UNAVAILABLE') {
+          return NextResponse.json({
+            answer:
+              "Upgrades data isn't wired into BullishAI yet. Want me to pull stocks with improving fundamentals or strong trend reversals instead?\n\n⚠️ *This is for educational purposes only and not financial advice.*",
+            model: 'bullishai-system',
+            modelBadge: 'BullishAI Screener Engine',
+            latency: 0,
+            section: section || undefined,
+            followUpContext: previousContext || undefined,
+          })
+        }
+
+        console.error('Recommended preset handling error:', error)
+        
+        const conceptualAnswers: Record<string, string> = {
+          'market-summary': "I don't have fresh market data from BullishAI right now, but here's how traders typically assess market health: watch major indices (SPY, QQQ, DIA) for overall direction, check sector rotation for risk-on/risk-off signals, and monitor VIX for volatility. Want me to explain how to read these indicators?",
+          'top-movers': "I don't see standout movers in BullishAI's feed right now. Typically, traders look for stocks moving >3-5% on above-average volume to identify momentum. Want me to explain how to spot unusual activity?",
+          'sectors': "I don't have fresh sector data right now. Traders typically watch sector ETFs (XLK, XLF, XLE, etc.) to identify rotation themes. Leading sectors often indicate risk-on sentiment. Want me to explain sector analysis?",
+          'news': "I don't see fresh headlines right now. Market-moving news typically includes earnings, Fed policy, major company announcements, and sector catalysts. Want me to explain how news affects markets?",
+          'earnings': "I don't see earnings scheduled today. Earnings season runs quarterly, with most companies reporting in weeks following quarter-end. Want me to explain what traders watch during earnings?",
+        }
+        
+        const conceptualAnswer = conceptualAnswers[recommendedType || ''] || 
+          "I don't have fresh data from BullishAI right now, but here's how traders typically approach this: focus on key indicators, watch for catalysts, and manage risk. Want me to explain the concepts behind this analysis?"
+        
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: unavailable',
+            answer: conceptualAnswer,
+            next: 'Want another market topic or a ticker?',
+          }),
+          model: 'bullishai-conceptual',
+          modelBadge: 'BullishAI Market Education',
+          latency: 0,
+          section: section || undefined,
+        })
+      }
+    }
+
     const intent = classifyIntent(query, tickers, previousContext)
 
-    // 1. Strict intent router (trade already handled)
+    // 2. Strict intent router (trade already handled)
+    if (intent === 'PRODUCT_INFO_INTENT') {
+      const answer = [
+        'BullishAI is a demo-first stock market analysis and trading simulator.',
+        'It helps you analyze stocks using real-time data, practice buying and selling with a virtual wallet, track portfolios and trades, and ask AI-powered market questions.',
+        'BullishAI is designed for learning and exploration — not real trading.',
+      ].join(' ')
+
+      return NextResponse.json({
+        answer: buildUnifiedResponse({
+          understood: query,
+          dataStamp: 'Data: BullishAI Product',
+          answer,
+          next: 'Want a tour of the dashboard, wallet, or demo trades?',
+        }),
+        model: 'bullishai-product',
+        modelBadge: 'BullishAI Platform',
+        latency: 0,
+      })
+    }
+
     if (intent === 'PORTFOLIO_INTENT') {
       try {
         const portfolioRes = await fetch(`${req.nextUrl.origin}/api/portfolio?enrich=1`, {
@@ -741,133 +887,10 @@ Do NOT:
       }
     }
 
-    // 3. Determine if this is a recommended preset question
-    const recommendedCheck = isRecommendedQuestion(query)
-    let recommendedType: RecommendedType | null = null
-    if (followUp && previousContext?.type) {
-      recommendedType = previousContext.type
-    } else if (presetId && PRESET_TYPE_MAP[presetId]) {
-      recommendedType = PRESET_TYPE_MAP[presetId]
-    } else if (recommendedCheck.needsLiveData && recommendedCheck.type) {
-      recommendedType = recommendedCheck.type as RecommendedType
-    }
-
-    // 4. Detect section/intent
+    // 3. Detect section/intent
     const section = detectSection(query)
-
-    // 5. Handle recommended presets with live data before knowledge base logic
-    if (recommendedType && recommendedType !== 'technical') {
-      try {
-        const recommendedResult = await handleRecommendedQuery({
-          type: recommendedType,
-          origin: req.nextUrl.origin,
-          followUp,
-          previousContext,
-        })
-
-        const {
-          ragContext,
-          liveDataText,
-          dataSource,
-          dataTimestamp,
-          requiredPhrases,
-          domain,
-          followUpContext,
-          summaryInstruction,
-        } = recommendedResult
-
-        const systemPrompt = `You are BullishAI Market Analyst. You must use ONLY the BullishAI live data provided below.
-
-Rules:
-- Start with a confident, friendly one-sentence takeaway.
-- Mention specific numbers/tickers from the live data (no guessing).
-- Provide broader market context (sector themes, macro tone, catalysts).
-- Keep the tone optimistic, educational, and actionable.
-- Explicitly cite: Updated ${dataTimestamp} • Source: ${dataSource}.
-- Offer at least TWO follow-up options that users can trigger.
-- End with: "⚠️ This is for educational purposes only and not financial advice."
-
-Additional guidance: ${summaryInstruction}
-`
-        const userPrompt = `${query}
-
-Live BullishAI data to use:
-${liveDataText}
-
-Answer using the rules above.`
-
-        let answer = buildUnifiedResponse({
-          understood: query,
-          dataStamp: `Updated ${dataTimestamp} • Source: ${dataSource}`,
-          answer: liveDataText,
-          next: 'Want me to expand with more names or dig into a sector?',
-        })
-
-        const tickersFromData = (requiredPhrases || []).filter((item) =>
-          /^[A-Z]{1,5}(?:\.[A-Z]{1,3})?$/.test(item),
-        )
-
-        const payloadFollowUp: FollowUpContext = {
-          ...followUpContext,
-          presetId: presetId || previousContext?.presetId || undefined,
-        }
-
-        const recommendedBadge = dataSource
-
-        return NextResponse.json({
-          answer,
-          model: 'bullishai-data',
-          modelBadge: recommendedBadge,
-          latency: 0,
-          section: section || undefined,
-          tickers: tickersFromData.length > 0 ? tickersFromData : undefined,
-          followUpContext: payloadFollowUp,
-        })
-      } catch (error: any) {
-        if (error?.message === 'UPGRADES_UNAVAILABLE') {
-          return NextResponse.json({
-            answer:
-              "Upgrades data isn't wired into BullishAI yet. Want me to pull stocks with improving fundamentals or strong trend reversals instead?\n\n⚠️ *This is for educational purposes only and not financial advice.*",
-            model: 'bullishai-system',
-            modelBadge: 'BullishAI Screener Engine',
-            latency: 0,
-            section: section || undefined,
-            followUpContext: previousContext || undefined,
-          })
-        }
-
-        // handleRecommendedQuery should never throw now - it returns conceptual answers
-        // But if it does throw for some reason, provide a helpful conceptual answer
-        console.error('Recommended preset handling error:', error)
-        
-        // Provide a conceptual answer based on the query type
-        const conceptualAnswers: Record<string, string> = {
-          'market-summary': "I don't have fresh market data from BullishAI right now, but here's how traders typically assess market health: watch major indices (SPY, QQQ, DIA) for overall direction, check sector rotation for risk-on/risk-off signals, and monitor VIX for volatility. Want me to explain how to read these indicators?",
-          'top-movers': "I don't see standout movers in BullishAI's feed right now. Typically, traders look for stocks moving >3-5% on above-average volume to identify momentum. Want me to explain how to spot unusual activity?",
-          'sectors': "I don't have fresh sector data right now. Traders typically watch sector ETFs (XLK, XLF, XLE, etc.) to identify rotation themes. Leading sectors often indicate risk-on sentiment. Want me to explain sector analysis?",
-          'news': "I don't see fresh headlines right now. Market-moving news typically includes earnings, Fed policy, major company announcements, and sector catalysts. Want me to explain how news affects markets?",
-          'earnings': "I don't see earnings scheduled today. Earnings season runs quarterly, with most companies reporting in weeks following quarter-end. Want me to explain what traders watch during earnings?",
-        }
-        
-        const conceptualAnswer = conceptualAnswers[recommendedType || ''] || 
-          "I don't have fresh data from BullishAI right now, but here's how traders typically approach this: focus on key indicators, watch for catalysts, and manage risk. Want me to explain the concepts behind this analysis?"
-        
-        return NextResponse.json({
-          answer: buildUnifiedResponse({
-            understood: query,
-            dataStamp: 'Data: unavailable',
-            answer: conceptualAnswer,
-            next: 'Want another market topic or a ticker?',
-          }),
-          model: 'bullishai-conceptual',
-          modelBadge: 'BullishAI Market Education',
-          latency: 0,
-          section: section || undefined,
-        })
-      }
-    }
     
-    // 6. Load BullishAI playbook entries (for tone/style on general questions)
+    // 4. Load BullishAI playbook entries (for tone/style on general questions)
     let kb: any[] = []
     let relevantContext: any[] = []
     try {

@@ -420,6 +420,11 @@ function HistoryPageContent() {
                                     {t.action === 'buy' ? 'Buy' : 'Sell'}
                                   </span>
                                   <span className="font-bold text-white">{t.symbol}</span>
+                                  {t.note && (
+                                    <span className="text-xs bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full border border-slate-600">
+                                      {t.note}
+                                    </span>
+                                  )}
                                   <span className="text-slate-400 text-sm">
                                     {t.quantity?.toFixed(4)} shares @ ${(t.price || 0).toFixed(2)}
                                   </span>

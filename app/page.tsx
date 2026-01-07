@@ -26,9 +26,14 @@ const fetcher = async (url: string) => {
   if (!ct.includes('application/json')) {
     const text = await res.text()
     console.error('Non-JSON response:', text.substring(0, 200))
-    throw new Error('Invalid response format')
+    return null
   }
-  return res.json()
+  try {
+    return await res.json()
+  } catch (error) {
+    console.error('JSON parse error:', error)
+    return null
+  }
 }
 
 const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
