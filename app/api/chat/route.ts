@@ -29,12 +29,20 @@ type TradeIntent = {
   symbol?: string
   amount?: number
   amountType?: 'dollars' | 'shares'
+  all?: boolean
 }
 
 type TradeFollowUpContext = {
   type: 'trade'
   tradeIntent: TradeIntent
 }
+
+type ChatIntent =
+  | 'TRADE_INTENT'
+  | 'MARKET_DATA_INTENT'
+  | 'TECHNICAL_ANALYSIS_INTENT'
+  | 'PORTFOLIO_INTENT'
+  | 'UNKNOWN'
 
 const SYMBOL_ALIASES: Record<string, string> = {
   apple: 'AAPL',
@@ -58,6 +66,45 @@ const SYMBOL_ALIASES: Record<string, string> = {
   'bank of montreal': 'BMO.TO',
 }
 
+const TECHNICAL_KEYWORDS = [
+  'support',
+  'resistance',
+  'pattern',
+  'triangle',
+  'flag',
+  'double bottom',
+  'double top',
+  'head and shoulders',
+  'rsi',
+  'macd',
+  'trend',
+  'breakout',
+  'levels',
+  'chart',
+]
+
+const MARKET_KEYWORDS = [
+  'price',
+  'quote',
+  'market',
+  'movers',
+  'rising',
+  'falling',
+  'top',
+  'sector',
+  'news',
+  'earnings',
+  'dividend',
+  'volume',
+  'today',
+  'premarket',
+  'after hours',
+  'indices',
+  'index',
+]
+
+const PORTFOLIO_KEYWORDS = ['wallet', 'portfolio', 'holdings', 'positions', 'p&l', 'balance']
+
 const TRADE_STOPWORDS = new Set([
   'BUY',
   'SELL',
@@ -80,6 +127,61 @@ const TRADE_STOPWORDS = new Set([
   'SHARE',
   'SHARES',
 ])
+
+function classifyIntent(query: string, tickers: string[], previousContext?: FollowUpContext | TradeFollowUpContext | null): ChatIntent {
+  const lower = query.toLowerCase()
+
+  if (parseTradeIntent(query)) return 'TRADE_INTENT'
+  if (previousContext && (previousContext as TradeFollowUpContext).type === 'trade') return 'TRADE_INTENT'
+
+  if (PORTFOLIO_KEYWORDS.some((word) => lower.includes(word))) return 'PORTFOLIO_INTENT'
+  if (TECHNICAL_KEYWORDS.some((word) => lower.includes(word))) return 'TECHNICAL_ANALYSIS_INTENT'
+  if (MARKET_KEYWORDS.some((word) => lower.includes(word)) || tickers.length > 0) return 'MARKET_DATA_INTENT'
+
+  return 'UNKNOWN'
+}
+
+function formatDataStamp(params: { provider?: string; symbol?: string; exchange?: string; currency?: string; timestamp?: number }) {
+  const { provider, symbol, exchange, currency, timestamp } = params
+  const parts = [
+    provider ? `Data: ${provider}` : 'Data: unavailable',
+    symbol ? symbol : undefined,
+    exchange ? exchange : undefined,
+    currency ? currency : undefined,
+    timestamp ? new Date(timestamp).toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET' : undefined,
+  ].filter(Boolean)
+  return parts.join(' | ')
+}
+
+function buildUnifiedResponse(params: { understood: string; dataStamp: string; answer: string; next: string }) {
+  return [
+    `What I understood: ${params.understood}`,
+    `Data pulled: ${params.dataStamp}`,
+    `Answer: ${params.answer}`,
+    `Next: ${params.next}`,
+    '⚠️ This is for educational purposes only and not financial advice.',
+  ].join('\n\n')
+}
+
+function getExchangeForSymbol(symbol: string) {
+  if (symbol.endsWith('.TO')) return 'TSX'
+  return 'NYSE/NASDAQ'
+}
+
+async function fetchQuote(origin: string, symbol: string, cookie?: string) {
+  const res = await fetch(`${origin}/api/quote?symbol=${encodeURIComponent(symbol)}`, {
+    headers: { cookie: cookie || '' },
+    cache: 'no-store',
+  })
+  const data = await res.json().catch(() => null)
+  return { ok: res.ok, data }
+}
+
+async function fetchCandles(origin: string, symbol: string, range: string = '1m') {
+  const res = await fetch(`${origin}/api/chart?symbol=${encodeURIComponent(symbol)}&range=${range}`, { cache: 'no-store' })
+  const data = await res.json().catch(() => null)
+  return { ok: res.ok, data }
+}
 
 function extractSymbolFromQuery(query: string): string | undefined {
   const upper = query.toUpperCase()
@@ -115,17 +217,26 @@ function parseTradeIntent(query: string): TradeIntent | null {
 
   const amountMatch = lower.match(/(?:\$|usd\s*)?(\d+(?:\.\d+)?)/)
   const amount = amountMatch ? Number(amountMatch[1]) : undefined
+  const all = /\ball\b|\bmax\b|\ball in\b/.test(lower)
 
-  return { action, symbol, amount, amountType }
+  return { action, symbol, amount, amountType, all }
 }
 
 function mergeTradeIntent(base: TradeIntent, input: string): TradeIntent {
   const parsed = parseTradeIntent(input)
+  const lower = input.toLowerCase()
+  const amountMatch = lower.match(/(?:\$|usd\s*)?(\d+(?:\.\d+)?)/)
+  const fallbackAmount = amountMatch ? Number(amountMatch[1]) : undefined
+  const fallbackAmountType: 'dollars' | 'shares' | undefined = /\bshare(s)?\b/.test(lower)
+    ? 'shares'
+    : (/\$|\bdollar(s)?\b/.test(lower) ? 'dollars' : undefined)
+  const fallbackAll = /\ball\b|\bmax\b|\ball in\b/.test(lower)
   const merged: TradeIntent = {
     action: base.action,
     symbol: base.symbol,
     amount: base.amount,
     amountType: base.amountType,
+    all: base.all,
   }
 
   if (parsed?.action) merged.action = parsed.action
@@ -136,7 +247,10 @@ function mergeTradeIntent(base: TradeIntent, input: string): TradeIntent {
   }
 
   if (!merged.amount && parsed?.amount) merged.amount = parsed.amount
+  if (!merged.amount && fallbackAmount) merged.amount = fallbackAmount
   if (!merged.amountType && parsed?.amountType) merged.amountType = parsed.amountType
+  if (!merged.amountType && fallbackAmountType) merged.amountType = fallbackAmountType
+  if (!merged.all && (parsed?.all || fallbackAll)) merged.all = true
 
   return merged
 }
@@ -187,7 +301,12 @@ export async function POST(req: NextRequest) {
       const symbol = tradeIntent.symbol
       if (!symbol) {
         return NextResponse.json({
-          answer: "I can place that trade for you. Which ticker should I use?",
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: Trade intent',
+            answer: 'I can place that trade for you. Which ticker should I use?',
+            next: 'Reply with a ticker symbol (e.g., AAPL).',
+          }),
           model: 'bullishai-trade',
           modelBadge: 'BullishAI Trade Desk',
           latency: 0,
@@ -195,9 +314,14 @@ export async function POST(req: NextRequest) {
           followUpContext: { type: 'trade', tradeIntent },
         })
       }
-      if (!tradeIntent.amount || !tradeIntent.amountType) {
+      if ((!tradeIntent.amount || !tradeIntent.amountType) && !tradeIntent.all) {
         return NextResponse.json({
-          answer: `Got it. How much ${tradeIntent.action === 'buy' ? 'do you want to buy' : 'do you want to sell'} for ${symbol}? You can say "$200" or "1 share".`,
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: Trade intent',
+            answer: `Got it. How much ${tradeIntent.action === 'buy' ? 'do you want to buy' : 'do you want to sell'} for ${symbol}? You can say "$200" or "1 share".`,
+            next: 'Reply with a dollar amount or share count.',
+          }),
           model: 'bullishai-trade',
           modelBadge: 'BullishAI Trade Desk',
           latency: 0,
@@ -215,7 +339,12 @@ export async function POST(req: NextRequest) {
         const price = Number(quote?.price || 0)
         if (!price || !Number.isFinite(price)) {
           return NextResponse.json({
-            answer: `I couldn't fetch a live price for ${symbol}. Try again in a moment.`,
+            answer: buildUnifiedResponse({
+              understood: query,
+              dataStamp: 'Data: provider unavailable',
+              answer: `I couldn't fetch a live price for ${symbol}. Try again in a moment.`,
+              next: 'Try again or ask for a different ticker.',
+            }),
             model: 'bullishai-trade',
             modelBadge: 'BullishAI Trade Desk',
             latency: 0,
@@ -223,10 +352,53 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        const quantity =
+        let quantity =
           tradeIntent.amountType === 'shares'
             ? tradeIntent.amount
-            : tradeIntent.amount / price
+            : tradeIntent.amount
+              ? tradeIntent.amount / price
+              : undefined
+
+        if (tradeIntent.all) {
+          if (tradeIntent.action === 'sell') {
+            const portfolioRes = await fetch(`${req.nextUrl.origin}/api/portfolio?enrich=1`, {
+              headers: { cookie: req.headers.get('cookie') || '' },
+              cache: 'no-store',
+            })
+            const portfolio = await portfolioRes.json().catch(() => null)
+            const holdings = Array.isArray(portfolio?.items) ? portfolio.items : []
+            const holding = holdings.find((item: any) => String(item.symbol || '').toUpperCase() === symbol)
+            quantity = holding?.totalShares || holding?.shares || 0
+          } else {
+            const walletRes = await fetch(`${req.nextUrl.origin}/api/wallet`, {
+              headers: { cookie: req.headers.get('cookie') || '' },
+              cache: 'no-store',
+            })
+            const wallet = await walletRes.json().catch(() => null)
+            const balance = Number(wallet?.balance || 0)
+            if (balance > 0) {
+              quantity = balance / price
+              tradeIntent.amount = balance
+              tradeIntent.amountType = 'dollars'
+            }
+          }
+        }
+
+        if (!quantity || !Number.isFinite(quantity) || quantity <= 0) {
+          return NextResponse.json({
+            answer: buildUnifiedResponse({
+              understood: query,
+              dataStamp: 'Data: Trade intent',
+              answer: `I couldn't determine the ${tradeIntent.action} quantity for ${symbol}. Please specify a dollar amount or share count.`,
+              next: 'Reply with a dollar amount or share count.',
+            }),
+            model: 'bullishai-trade',
+            modelBadge: 'BullishAI Trade Desk',
+            latency: 0,
+            trade: { status: 'needs_amount', symbol },
+            followUpContext: { type: 'trade', tradeIntent },
+          })
+        }
 
         const tradeRes = await fetch(`${req.nextUrl.origin}/api/portfolio`, {
           method: 'POST',
@@ -245,7 +417,18 @@ export async function POST(req: NextRequest) {
         if (!tradeRes.ok) {
           const message = tradeJson?.error || 'Trade failed'
           return NextResponse.json({
-            answer: `I couldn't place that trade for ${symbol}. ${message}`,
+            answer: buildUnifiedResponse({
+              understood: query,
+              dataStamp: formatDataStamp({
+                provider: quote.source || 'Market Data',
+                symbol,
+                exchange: getExchangeForSymbol(symbol),
+                currency: quote.currency || 'USD',
+                timestamp: quote.fetchedAt || Date.now(),
+              }),
+              answer: `I couldn't place that trade for ${symbol}. ${message}`,
+              next: 'Adjust the amount or check your wallet balance.',
+            }),
             model: 'bullishai-trade',
             modelBadge: 'BullishAI Trade Desk',
             latency: 0,
@@ -259,7 +442,18 @@ export async function POST(req: NextRequest) {
         const summary = `${tradeIntent.action === 'buy' ? 'Bought' : 'Sold'} ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)} (${tradeIntent.amountType === 'dollars' ? `$${tradeIntent.amount.toFixed(2)}` : `${tradeIntent.amount} shares`}) on ${timeLabel} ET.`
 
         return NextResponse.json({
-          answer: `✅ **Trade executed**\n\n${summary}\n\nLet me know if you want another trade or a quick analysis on ${symbol}.`,
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: formatDataStamp({
+              provider: quote.source || 'Market Data',
+              symbol,
+              exchange: getExchangeForSymbol(symbol),
+              currency: quote.currency || 'USD',
+              timestamp: quote.fetchedAt || Date.now(),
+            }),
+            answer: summary,
+            next: `Want another trade or a quick analysis on ${symbol}?`,
+          }),
           model: 'bullishai-trade',
           modelBadge: 'BullishAI Trade Desk',
           latency: 0,
@@ -276,7 +470,12 @@ export async function POST(req: NextRequest) {
         })
       } catch (error: any) {
         return NextResponse.json({
-          answer: `I couldn't place that trade right now. ${error?.message || ''}`.trim(),
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: Trade intent',
+            answer: `I couldn't place that trade right now. ${error?.message || ''}`.trim(),
+            next: 'Try again in a moment.',
+          }),
           model: 'bullishai-trade',
           modelBadge: 'BullishAI Trade Desk',
           latency: 0,
@@ -285,7 +484,186 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 1. Check if this is a stock recommendation question (highest priority)
+    const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
+    const intent = classifyIntent(query, tickers, previousContext)
+
+    // 1. Strict intent router (trade already handled)
+    if (intent === 'PORTFOLIO_INTENT') {
+      try {
+        const portfolioRes = await fetch(`${req.nextUrl.origin}/api/portfolio?enrich=1`, {
+          headers: { cookie: req.headers.get('cookie') || '' },
+          cache: 'no-store',
+        })
+        const portfolio = await portfolioRes.json().catch(() => null)
+        if (!portfolioRes.ok) {
+          return NextResponse.json({
+            answer: buildUnifiedResponse({
+              understood: query,
+              dataStamp: 'Data: unavailable',
+              answer: 'I couldn’t load your portfolio right now. Please try again.',
+              next: 'Try again or visit your dashboard.',
+            }),
+            model: 'bullishai-portfolio',
+            modelBadge: 'BullishAI Portfolio',
+            latency: 0,
+          })
+        }
+
+        const balance = portfolio?.wallet?.balance ?? 0
+        const holdings = Array.isArray(portfolio?.items) ? portfolio.items : []
+        const topHolding = holdings[0]
+        const answer = `Wallet balance is $${balance.toFixed(2)}. You hold ${holdings.length} positions${topHolding ? `; top position: ${topHolding.symbol}` : ''}.`
+
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: BullishAI Portfolio | Wallet | USD | ' + new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET',
+            answer,
+            next: 'Want a full holdings list or recent transactions?',
+          }),
+          model: 'bullishai-portfolio',
+          modelBadge: 'BullishAI Portfolio',
+          latency: 0,
+        })
+      } catch (error: any) {
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: unavailable',
+            answer: 'I couldn’t load your portfolio right now.',
+            next: 'Try again or open the dashboard.',
+          }),
+          model: 'bullishai-portfolio',
+          modelBadge: 'BullishAI Portfolio',
+          latency: 0,
+        })
+      }
+    }
+
+    if (intent === 'MARKET_DATA_INTENT') {
+      const targetSymbol = tickers[0]
+      if (!targetSymbol) {
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: unavailable',
+            answer: 'Tell me a ticker or market topic so I can pull live data.',
+            next: 'Example: “price of NVDA” or “top movers today”.',
+          }),
+          model: 'bullishai-market',
+          modelBadge: 'BullishAI Data Engine',
+          latency: 0,
+        })
+      }
+
+      const quoteResult = await fetchQuote(req.nextUrl.origin, targetSymbol, req.headers.get('cookie') || '')
+      const quote = quoteResult.data
+      if (!quoteResult.ok || !quote?.price) {
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: provider unavailable',
+            answer: `I can’t verify live prices for ${targetSymbol} right now. Please try again.`,
+            next: 'Retry in a moment or ask for another ticker.',
+          }),
+          model: 'bullishai-market',
+          modelBadge: 'BullishAI Data Engine',
+          latency: 0,
+        })
+      }
+
+      const dataStamp = formatDataStamp({
+        provider: quote.source || 'Market Data',
+        symbol: targetSymbol,
+        exchange: getExchangeForSymbol(targetSymbol),
+        currency: quote.currency || 'USD',
+        timestamp: quote.fetchedAt || Date.now(),
+      })
+      const answer = `${targetSymbol} is $${quote.price.toFixed(2)} (${quote.changePercent >= 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%). Volume: ${quote.volume ? quote.volume.toLocaleString() : '—'}.`
+
+      return NextResponse.json({
+        answer: buildUnifiedResponse({
+          understood: query,
+          dataStamp,
+          answer,
+          next: 'Want trend analysis, news, or key levels?',
+        }),
+        model: 'bullishai-market',
+        modelBadge: 'BullishAI Data Engine',
+        latency: 0,
+        tickers: [targetSymbol],
+      })
+    }
+
+    if (intent === 'TECHNICAL_ANALYSIS_INTENT') {
+      const targetSymbol = tickers[0]
+      if (!targetSymbol) {
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: unavailable',
+            answer: 'Tell me which ticker to analyze.',
+            next: 'Example: “technical on NVDA”.',
+          }),
+          model: 'bullishai-technical',
+          modelBadge: 'BullishAI TA Engine',
+          latency: 0,
+        })
+      }
+
+      const [quoteResult, chartResult] = await Promise.all([
+        fetchQuote(req.nextUrl.origin, targetSymbol, req.headers.get('cookie') || ''),
+        fetchCandles(req.nextUrl.origin, targetSymbol, '3m'),
+      ])
+
+      const quote = quoteResult.data
+      const chart = chartResult.data
+      if (!quoteResult.ok || !quote?.price || !chartResult.ok || !Array.isArray(chart?.data) || chart.data.length === 0) {
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: provider unavailable',
+            answer: `I can’t verify technical levels for ${targetSymbol} because live candles are unavailable.`,
+            next: 'Retry in a moment or ask for basic price info.',
+          }),
+          model: 'bullishai-technical',
+          modelBadge: 'BullishAI TA Engine',
+          latency: 0,
+        })
+      }
+
+      const closes = chart.data.map((c: any) => Number(c.c ?? c.close)).filter((v: number) => Number.isFinite(v))
+      const highs = chart.data.map((c: any) => Number(c.h ?? c.high)).filter((v: number) => Number.isFinite(v))
+      const lows = chart.data.map((c: any) => Number(c.l ?? c.low)).filter((v: number) => Number.isFinite(v))
+      const recentHigh = highs.length ? Math.max(...highs.slice(-20)) : undefined
+      const recentLow = lows.length ? Math.min(...lows.slice(-20)) : undefined
+      const trendPct = closes.length > 1 ? ((closes[closes.length - 1] - closes[0]) / closes[0]) * 100 : 0
+
+      const dataStamp = formatDataStamp({
+        provider: quote.source || chart.source || 'Market Data',
+        symbol: targetSymbol,
+        exchange: getExchangeForSymbol(targetSymbol),
+        currency: quote.currency || 'USD',
+        timestamp: quote.fetchedAt || Date.now(),
+      })
+
+      const answer = `Trend over 3M: ${trendPct >= 0 ? 'up' : 'down'} ${Math.abs(trendPct).toFixed(2)}%. Recent range: ${recentLow ? `$${recentLow.toFixed(2)}` : '—'} to ${recentHigh ? `$${recentHigh.toFixed(2)}` : '—'}. Pattern detection is not enabled yet.`
+
+      return NextResponse.json({
+        answer: buildUnifiedResponse({
+          understood: query,
+          dataStamp,
+          answer,
+          next: 'Want support/resistance alerts or volume analysis?',
+        }),
+        model: 'bullishai-technical',
+        modelBadge: 'BullishAI TA Engine',
+        latency: 0,
+        tickers: [targetSymbol],
+      })
+    }
+
+    // 2. Check if this is a stock recommendation question (highest priority)
     if (isStockRecommendationQuery(query)) {
       try {
         const recommendation = await handleStockRecommendation(query, req.nextUrl.origin)
@@ -362,7 +740,7 @@ Do NOT:
       }
     }
 
-    // 2. Determine if this is a recommended preset question
+    // 3. Determine if this is a recommended preset question
     const recommendedCheck = isRecommendedQuestion(query)
     let recommendedType: RecommendedType | null = null
     if (followUp && previousContext?.type) {
@@ -373,11 +751,10 @@ Do NOT:
       recommendedType = recommendedCheck.type as RecommendedType
     }
 
-    // 3. Detect section/intent
+    // 4. Detect section/intent
     const section = detectSection(query)
-    const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
 
-    // 4. Handle recommended presets with live data before knowledge base logic
+    // 5. Handle recommended presets with live data before knowledge base logic
     if (recommendedType && recommendedType !== 'technical') {
       try {
         const recommendedResult = await handleRecommendedQuery({
@@ -418,35 +795,12 @@ ${liveDataText}
 
 Answer using the rules above.`
 
-        const llmResponse = await runHybridLLM({
-          userPrompt,
-          systemPrompt,
-          context: ragContext,
-          domain,
-          requiredPhrases: Array.from(new Set([...(requiredPhrases || []), dataSource])),
-          minLength: followUp ? 170 : 130,
+        let answer = buildUnifiedResponse({
+          understood: query,
+          dataStamp: `Updated ${dataTimestamp} • Source: ${dataSource}`,
+          answer: liveDataText,
+          next: 'Want me to expand with more names or dig into a sector?',
         })
-
-        let answer = llmResponse.answer?.trim() || ''
-
-        const sourceLine = `*Updated: ${dataTimestamp} • Source: ${dataSource}*`
-        if (!answer.includes(sourceLine)) {
-          answer += `\n\n${sourceLine}`
-        }
-
-        const followUpHooks = [
-          'Want me to expand with more names or dig into a sector?',
-          'Want analysis on any specific ticker?',
-          'Need me to watch for catalysts or earnings dates?',
-        ]
-        const hasFollowUpHook = followUpHooks.some((hook) => answer.toLowerCase().includes(hook.toLowerCase()))
-        if (!hasFollowUpHook) {
-          answer += `\n\nWant me to expand with more names or dig into a sector? Or analyze any specific ticker?`
-        }
-
-        if (!answer.toLowerCase().includes('educational') && !answer.toLowerCase().includes('not financial advice')) {
-          answer += `\n\n⚠️ This is for educational purposes only and not financial advice.`
-        }
 
         const tickersFromData = (requiredPhrases || []).filter((item) =>
           /^[A-Z]{1,5}(?:\.[A-Z]{1,3})?$/.test(item),
@@ -457,13 +811,13 @@ Answer using the rules above.`
           presetId: presetId || previousContext?.presetId || undefined,
         }
 
-        const recommendedBadge = getModelBadge(llmResponse.metadata) || dataSource
+        const recommendedBadge = dataSource
 
         return NextResponse.json({
           answer,
-          model: llmResponse.model,
+          model: 'bullishai-data',
           modelBadge: recommendedBadge,
-          latency: llmResponse.latency,
+          latency: 0,
           section: section || undefined,
           tickers: tickersFromData.length > 0 ? tickersFromData : undefined,
           followUpContext: payloadFollowUp,
@@ -498,7 +852,12 @@ Answer using the rules above.`
           "I don't have fresh data from BullishAI right now, but here's how traders typically approach this: focus on key indicators, watch for catalysts, and manage risk. Want me to explain the concepts behind this analysis?"
         
         return NextResponse.json({
-          answer: `${conceptualAnswer}\n\n⚠️ *This is for educational purposes only and not financial advice.*`,
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp: 'Data: unavailable',
+            answer: conceptualAnswer,
+            next: 'Want another market topic or a ticker?',
+          }),
           model: 'bullishai-conceptual',
           modelBadge: 'BullishAI Market Education',
           latency: 0,
@@ -507,7 +866,7 @@ Answer using the rules above.`
       }
     }
     
-    // 5. Load BullishAI playbook entries (for tone/style on general questions)
+    // 6. Load BullishAI playbook entries (for tone/style on general questions)
     let kb: any[] = []
     let relevantContext: any[] = []
     try {
@@ -517,7 +876,7 @@ Answer using the rules above.`
       console.error('Failed to load BullishAI playbook:', kbError)
     }
 
-    // 5. Build RAG context with live data
+    // 7. Build RAG context with live data
     const ragContext: RAGContext = {
       symbol: symbol || tickers[0] || undefined,
       prices: {},
@@ -634,7 +993,6 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
 
     let answer = llmResponse.answer?.trim() || "I'm still thinking about that. Can you rephrase or point me to a ticker?"
 
-    // Ensure follow-up hooks
     const domainFollowUps: Record<ChatDomain, string[]> = {
       market_overview: [
         'Want me to expand to more movers or break it down by sector?',
@@ -667,14 +1025,25 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
     }
 
     const hooks = domainFollowUps[domain] || domainFollowUps.general_chat
-    const hasHook = hooks.some((hook) => answer.toLowerCase().includes(hook.toLowerCase()))
-    if (!hasHook) {
-      answer += `\n\n${hooks[0]} Or ${hooks[1]}`
-    }
 
-    if (!answer.toLowerCase().includes('educational') && !answer.toLowerCase().includes('not financial advice')) {
-      answer += `\n\n⚠️ This is for educational purposes only and not financial advice.`
-    }
+    const firstPriceSymbol = Object.keys(ragContext.prices || {})[0]
+    const firstPrice = firstPriceSymbol ? ragContext.prices?.[firstPriceSymbol] : undefined
+    const dataStamp = firstPriceSymbol && firstPrice
+      ? formatDataStamp({
+          provider: 'BullishAI Quotes',
+          symbol: firstPriceSymbol,
+          exchange: getExchangeForSymbol(firstPriceSymbol),
+          currency: 'USD',
+          timestamp: firstPrice.timestamp,
+        })
+      : 'Data: BullishAI Context'
+
+    answer = buildUnifiedResponse({
+      understood: query,
+      dataStamp,
+      answer,
+      next: hooks[0],
+    })
 
     const modelBadge = getModelBadge(llmResponse.metadata) || 'Multi-Model Engine'
 
@@ -689,32 +1058,16 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
   } catch (error: any) {
     console.error('Chat API error:', error)
     
-    // Try to use BullishAI playbook as fallback even on errors
-    try {
-      const kb = await loadKnowledgeBase().catch(() => [])
-      if (kb.length > 0 && query) {
-        const relevantContext = findBestMatch(query, kb, 3)
-        
-        if (relevantContext.length > 0) {
-          const fallbackAnswer = relevantContext[0].answer
-          return NextResponse.json({
-            answer: `${fallbackAnswer}\n\n⚠️ *This is for educational purposes only and not financial advice.*`,
-            model: 'bullishai-playbook',
-            modelBadge: 'BullishAI Playbook',
-            latency: 0,
-            cached: true,
-          })
-        }
-      }
-    } catch (kbError) {
-      console.error('Knowledge base fallback also failed:', kbError)
-    }
-    
     // Final fallback - never show raw errors to users
     return NextResponse.json({
-      answer: "Sorry, I'm having a bit of trouble right now. Can you try rephrasing that? Or ask me about something else — I'm great with stock prices, market trends, and quick insights!\n\n⚠️ *This is for educational purposes only and not financial advice.*",
+      answer: buildUnifiedResponse({
+        understood: query,
+        dataStamp: 'Data: unavailable',
+        answer: "I couldn’t complete that request just now.",
+        next: 'Try again or ask about a specific ticker.',
+      }),
       model: 'error-fallback',
-      modelBadge: 'BullishAI Hybrid',
+      modelBadge: 'BullishAI Data Engine',
       latency: 0,
     })
   }

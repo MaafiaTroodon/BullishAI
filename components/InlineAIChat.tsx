@@ -96,7 +96,9 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
 
   // Initialize greeting message
   useEffect(() => {
-    if (messages.length === 0) {
+    if (typeof window === 'undefined') return
+    const greeted = localStorage.getItem('bullishai_chat_greeted')
+    if (messages.length === 0 && !greeted) {
       setMessages([
         {
           id: '1',
@@ -105,6 +107,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           timestamp: new Date(),
         },
       ])
+      localStorage.setItem('bullishai_chat_greeted', '1')
     }
   }, [])
 
