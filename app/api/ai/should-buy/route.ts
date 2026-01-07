@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
     const stockData = stockRes ? await stockRes.json().catch(() => null) : null
     const chart = chartRes ? await chartRes.json().catch(() => null) : null
 
-    const chartPoints = Array.isArray(chart?.data) ? chart.data : []
+    const chartPoints: OhlcPoint[] = Array.isArray(chart?.data) ? (chart.data as OhlcPoint[]) : []
     const trendPct = computeTrendPct(chartPoints)
     const volatilityPct = computeVolatilityPct(chartPoints)
     const recentLows = chartPoints
