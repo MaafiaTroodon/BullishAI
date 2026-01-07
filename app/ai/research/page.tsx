@@ -115,7 +115,7 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">P/E Ratio</div>
                     <div className="text-lg font-semibold text-white">
-                      {fundamentals?.peRatio || 'N/A'}
+                      {(fundamentals?.peRatio ?? quote?.peRatio) ? (fundamentals?.peRatio ?? quote?.peRatio)?.toFixed?.(2) ?? (fundamentals?.peRatio ?? quote?.peRatio) : 'N/A'}
                     </div>
                   </div>
                   <div>
@@ -127,8 +127,8 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">52W Range</div>
                     <div className="text-lg font-semibold text-white">
-                      {fundamentals?.week52High && fundamentals?.week52Low
-                        ? `$${fundamentals.week52Low.toFixed(2)} - $${fundamentals.week52High.toFixed(2)}`
+                      {(fundamentals?.week52High ?? quote?.week52High) && (fundamentals?.week52Low ?? quote?.week52Low)
+                        ? `$${(fundamentals?.week52Low ?? quote?.week52Low).toFixed(2)} - $${(fundamentals?.week52High ?? quote?.week52High).toFixed(2)}`
                         : 'N/A'}
                     </div>
                   </div>

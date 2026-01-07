@@ -31,6 +31,11 @@ type TradeIntent = {
   amountType?: 'dollars' | 'shares'
 }
 
+type TradeFollowUpContext = {
+  type: 'trade'
+  tradeIntent: TradeIntent
+}
+
 const SYMBOL_ALIASES: Record<string, string> = {
   apple: 'AAPL',
   tesla: 'TSLA',
@@ -53,6 +58,35 @@ const SYMBOL_ALIASES: Record<string, string> = {
   'bank of montreal': 'BMO.TO',
 }
 
+const TRADE_STOPWORDS = new Set([
+  'BUY',
+  'SELL',
+  'FOR',
+  'ME',
+  'PLEASE',
+  'CAN',
+  'YOU',
+  'A',
+  'AN',
+  'THE',
+  'TO',
+  'OF',
+  'ON',
+  'IN',
+  'AT',
+  'DOLLAR',
+  'DOLLARS',
+  'USD',
+  'SHARE',
+  'SHARES',
+])
+
+function extractSymbolFromQuery(query: string): string | undefined {
+  const upper = query.toUpperCase()
+  const tokens = upper.match(/[A-Z]{1,5}(?:\\.TO)?/g) || []
+  return tokens.find((token) => !TRADE_STOPWORDS.has(token))
+}
+
 function parseTradeIntent(query: string): TradeIntent | null {
   const lower = query.toLowerCase()
   const action = lower.includes('buy') ? 'buy' : lower.includes('sell') ? 'sell' : null
@@ -70,6 +104,9 @@ function parseTradeIntent(query: string): TradeIntent | null {
       }
     }
   }
+  if (!symbol) {
+    symbol = extractSymbolFromQuery(query)
+  }
 
   let amountType: 'dollars' | 'shares' | undefined
   if (/\bshare(s)?\b/.test(lower)) amountType = 'shares'
@@ -80,6 +117,28 @@ function parseTradeIntent(query: string): TradeIntent | null {
   const amount = amountMatch ? Number(amountMatch[1]) : undefined
 
   return { action, symbol, amount, amountType }
+}
+
+function mergeTradeIntent(base: TradeIntent, input: string): TradeIntent {
+  const parsed = parseTradeIntent(input)
+  const merged: TradeIntent = {
+    action: base.action,
+    symbol: base.symbol,
+    amount: base.amount,
+    amountType: base.amountType,
+  }
+
+  if (parsed?.action) merged.action = parsed.action
+  if (!merged.symbol && parsed?.symbol) merged.symbol = parsed.symbol
+  if (!merged.symbol) {
+    const aliasMatch = extractSymbolFromQuery(input)
+    if (aliasMatch) merged.symbol = aliasMatch
+  }
+
+  if (!merged.amount && parsed?.amount) merged.amount = parsed.amount
+  if (!merged.amountType && parsed?.amountType) merged.amountType = parsed.amountType
+
+  return merged
 }
 
 /**
@@ -114,11 +173,16 @@ export async function POST(req: NextRequest) {
 
     const presetId: string | undefined = body.presetId || undefined
     const followUp: boolean = Boolean(body.followUp)
-    const previousContext: FollowUpContext | null =
+    const previousContext: (FollowUpContext | TradeFollowUpContext) | null =
       body.previousContext && typeof body.previousContext === 'object' ? body.previousContext : null
 
     // 0. Check if this is a trade command (buy/sell)
-    const tradeIntent = parseTradeIntent(query)
+    let tradeIntent = parseTradeIntent(query)
+    if (!tradeIntent && previousContext && (previousContext as TradeFollowUpContext).type === 'trade') {
+      tradeIntent = mergeTradeIntent((previousContext as TradeFollowUpContext).tradeIntent, query)
+    } else if (tradeIntent && previousContext && (previousContext as TradeFollowUpContext).type === 'trade') {
+      tradeIntent = mergeTradeIntent((previousContext as TradeFollowUpContext).tradeIntent, query)
+    }
     if (tradeIntent) {
       const symbol = tradeIntent.symbol
       if (!symbol) {
@@ -128,6 +192,7 @@ export async function POST(req: NextRequest) {
           modelBadge: 'BullishAI Trade Desk',
           latency: 0,
           trade: { status: 'needs_symbol' },
+          followUpContext: { type: 'trade', tradeIntent },
         })
       }
       if (!tradeIntent.amount || !tradeIntent.amountType) {
@@ -137,6 +202,7 @@ export async function POST(req: NextRequest) {
           modelBadge: 'BullishAI Trade Desk',
           latency: 0,
           trade: { status: 'needs_amount', symbol },
+          followUpContext: { type: 'trade', tradeIntent },
         })
       }
 

@@ -136,6 +136,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     if (!messageToSend || !isLoggedIn) return
     
     // Don't hide presets - they stay visible at bottom
+    const isTradeFollowUp = lastFollowUpContext?.type === 'trade'
     const isAffirmativeFollowUp = /^y(es)?$/i.test(messageToSend) && !!lastFollowUpContext
     const presetIdToUse = options?.presetId || (isAffirmativeFollowUp ? lastFollowUpContext?.presetId : null)
 
@@ -144,7 +145,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     } else if (!isAffirmativeFollowUp) {
       setLastPresetId(null)
     }
-    if (!isAffirmativeFollowUp && !options?.presetId) {
+    if (!isAffirmativeFollowUp && !options?.presetId && !isTradeFollowUp) {
       setLastFollowUpContext(null)
     }
 
@@ -174,8 +175,8 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           query: effectiveQuery,
           symbol: focusSymbol,
           presetId: presetIdToUse || undefined,
-          followUp: isAffirmativeFollowUp,
-          previousContext: isAffirmativeFollowUp ? lastFollowUpContext : undefined,
+          followUp: isAffirmativeFollowUp || isTradeFollowUp,
+          previousContext: isTradeFollowUp ? lastFollowUpContext : (isAffirmativeFollowUp ? lastFollowUpContext : undefined),
         }),
       })
 

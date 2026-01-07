@@ -6,9 +6,11 @@
 import Groq from 'groq-sdk'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+const primaryGroqKey = process.env.GROQ_API_KEY
+const secondaryGroqKey = process.env.GROQ_API_KEY_SECONDARY
+
+const groqPrimary = primaryGroqKey ? new Groq({ apiKey: primaryGroqKey }) : null
+const groqSecondary = secondaryGroqKey ? new Groq({ apiKey: secondaryGroqKey }) : null
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
@@ -143,7 +145,8 @@ function isRecoverableError(error: any): boolean {
 /**
  * Call Groq Llama-3 model
  */
-async function callGroq(
+async function callGroqClient(
+  client: Groq,
   query: string,
   context: RAGContext,
   systemPrompt?: string,
@@ -163,7 +166,7 @@ ${SAFETY_DISCLAIMER}`
   const fullPrompt = `${ragContext}${jsonHint}\n\nUser Question: ${query}`
   
   try {
-    const response = await groq.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: (systemPrompt || defaultSystemPrompt) + (jsonSchema ? ' Respond in valid JSON format only.' : '') },
@@ -196,6 +199,40 @@ ${SAFETY_DISCLAIMER}`
   }
 }
 
+async function callGroq(
+  query: string,
+  context: RAGContext,
+  systemPrompt?: string,
+  jsonSchema?: any
+): Promise<AIResponse> {
+  if (groqPrimary) {
+    try {
+      return await callGroqClient(groqPrimary, query, context, systemPrompt, jsonSchema)
+    } catch (error: any) {
+      const status = error.status || error.statusCode
+      const message = String(error.message || '')
+      const shouldTrySecondary =
+        !!groqSecondary &&
+        (status === 401 ||
+          status === 403 ||
+          status === 429 ||
+          message.toLowerCase().includes('invalid') ||
+          message.toLowerCase().includes('unauthorized'))
+
+      if (shouldTrySecondary) {
+        return await callGroqClient(groqSecondary as Groq, query, context, systemPrompt, jsonSchema)
+      }
+      throw error
+    }
+  }
+
+  if (groqSecondary) {
+    return await callGroqClient(groqSecondary, query, context, systemPrompt, jsonSchema)
+  }
+
+  throw new Error('Groq API key missing')
+}
+
 /**
  * Call Google Gemini model
  */
@@ -206,6 +243,16 @@ async function callGemini(
   jsonSchema?: any
 ): Promise<AIResponse> {
   const startTime = Date.now()
+
+  if (!process.env.GEMINI_API_KEY) {
+    return {
+      answer: buildContextFallbackAnswer(context),
+      model: 'gemini',
+      latency: Date.now() - startTime,
+      riskNote: 'Service unavailable. Please verify information independently.',
+      metadata: { fallback: true, reason: 'missing_api_key' },
+    }
+  }
   
   const defaultSystemPrompt = `You are a financial analysis AI assistant.
 Use ONLY the provided context for numbers and facts. Never guess or hallucinate numbers.
@@ -258,13 +305,32 @@ ${SAFETY_DISCLAIMER}`
     // Never throw from Gemini - always return a graceful fallback response
     const latency = Date.now() - startTime
     return {
-      answer: `I'm having trouble accessing the AI service right now. Here's what I can tell you based on the available context:\n\n${formatRAGContext(context)}\n\nPlease try again in a moment, or contact support if the issue persists.`,
+      answer: buildContextFallbackAnswer(context),
       model: 'gemini',
       latency,
       riskNote: 'Service temporarily unavailable. Please verify information independently.',
-      metadata: { error: error.message, fallback: true }
+      metadata: { error: error.message, fallback: true },
     }
   }
+}
+
+function buildContextFallbackAnswer(context: RAGContext): string {
+  if (context.prices && Object.keys(context.prices).length > 0) {
+    const priceLines = Object.entries(context.prices)
+      .map(([symbol, data]) => `• ${symbol}: $${data.price.toFixed(2)} (${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%)`)
+      .join('\n')
+    return `Quick Summary: Here’s a snapshot from the latest available pricing context.\n\nKey Numbers:\n${priceLines}\n\nBroader Context: If you want a deeper breakdown, ask about a specific ticker or sector and I’ll focus the analysis there.\n\n⚠️ This is for educational purposes only and not financial advice.`
+  }
+
+  if (context.news && context.news.length > 0) {
+    const headlines = context.news
+      .slice(0, 3)
+      .map((item) => `• ${item.headline} (${item.source})`)
+      .join('\n')
+    return `Quick Summary: Here are the latest notable headlines.\n\nRecent News:\n${headlines}\n\nWant me to analyze a ticker or sector based on these catalysts?\n\n⚠️ This is for educational purposes only and not financial advice.`
+  }
+
+  return `Quick Summary: I’m ready to help with market insights. Ask about a ticker (like AAPL or NVDA), a sector, or a trading theme.\n\nOptional Follow-Up:\n• “What’s the outlook for big tech?”\n• “Show me momentum leaders today.”\n• “Analyze TSX banks.”\n\n⚠️ This is for educational purposes only and not financial advice.`
 }
 
 /**
@@ -409,4 +475,3 @@ export async function routeAIQuery(
     }
   }
 }
-
