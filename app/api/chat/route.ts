@@ -24,6 +24,64 @@ const PRESET_TYPE_MAP: Record<string, RecommendedType> = {
   'dividend-momentum': 'dividend-momentum',
 }
 
+type TradeIntent = {
+  action: 'buy' | 'sell'
+  symbol?: string
+  amount?: number
+  amountType?: 'dollars' | 'shares'
+}
+
+const SYMBOL_ALIASES: Record<string, string> = {
+  apple: 'AAPL',
+  tesla: 'TSLA',
+  microsoft: 'MSFT',
+  nvidia: 'NVDA',
+  amazon: 'AMZN',
+  meta: 'META',
+  facebook: 'META',
+  alphabet: 'GOOGL',
+  google: 'GOOGL',
+  netflix: 'NFLX',
+  jpmorgan: 'JPM',
+  chase: 'JPM',
+  visa: 'V',
+  mastercard: 'MA',
+  shopify: 'SHOP.TO',
+  'royal bank': 'RY.TO',
+  'td bank': 'TD.TO',
+  'scotiabank': 'BNS.TO',
+  'bank of montreal': 'BMO.TO',
+}
+
+function parseTradeIntent(query: string): TradeIntent | null {
+  const lower = query.toLowerCase()
+  const action = lower.includes('buy') ? 'buy' : lower.includes('sell') ? 'sell' : null
+  if (!action) return null
+
+  let symbol: string | undefined
+  const tickers = extractTickers(query)
+  if (tickers && tickers.length > 0) {
+    symbol = tickers[0].toUpperCase()
+  } else {
+    for (const [name, mapped] of Object.entries(SYMBOL_ALIASES)) {
+      if (lower.includes(name)) {
+        symbol = mapped
+        break
+      }
+    }
+  }
+
+  let amountType: 'dollars' | 'shares' | undefined
+  if (/\bshare(s)?\b/.test(lower)) amountType = 'shares'
+  if (/\$|\bdollar(s)?\b/.test(lower)) amountType = 'dollars'
+  if (!amountType && /\bfor\b/.test(lower)) amountType = 'dollars'
+
+  const amountMatch = lower.match(/(?:\$|usd\s*)?(\d+(?:\.\d+)?)/)
+  const amount = amountMatch ? Number(amountMatch[1]) : undefined
+
+  return { action, symbol, amount, amountType }
+}
+
 /**
  * Conversational Chat API - Main entry point for chat interface
  * Uses stock_qa_100k.json as knowledge base
@@ -58,6 +116,108 @@ export async function POST(req: NextRequest) {
     const followUp: boolean = Boolean(body.followUp)
     const previousContext: FollowUpContext | null =
       body.previousContext && typeof body.previousContext === 'object' ? body.previousContext : null
+
+    // 0. Check if this is a trade command (buy/sell)
+    const tradeIntent = parseTradeIntent(query)
+    if (tradeIntent) {
+      const symbol = tradeIntent.symbol
+      if (!symbol) {
+        return NextResponse.json({
+          answer: "I can place that trade for you. Which ticker should I use?",
+          model: 'bullishai-trade',
+          modelBadge: 'BullishAI Trade Desk',
+          latency: 0,
+          trade: { status: 'needs_symbol' },
+        })
+      }
+      if (!tradeIntent.amount || !tradeIntent.amountType) {
+        return NextResponse.json({
+          answer: `Got it. How much ${tradeIntent.action === 'buy' ? 'do you want to buy' : 'do you want to sell'} for ${symbol}? You can say "$200" or "1 share".`,
+          model: 'bullishai-trade',
+          modelBadge: 'BullishAI Trade Desk',
+          latency: 0,
+          trade: { status: 'needs_amount', symbol },
+        })
+      }
+
+      try {
+        const quoteRes = await fetch(`${req.nextUrl.origin}/api/quote?symbol=${symbol}`, {
+          headers: { cookie: req.headers.get('cookie') || '' },
+          cache: 'no-store',
+        })
+        const quote = await quoteRes.json().catch(() => null)
+        const price = Number(quote?.price || 0)
+        if (!price || !Number.isFinite(price)) {
+          return NextResponse.json({
+            answer: `I couldn't fetch a live price for ${symbol}. Try again in a moment.`,
+            model: 'bullishai-trade',
+            modelBadge: 'BullishAI Trade Desk',
+            latency: 0,
+            trade: { status: 'rejected', message: 'Price unavailable.' },
+          })
+        }
+
+        const quantity =
+          tradeIntent.amountType === 'shares'
+            ? tradeIntent.amount
+            : tradeIntent.amount / price
+
+        const tradeRes = await fetch(`${req.nextUrl.origin}/api/portfolio`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            cookie: req.headers.get('cookie') || '',
+          },
+          body: JSON.stringify({
+            symbol,
+            action: tradeIntent.action,
+            price,
+            quantity,
+          }),
+        })
+        const tradeJson = await tradeRes.json().catch(() => null)
+        if (!tradeRes.ok) {
+          const message = tradeJson?.error || 'Trade failed'
+          return NextResponse.json({
+            answer: `I couldn't place that trade for ${symbol}. ${message}`,
+            model: 'bullishai-trade',
+            modelBadge: 'BullishAI Trade Desk',
+            latency: 0,
+            trade: { status: 'rejected', message },
+          })
+        }
+
+        const now = new Date()
+        const timeLabel = now.toLocaleString('en-US', { timeZone: 'America/New_York' })
+        const totalCost = price * quantity
+        const summary = `${tradeIntent.action === 'buy' ? 'Bought' : 'Sold'} ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)} (${tradeIntent.amountType === 'dollars' ? `$${tradeIntent.amount.toFixed(2)}` : `${tradeIntent.amount} shares`}) on ${timeLabel} ET.`
+
+        return NextResponse.json({
+          answer: `✅ **Trade executed**\n\n${summary}\n\nLet me know if you want another trade or a quick analysis on ${symbol}.`,
+          model: 'bullishai-trade',
+          modelBadge: 'BullishAI Trade Desk',
+          latency: 0,
+          trade: {
+            status: 'executed',
+            symbol,
+            action: tradeIntent.action,
+            price,
+            quantity,
+            totalCost,
+            timestamp: now.toISOString(),
+            summary,
+          },
+        })
+      } catch (error: any) {
+        return NextResponse.json({
+          answer: `I couldn't place that trade right now. ${error?.message || ''}`.trim(),
+          model: 'bullishai-trade',
+          modelBadge: 'BullishAI Trade Desk',
+          latency: 0,
+          trade: { status: 'rejected', message: error?.message || 'Trade failed' },
+        })
+      }
+    }
 
     // 1. Check if this is a stock recommendation question (highest priority)
     if (isStockRecommendationQuery(query)) {
@@ -493,4 +653,3 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
     })
   }
 }
-

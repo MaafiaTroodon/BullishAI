@@ -144,8 +144,14 @@ export async function GET(req: NextRequest) {
     const chartPoints = Array.isArray(chart?.data) ? chart.data : []
     const trendPct = computeTrendPct(chartPoints)
     const volatilityPct = computeVolatilityPct(chartPoints)
-    const recentLows = chartPoints.slice(-20).map(normalizeLow).filter((v) => Number.isFinite(v) && v > 0)
-    const recentHighs = chartPoints.slice(-20).map(normalizeHigh).filter((v) => Number.isFinite(v) && v > 0)
+    const recentLows = chartPoints
+      .slice(-20)
+      .map(normalizeLow)
+      .filter((v: number) => Number.isFinite(v) && v > 0)
+    const recentHighs = chartPoints
+      .slice(-20)
+      .map(normalizeHigh)
+      .filter((v: number) => Number.isFinite(v) && v > 0)
     const recentLow = recentLows.length ? Math.min(...recentLows) : undefined
     const recentHigh = recentHighs.length ? Math.max(...recentHighs) : undefined
 

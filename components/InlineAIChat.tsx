@@ -221,6 +221,15 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       }
 
       setMessages((prev) => [...prev, botMessage])
+      if (data.trade?.status === 'executed') {
+        showToast(data.trade.summary || 'Trade executed.', 'success')
+        try {
+          window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: data.trade.symbol } }))
+          window.dispatchEvent(new CustomEvent('walletUpdated'))
+        } catch {}
+      } else if (data.trade?.status === 'rejected') {
+        showToast(data.trade.message || 'Trade rejected.', 'error')
+      }
       if (data.followUpContext) {
         setLastFollowUpContext({
           ...data.followUpContext,
@@ -414,78 +423,6 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
               </div>
             )}
             <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick Trade */}
-          <div className="border-t border-slate-700 bg-slate-800/70 backdrop-blur flex-shrink-0">
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-200">Quick Trade</div>
-                  <div className="text-xs text-slate-500">Buy or sell in your demo portfolio.</div>
-                </div>
-                <div className="text-xs text-slate-400">
-                  Wallet: ${walletBalance.toFixed(2)}
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[120px_1fr_160px_160px_120px]">
-                <div className="flex bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setTradeMode('buy')}
-                    className={`flex-1 py-2 text-xs font-semibold ${tradeMode === 'buy' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-                  >
-                    Buy
-                  </button>
-                  <button
-                    onClick={() => setTradeMode('sell')}
-                    className={`flex-1 py-2 text-xs font-semibold ${tradeMode === 'sell' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-                  >
-                    Sell
-                  </button>
-                </div>
-                <input
-                  value={tradeSymbol}
-                  onChange={(e) => setTradeSymbol(e.target.value.toUpperCase())}
-                  placeholder="Symbol (AAPL)"
-                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <div className="flex bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setTradeInputMode('dollars')}
-                    className={`flex-1 py-2 text-xs font-semibold ${tradeInputMode === 'dollars' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-                  >
-                    $
-                  </button>
-                  <button
-                    onClick={() => setTradeInputMode('shares')}
-                    className={`flex-1 py-2 text-xs font-semibold ${tradeInputMode === 'shares' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-                  >
-                    Shares
-                  </button>
-                </div>
-                <input
-                  value={tradeAmount}
-                  onChange={(e) => setTradeAmount(e.target.value)}
-                  placeholder={tradeInputMode === 'dollars' ? 'Amount (200)' : 'Shares (1)'}
-                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={submitTrade}
-                  disabled={!isLoggedIn || isTradeSubmitting}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg px-3 py-2 text-sm font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {tradeMode === 'buy' ? 'Place Buy' : 'Place Sell'}
-                </button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400">
-                <span>Price: {currentPrice ? `$${currentPrice.toFixed(2)}` : '—'}</span>
-                <span>Est. shares: {tradeShares > 0 ? tradeShares.toFixed(4) : '—'}</span>
-                <span>Est. cost: {estCost > 0 ? `$${estCost.toFixed(2)}` : '—'}</span>
-                {tradeMode === 'sell' && normalizedTradeSymbol && (
-                  <span>Available: {availableShares.toFixed(4)} shares</span>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Preset Questions - Static at Bottom (like AInvest) */}
