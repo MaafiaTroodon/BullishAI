@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Send, Sparkles, TrendingUp, TrendingDown, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { chatPresets, getPresetsByCategory, ChatPreset } from '@/lib/chat-presets'
-import useSWR, { useSWRConfig } from 'swr'
-import { showToast, showToastWithAction } from '@/components/Toast'
+import { showToast } from '@/components/Toast'
 // Removed AIInsightsToolbar - everything is conversational now
 
 interface Message {
@@ -35,63 +34,9 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [selectedCategory, setSelectedCategory] = useState<'quick-insights' | 'recommended' | 'technical' | 'all'>('all')
   const [lastPresetId, setLastPresetId] = useState<string | null>(null)
   const [lastFollowUpContext, setLastFollowUpContext] = useState<any>(null)
-  const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy')
-  const [tradeInputMode, setTradeInputMode] = useState<'dollars' | 'shares'>('dollars')
-  const [tradeSymbol, setTradeSymbol] = useState('')
-  const [tradeAmount, setTradeAmount] = useState('')
-  const [isTradeSubmitting, setIsTradeSubmitting] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { mutate: globalMutate } = useSWRConfig()
-
-  const portfolioFetcher = (url: string) => fetch(url).then((r) => r.json())
-  const quoteFetcher = (url: string) => fetch(url).then((r) => r.json())
-
-  const { data: portfolioData } = useSWR(
-    isLoggedIn ? '/api/portfolio?enrich=1' : null,
-    portfolioFetcher,
-    { refreshInterval: isLoggedIn ? 3000 : 0, revalidateIfStale: true, shouldRetryOnError: false }
-  )
-
-  const normalizedTradeSymbol = tradeSymbol.trim().toUpperCase()
-  const { data: tradeQuote } = useSWR(
-    normalizedTradeSymbol ? `/api/quote?symbol=${normalizedTradeSymbol}` : null,
-    quoteFetcher,
-    { refreshInterval: normalizedTradeSymbol ? 5000 : 0, revalidateIfStale: true }
-  )
-
-  const currentPrice = useMemo(() => {
-    const price = Number(tradeQuote?.price || 0)
-    return Number.isFinite(price) ? price : 0
-  }, [tradeQuote])
-
-  const holdingsMap = useMemo(() => {
-    const map: Record<string, number> = {}
-    const items = portfolioData?.items || []
-    for (const item of items) {
-      const symbol = String(item.symbol || '').toUpperCase()
-      if (symbol) map[symbol] = Number(item.totalShares || 0)
-    }
-    return map
-  }, [portfolioData?.items])
-
-  const availableShares = normalizedTradeSymbol ? (holdingsMap[normalizedTradeSymbol] || 0) : 0
-
-  const parsedAmount = Number(tradeAmount)
-  const tradeShares = useMemo(() => {
-    if (!currentPrice || !parsedAmount || parsedAmount <= 0) return 0
-    if (tradeInputMode === 'shares') return parsedAmount
-    return parsedAmount / currentPrice
-  }, [currentPrice, parsedAmount, tradeInputMode])
-
-  const estCost = useMemo(() => {
-    if (!currentPrice || tradeShares <= 0) return 0
-    return tradeInputMode === 'dollars' ? parsedAmount : tradeShares * currentPrice
-  }, [currentPrice, tradeShares, parsedAmount, tradeInputMode])
-
-  const walletBalance = portfolioData?.wallet?.balance ?? 0
-  const insufficientFunds = tradeMode === 'buy' && estCost > 0 && walletBalance < estCost
 
   // Load chat history from localStorage
   useEffect(() => {
@@ -332,64 +277,6 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     }
     setIsExpanded(true)
     setTimeout(() => inputRef.current?.focus(), 100)
-  }
-
-  const submitTrade = async () => {
-    if (!normalizedTradeSymbol) {
-      showToast('Enter a symbol first.', 'error')
-      return
-    }
-    if (!currentPrice || tradeShares <= 0) {
-      showToast('Enter a valid amount.', 'error')
-      return
-    }
-    if (tradeMode === 'buy' && insufficientFunds) {
-      showToastWithAction('Not enough balance. Please deposit funds to your wallet.', 'error', 'Deposit', '/wallet')
-      return
-    }
-    if (tradeMode === 'sell') {
-      if (!availableShares || tradeShares > availableShares) {
-        showToast(`Not enough shares to sell. You have ${availableShares.toFixed(4)} shares.`, 'error')
-        return
-      }
-    }
-
-    setIsTradeSubmitting(true)
-    try {
-      const res = await fetch('/api/portfolio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: normalizedTradeSymbol,
-          action: tradeMode,
-          price: currentPrice,
-          quantity: tradeShares,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        showToast(data?.error || 'Trade failed', 'error')
-        return
-      }
-
-      globalMutate('/api/portfolio?enrich=1')
-      globalMutate('/api/wallet')
-      try {
-        window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: normalizedTradeSymbol } }))
-        window.dispatchEvent(new CustomEvent('walletUpdated'))
-      } catch {}
-
-      showToast(
-        `${tradeMode === 'buy' ? 'Bought' : 'Sold'} ${tradeShares.toFixed(4)} ${normalizedTradeSymbol} @ $${currentPrice.toFixed(2)}`,
-        'success'
-      )
-      setTradeAmount('')
-    } catch (error) {
-      console.error('Trade error:', error)
-      showToast('Trade failed. Please try again.', 'error')
-    } finally {
-      setIsTradeSubmitting(false)
-    }
   }
 
   return (
