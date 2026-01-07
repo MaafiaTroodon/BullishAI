@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Send, Sparkles, TrendingUp, TrendingDown, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { chatPresets, getPresetsByCategory, ChatPreset } from '@/lib/chat-presets'
+import useSWR, { useSWRConfig } from 'swr'
+import { showToast, showToastWithAction } from '@/components/Toast'
 // Removed AIInsightsToolbar - everything is conversational now
 
 interface Message {
@@ -33,9 +35,63 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [selectedCategory, setSelectedCategory] = useState<'quick-insights' | 'recommended' | 'technical' | 'all'>('all')
   const [lastPresetId, setLastPresetId] = useState<string | null>(null)
   const [lastFollowUpContext, setLastFollowUpContext] = useState<any>(null)
+  const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy')
+  const [tradeInputMode, setTradeInputMode] = useState<'dollars' | 'shares'>('dollars')
+  const [tradeSymbol, setTradeSymbol] = useState('')
+  const [tradeAmount, setTradeAmount] = useState('')
+  const [isTradeSubmitting, setIsTradeSubmitting] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { mutate: globalMutate } = useSWRConfig()
+
+  const portfolioFetcher = (url: string) => fetch(url).then((r) => r.json())
+  const quoteFetcher = (url: string) => fetch(url).then((r) => r.json())
+
+  const { data: portfolioData } = useSWR(
+    isLoggedIn ? '/api/portfolio?enrich=1' : null,
+    portfolioFetcher,
+    { refreshInterval: isLoggedIn ? 3000 : 0, revalidateIfStale: true, shouldRetryOnError: false }
+  )
+
+  const normalizedTradeSymbol = tradeSymbol.trim().toUpperCase()
+  const { data: tradeQuote } = useSWR(
+    normalizedTradeSymbol ? `/api/quote?symbol=${normalizedTradeSymbol}` : null,
+    quoteFetcher,
+    { refreshInterval: normalizedTradeSymbol ? 5000 : 0, revalidateIfStale: true }
+  )
+
+  const currentPrice = useMemo(() => {
+    const price = Number(tradeQuote?.price || 0)
+    return Number.isFinite(price) ? price : 0
+  }, [tradeQuote])
+
+  const holdingsMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    const items = portfolioData?.items || []
+    for (const item of items) {
+      const symbol = String(item.symbol || '').toUpperCase()
+      if (symbol) map[symbol] = Number(item.totalShares || 0)
+    }
+    return map
+  }, [portfolioData?.items])
+
+  const availableShares = normalizedTradeSymbol ? (holdingsMap[normalizedTradeSymbol] || 0) : 0
+
+  const parsedAmount = Number(tradeAmount)
+  const tradeShares = useMemo(() => {
+    if (!currentPrice || !parsedAmount || parsedAmount <= 0) return 0
+    if (tradeInputMode === 'shares') return parsedAmount
+    return parsedAmount / currentPrice
+  }, [currentPrice, parsedAmount, tradeInputMode])
+
+  const estCost = useMemo(() => {
+    if (!currentPrice || tradeShares <= 0) return 0
+    return tradeInputMode === 'dollars' ? parsedAmount : tradeShares * currentPrice
+  }, [currentPrice, tradeShares, parsedAmount, tradeInputMode])
+
+  const walletBalance = portfolioData?.wallet?.balance ?? 0
+  const insufficientFunds = tradeMode === 'buy' && estCost > 0 && walletBalance < estCost
 
   // Load chat history from localStorage
   useEffect(() => {
@@ -278,6 +334,64 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
+  const submitTrade = async () => {
+    if (!normalizedTradeSymbol) {
+      showToast('Enter a symbol first.', 'error')
+      return
+    }
+    if (!currentPrice || tradeShares <= 0) {
+      showToast('Enter a valid amount.', 'error')
+      return
+    }
+    if (tradeMode === 'buy' && insufficientFunds) {
+      showToastWithAction('Not enough balance. Please deposit funds to your wallet.', 'error', 'Deposit', '/wallet')
+      return
+    }
+    if (tradeMode === 'sell') {
+      if (!availableShares || tradeShares > availableShares) {
+        showToast(`Not enough shares to sell. You have ${availableShares.toFixed(4)} shares.`, 'error')
+        return
+      }
+    }
+
+    setIsTradeSubmitting(true)
+    try {
+      const res = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: normalizedTradeSymbol,
+          action: tradeMode,
+          price: currentPrice,
+          quantity: tradeShares,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(data?.error || 'Trade failed', 'error')
+        return
+      }
+
+      globalMutate('/api/portfolio?enrich=1')
+      globalMutate('/api/wallet')
+      try {
+        window.dispatchEvent(new CustomEvent('portfolioUpdated', { detail: { symbol: normalizedTradeSymbol } }))
+        window.dispatchEvent(new CustomEvent('walletUpdated'))
+      } catch {}
+
+      showToast(
+        `${tradeMode === 'buy' ? 'Bought' : 'Sold'} ${tradeShares.toFixed(4)} ${normalizedTradeSymbol} @ $${currentPrice.toFixed(2)}`,
+        'success'
+      )
+      setTradeAmount('')
+    } catch (error) {
+      console.error('Trade error:', error)
+      showToast('Trade failed. Please try again.', 'error')
+    } finally {
+      setIsTradeSubmitting(false)
+    }
+  }
+
   return (
     <div className={`transition-all duration-500 ease-out ${
       isExpanded ? 'h-auto' : 'h-auto'
@@ -413,6 +527,78 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
               </div>
             )}
             <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick Trade */}
+          <div className="border-t border-slate-700 bg-slate-800/70 backdrop-blur flex-shrink-0">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-200">Quick Trade</div>
+                  <div className="text-xs text-slate-500">Buy or sell in your demo portfolio.</div>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Wallet: ${walletBalance.toFixed(2)}
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[120px_1fr_160px_160px_120px]">
+                <div className="flex bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setTradeMode('buy')}
+                    className={`flex-1 py-2 text-xs font-semibold ${tradeMode === 'buy' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    Buy
+                  </button>
+                  <button
+                    onClick={() => setTradeMode('sell')}
+                    className={`flex-1 py-2 text-xs font-semibold ${tradeMode === 'sell' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    Sell
+                  </button>
+                </div>
+                <input
+                  value={tradeSymbol}
+                  onChange={(e) => setTradeSymbol(e.target.value.toUpperCase())}
+                  placeholder="Symbol (AAPL)"
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setTradeInputMode('dollars')}
+                    className={`flex-1 py-2 text-xs font-semibold ${tradeInputMode === 'dollars' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    $
+                  </button>
+                  <button
+                    onClick={() => setTradeInputMode('shares')}
+                    className={`flex-1 py-2 text-xs font-semibold ${tradeInputMode === 'shares' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    Shares
+                  </button>
+                </div>
+                <input
+                  value={tradeAmount}
+                  onChange={(e) => setTradeAmount(e.target.value)}
+                  placeholder={tradeInputMode === 'dollars' ? 'Amount (200)' : 'Shares (1)'}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={submitTrade}
+                  disabled={!isLoggedIn || isTradeSubmitting}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg px-3 py-2 text-sm font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {tradeMode === 'buy' ? 'Place Buy' : 'Place Sell'}
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400">
+                <span>Price: {currentPrice ? `$${currentPrice.toFixed(2)}` : '—'}</span>
+                <span>Est. shares: {tradeShares > 0 ? tradeShares.toFixed(4) : '—'}</span>
+                <span>Est. cost: {estCost > 0 ? `$${estCost.toFixed(2)}` : '—'}</span>
+                {tradeMode === 'sell' && normalizedTradeSymbol && (
+                  <span>Available: {availableShares.toFixed(4)} shares</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Preset Questions - Static at Bottom (like AInvest) */}
