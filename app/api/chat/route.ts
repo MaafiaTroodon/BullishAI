@@ -411,6 +411,7 @@ export async function POST(req: NextRequest) {
             action: tradeIntent.action,
             price,
             quantity,
+            note: tradeIntent.action === 'buy' ? 'Bought via AI agent' : 'Sold via AI agent',
           }),
         })
         const tradeJson = await tradeRes.json().catch(() => null)

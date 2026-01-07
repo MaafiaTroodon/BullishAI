@@ -429,6 +429,11 @@ function HistoryPageContent() {
                             <div className="text-xs text-slate-500">
                               {formatETTime(new Date(t.timestamp || 0))}
                             </div>
+                            {activeTab === 'trades' && t.note && (
+                              <div className="text-xs text-slate-400 mt-1">
+                                {t.note}
+                              </div>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className={`font-bold ${activeTab === 'wallet' && t.action === 'deposit' ? 'text-green-400' : activeTab === 'wallet' ? 'text-red-400' : 'text-white'}`}>
@@ -473,4 +478,3 @@ export default function HistoryPage() {
     </Suspense>
   )
 }
-
