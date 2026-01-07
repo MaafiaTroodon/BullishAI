@@ -115,18 +115,45 @@ Use ONLY the provided context for numbers. Be concise, factual, and cite specifi
 
     const systemPrompt = `You are a market analyst providing quick insights. Use ONLY numbers from context. Be concise, factual, and cite specific numbers.`
 
+    const buildSnapshotFallback = () => {
+      const spy = context.marketData?.indices?.SPY
+      const qqq = context.marketData?.indices?.QQQ
+      const dia = context.marketData?.indices?.DIA
+      const iwm = context.marketData?.indices?.IWM
+      const vix = context.marketData?.indices?.VIX
+      const avgChange = [spy, qqq, dia, iwm]
+        .map((idx) => idx?.changePercent)
+        .filter((v): v is number => typeof v === 'number')
+      const avg =
+        avgChange.length ? avgChange.reduce((acc, v) => acc + v, 0) / avgChange.length : 0
+      const sentiment = avg > 0.4 ? 'bullish' : avg < -0.4 ? 'bearish' : 'neutral'
+      const vixNote =
+        typeof vix?.changePercent === 'number'
+          ? `VIX ${vix.changePercent >= 0 ? 'up' : 'down'} ${Math.abs(vix.changePercent).toFixed(2)}%`
+          : 'Volatility data mixed'
+
+      return `US indices are ${sentiment} with average moves around ${avg.toFixed(
+        2
+      )}%. ${vixNote}. Market breadth is ${breadth?.advancers ? `${breadth.advancers} advancers vs ${breadth.decliners} decliners` : 'mixed'}.`
+    }
+
     let snapshot = 'Market data unavailable.'
     let provider = 'groq-llama'
     let latency = 0
     
     try {
-      const response = await routeAIQuery(query, context, systemPrompt)
+      const response = await routeAIQuery(query, context, systemPrompt, undefined, 'groq-llama')
       snapshot = response.answer || snapshot
       provider = response.model || provider
       latency = response.latency || 0
+      if (response.model === 'gemini' && response.metadata?.fallback) {
+        snapshot = buildSnapshotFallback()
+        provider = 'deterministic'
+      }
     } catch (error) {
       // Fallback snapshot if LLM fails
-      snapshot = 'Market analysis unavailable. Please check back later.'
+      snapshot = buildSnapshotFallback()
+      provider = 'deterministic'
     }
 
     // Extract top 3 tickers from movers with deterministic tags
@@ -193,4 +220,3 @@ Use ONLY the provided context for numbers. Be concise, factual, and cite specifi
     )
   }
 }
-

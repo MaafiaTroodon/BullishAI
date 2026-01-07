@@ -124,19 +124,27 @@ export default function TopPicksPage() {
                         
                         <div className="mb-3">
                           <span className="px-2 py-1 bg-indigo-600/20 text-indigo-400 text-xs font-semibold rounded">
-                            {selectedTheme === 'value' ? 'Undervalued' : 
-                             selectedTheme === 'quality' ? 'Consistent EPS' :
-                             selectedTheme === 'momentum' ? 'High Momentum' : 
-                             selectedTheme === 'dividend' ? `High Yield (${stock.dividend_yield?.toFixed(1)}%)` : 'Recommended'}
+                            {selectedTheme === 'value'
+                              ? (stock.valueLabel || 'Value')
+                              : selectedTheme === 'quality'
+                              ? (stock.qualityLabel || 'Quality')
+                              : selectedTheme === 'momentum'
+                              ? (stock.momentumLabel || 'Momentum')
+                              : selectedTheme === 'dividend'
+                              ? (stock.dividendLabel || (stock.dividend_yield ? `Yield ${stock.dividend_yield.toFixed(1)}%` : 'Dividend'))
+                              : 'Recommended'}
                           </span>
                         </div>
                         
                         <p className="text-sm text-slate-300 leading-relaxed">
-                          {stock.rationale || 
-                           (selectedTheme === 'value' ? 'Strong value metrics with quality fundamentals' :
-                            selectedTheme === 'momentum' ? `5-day momentum: ${stock.momentum_5d?.toFixed(2)}%` :
-                            selectedTheme === 'dividend' ? `Dividend yield: ${stock.dividend_yield?.toFixed(1)}% with high relative strength` :
-                            'Strong fundamentals and positive momentum')}
+                          {stock.rationale ||
+                            (selectedTheme === 'value'
+                              ? 'Valuation is in-line with peers based on available fundamentals.'
+                              : selectedTheme === 'momentum'
+                              ? `Recent momentum: ${stock.momentum_5d?.toFixed(2)}%`
+                              : selectedTheme === 'dividend'
+                              ? `Dividend yield: ${stock.dividend_yield?.toFixed(1)}% with stable payouts`
+                              : 'Strong fundamentals with steady performance.')}
                         </p>
                       </div>
                     </Link>

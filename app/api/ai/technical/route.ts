@@ -116,13 +116,34 @@ export async function GET(req: NextRequest) {
 
 Use ONLY the provided context for numbers. Be concise and factual.`
 
-    let thesis = 'Technical analysis based on current market data.'
-    let risk = 'Past performance does not guarantee future results.'
+    const fallbackThesis = () => {
+      const trend = calc.trend.toLowerCase()
+      const momentum = calc.momentum_score
+      if (trend === 'up' && momentum >= 60) {
+        return `${symbol} shows a constructive uptrend with above-average momentum. Buyers are holding recent gains.`
+      }
+      if (trend === 'down' && momentum <= 40) {
+        return `${symbol} remains in a weak trend with soft momentum. Sellers still control near-term direction.`
+      }
+      return `${symbol} is range-bound with mixed momentum. Price is oscillating between support and resistance.`
+    }
+    const fallbackRisk = () => {
+      if (calc.momentum_score >= 65) {
+        return 'Momentum can fade quickly if volume dries up near resistance.'
+      }
+      if (calc.momentum_score <= 35) {
+        return 'Downside follow-through remains possible if support breaks.'
+      }
+      return 'Choppy price action can trigger false breakouts in a range.'
+    }
+
+    let thesis = fallbackThesis()
+    let risk = fallbackRisk()
     let provider = 'groq-llama'
     let latency = 0
 
     try {
-      const response = await routeAIQuery(query, context)
+      const response = await routeAIQuery(query, context, undefined, undefined, 'groq-llama')
       // Try to parse thesis and risk from response
       const answer = response.answer || ''
       const lines = answer.split('\n').filter(l => l.trim())
@@ -132,12 +153,19 @@ Use ONLY the provided context for numbers. Be concise and factual.`
       } else if (lines.length === 1) {
         thesis = lines[0].trim()
       }
-      provider = response.model || provider
+      if (response.model === 'gemini' && response.metadata?.fallback) {
+        thesis = fallbackThesis()
+        risk = fallbackRisk()
+        provider = 'deterministic'
+      } else {
+        provider = response.model || provider
+      }
       latency = response.latency || 0
     } catch (error) {
       // Fallback explanations if LLM fails
-      thesis = `Technical analysis for ${symbol} based on current market data.`
-      risk = 'Past performance does not guarantee future results.'
+      thesis = fallbackThesis()
+      risk = fallbackRisk()
+      provider = 'deterministic'
     }
 
     const latency_ms = latency || (Date.now() - startTime)
@@ -170,4 +198,3 @@ Use ONLY the provided context for numbers. Be concise and factual.`
     )
   }
 }
-

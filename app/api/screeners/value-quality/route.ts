@@ -6,11 +6,6 @@ export async function GET(req: NextRequest) {
     const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
     const popular = await popularRes.json().catch(() => ({ stocks: [] }))
 
-    const symbols = popular.stocks?.slice(0, 50).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL'
-    
-    const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
-    const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
-
     // Always use fallback stocks to ensure we have proper data (US + Canadian)
     const fallbackStocks = [
       // US stocks
@@ -37,60 +32,87 @@ export async function GET(req: NextRequest) {
       { symbol: 'ATD.TO', name: 'Alimentation Couche-Tard' },
     ]
     
-    // Use quotes if they have valid symbols, otherwise use fallback
-    let workingQuotes = (quotes.quotes || []).filter((q: any) => q.symbol && q.symbol !== 'UNKNOWN')
-    if (workingQuotes.length === 0) {
-      workingQuotes = fallbackStocks.map(stock => ({
-        symbol: stock.symbol,
-        data: { price: 100 + Math.random() * 200, dp: (Math.random() - 0.5) * 5 },
-        name: stock.name,
-      }))
-    }
-    
-    // Ensure all quotes have symbol and name
-    workingQuotes = workingQuotes.map((q: any) => ({
-      ...q,
-      symbol: q.symbol || 'UNKNOWN',
-      name: q.name || q.symbol || 'Unknown Company',
-    })).filter((q: any) => q.symbol && q.symbol !== 'UNKNOWN')
-    
-    // Filter for value + quality (PE < 15, mock ROE > 15%, mock revenue growth > 10%)
-    const stocks = workingQuotes
-      .map((q: any, idx: number) => {
-        // Handle both formats - ensure we get symbol and name
-        const symbol = q.symbol || 'UNKNOWN'
-        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
-        // Try to get name from multiple possible locations
-        const name = q.name || q.data?.name || q.companyName || symbol
-        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
-        
-        // Generate consistent mock data based on symbol to ensure we get results
-        // Use a seed based on symbol to make it deterministic
-        const seed = (symbol || 'UNKNOWN').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
-        const random1 = (seed % 100) / 100
-        const random2 = ((seed * 2) % 100) / 100
-        const random3 = ((seed * 3) % 100) / 100
-        
-        // Generate PE between 8-14 (value range)
-        const pe = 8 + random1 * 6
-        // Generate ROE between 15-25% (quality range)
-        const roe = 15 + random2 * 10
-        // Generate revenue growth between 10-20% (growth range)
-        const revenueGrowth = 10 + random3 * 10
-        
-        return {
-          symbol: symbol,
-          name: name || symbol, // Ensure name is never empty
-          pe,
-          roe,
-          revenue_growth: revenueGrowth,
-          quality_score: (roe * 0.4 + revenueGrowth * 0.3 + (30 - pe) * 0.3), // Higher is better
-          price: price || 100 + Math.random() * 200, // Ensure price is always set
-          change: changePercent,
+    const symbols = (popular.stocks || [])
+      .slice(0, 30)
+      .map((s: any) => s.symbol)
+      .filter(Boolean)
+
+    const symbolList = [...new Set([...symbols, ...fallbackStocks.map((s) => s.symbol)])].slice(0, 20)
+
+    const stockDetails = await Promise.all(
+      symbolList.map(async (symbol) => {
+        try {
+          const res = await fetch(`${req.nextUrl.origin}/api/stocks/${symbol}`)
+          const data = await res.json().catch(() => null)
+          if (!data?.quote) return null
+          return {
+            symbol: data.symbol || symbol,
+            name: data.companyName || symbol,
+            price: data.quote.price || 0,
+            change: data.quote.changePct || 0,
+            peRatio: data.quote.peRatio ?? data.fundamentals?.peRatio ?? null,
+            week52High: data.quote.week52High ?? data.fundamentals?.week52High ?? null,
+            week52Low: data.quote.week52Low ?? data.fundamentals?.week52Low ?? null,
+            marketCap: data.quote.marketCap ?? data.fundamentals?.marketCap ?? null,
+            dividendYield: data.fundamentals?.dividendYield ?? null,
+          }
+        } catch {
+          return null
         }
       })
-      .filter((s: any) => s.price > 0)
-      .sort((a: any, b: any) => b.quality_score - a.quality_score)
+    )
+
+    const stocks = stockDetails
+      .filter((item): item is NonNullable<typeof item> => !!item && item.price > 0)
+      .map((item) => {
+        const pe = item.peRatio
+        const week52High = item.week52High
+        const price = item.price
+        const discount = week52High ? (week52High - price) / week52High : null
+        let valueLabel = 'Limited data'
+        let qualityLabel = 'Limited data'
+        let rationale = 'Limited valuation data available.'
+
+        if (typeof pe === 'number') {
+          if (pe <= 18 && discount != null && discount >= 0.1) {
+            valueLabel = 'Undervalued'
+          } else if (pe <= 28) {
+            valueLabel = 'Fairly Valued'
+          } else {
+            valueLabel = 'Premium'
+          }
+          rationale = `P/E ${pe.toFixed(1)}${week52High ? `, 52W high $${week52High.toFixed(2)}` : ''}.`
+        }
+
+        const cap = item.marketCap || 0
+        if (cap >= 200_000_000_000) {
+          qualityLabel = 'High Quality'
+        } else if (cap >= 50_000_000_000) {
+          qualityLabel = 'Stable'
+        } else if (cap > 0) {
+          qualityLabel = 'Emerging'
+        }
+
+        if (item.dividendYield != null && Number.isFinite(item.dividendYield)) {
+          rationale += ` Dividend yield ${item.dividendYield.toFixed(2)}%.`
+        }
+
+        return {
+          symbol: item.symbol,
+          name: item.name,
+          price: item.price,
+          change: item.change,
+          peRatio: item.peRatio,
+          week52High: item.week52High,
+          week52Low: item.week52Low,
+          marketCap: item.marketCap,
+          dividend_yield: item.dividendYield,
+          valueLabel,
+          qualityLabel,
+          rationale,
+        }
+      })
+      .sort((a, b) => (a.peRatio ?? 99) - (b.peRatio ?? 99))
       .slice(0, 10)
 
     return NextResponse.json({
@@ -105,4 +127,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-

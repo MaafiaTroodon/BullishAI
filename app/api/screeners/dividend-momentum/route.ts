@@ -129,18 +129,15 @@ export async function GET(req: NextRequest) {
         } else if (dividendData && dividendData.amount > 0 && price > 0) {
           // Calculate yield from amount
           dividendYield = (dividendData.amount * (dividendData.frequency === 'QUARTERLY' ? 4 : dividendData.frequency === 'MONTHLY' ? 12 : 1)) / price * 100
-        } else {
-          // Fallback: use deterministic calculation based on symbol
-          const seed = symbol.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
-          const random1 = (seed % 100) / 100
-          // Only assign yield to known dividend stocks
-          if (DIVIDEND_STOCKS.some(ds => symbol.includes(ds.replace('.TO', '')))) {
-            dividendYield = 2.5 + random1 * 3 // 2.5-5.5%
-          }
         }
         
         const relativeStrength = Math.abs(changePercent) + (dividendYield > 0 ? 2 : 0)
         
+        let dividendLabel = 'Dividend'
+        if (dividendYield >= 4) dividendLabel = 'High Yield'
+        else if (dividendYield >= 2) dividendLabel = 'Steady Yield'
+        else if (dividendYield > 0) dividendLabel = 'Low Yield'
+
         return {
           symbol: parsed.normalizedSymbol || symbol,
           name: name || symbol,
@@ -153,6 +150,8 @@ export async function GET(req: NextRequest) {
           change: changePercent,
           nextExDate: dividendData?.nextExDate,
           frequency: dividendData?.frequency,
+          dividendLabel,
+          rationale: dividendYield > 0 ? `Dividend yield ${dividendYield.toFixed(2)}%.` : 'Dividend yield unavailable.',
         }
       })
       .filter((s: any) => s.price > 0 && s.dividend_yield >= minYield * 100) // minYield is decimal
@@ -177,5 +176,4 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-
 

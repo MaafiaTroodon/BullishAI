@@ -57,9 +57,21 @@ export async function GET(req: NextRequest) {
       if (quote.symbol) quoteMap.set(String(quote.symbol).toUpperCase(), quote)
     }
 
-    const dividendItems = Array.isArray(dividendJson.items) ? dividendJson.items : []
-    const dividendMap = new Map<string, any[]>()
-    dividendItems.forEach((item) => {
+    type DividendCalendarItem = {
+      symbol?: string
+      exDate?: string
+      payDate?: string
+      date?: string
+      amount?: number | string
+      yield?: number | string
+      frequency?: string
+    }
+
+    const dividendItems: DividendCalendarItem[] = Array.isArray(dividendJson.items)
+      ? (dividendJson.items as DividendCalendarItem[])
+      : []
+    const dividendMap = new Map<string, DividendCalendarItem[]>()
+    dividendItems.forEach((item: DividendCalendarItem) => {
       const symbol = String(item.symbol || '').toUpperCase()
       if (!symbol) return
       if (!dividendMap.has(symbol)) dividendMap.set(symbol, [])

@@ -9,11 +9,6 @@ export async function GET(req: NextRequest) {
     const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
     const popular = await popularRes.json().catch(() => ({ stocks: [] }))
 
-    const symbols = popular.stocks?.slice(0, 50).map((s: any) => s.symbol).join(',') || 'AAPL,MSFT,GOOGL'
-    
-    const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
-    const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
-
     // Always use fallback stocks to ensure we have proper data (US + Canadian)
     const fallbackStocks = [
       // US stocks
@@ -40,63 +35,57 @@ export async function GET(req: NextRequest) {
       { symbol: 'ATD.TO', name: 'Alimentation Couche-Tard' },
     ]
     
-    // Use quotes if they have valid symbols, otherwise use fallback
-    let workingQuotes = (quotes.quotes || []).filter((q: any) => q.symbol && q.symbol !== 'UNKNOWN')
-    if (workingQuotes.length === 0) {
-      workingQuotes = fallbackStocks.map(stock => ({
-        symbol: stock.symbol,
-        data: { price: 100 + Math.random() * 200, dp: (Math.random() - 0.5) * 5, volume: 1000000 },
-        name: stock.name,
-      }))
-    }
-    
-    // Ensure all quotes have symbol and name
-    workingQuotes = workingQuotes.map((q: any) => ({
-      ...q,
-      symbol: q.symbol || 'UNKNOWN',
-      name: q.name || q.data?.name || q.symbol || 'Unknown Company',
-    })).filter((q: any) => q.symbol && q.symbol !== 'UNKNOWN')
+    const symbols = (popular.stocks || [])
+      .slice(0, 30)
+      .map((s: any) => s.symbol)
+      .filter(Boolean)
 
-    // Calculate momentum (simplified - in production, use actual historical data)
-    const stocks = workingQuotes
-      .map((q: any) => {
-        // Handle both formats
-        const symbol = q.symbol || 'UNKNOWN'
-        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
-        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
-        const volume = q.data ? (q.data.volume || 0) : (q.volume || 0)
-        const name = q.name || q.data?.name || q.companyName || symbol
-        
-        // Mock momentum calculation
-        const momentum5d = changePercent * (window === '5d' ? 1.2 : 1)
-        
-        return {
-          symbol: symbol,
-          name: name || symbol,
-          momentum_5d: momentum5d,
-          volume,
-          price: price || 100 + Math.random() * 200,
-          change: changePercent,
+    const symbolList = [...new Set([...symbols, ...fallbackStocks.map((s) => s.symbol)])].slice(0, 18)
+
+    const stocks = await Promise.all(
+      symbolList.map(async (symbol) => {
+        try {
+          const [quoteRes, chartRes] = await Promise.all([
+            fetch(`${req.nextUrl.origin}/api/quote?symbol=${symbol}`),
+            fetch(`${req.nextUrl.origin}/api/chart?symbol=${symbol}&range=1m`),
+          ])
+          const quote = await quoteRes.json().catch(() => null)
+          const chart = await chartRes.json().catch(() => null)
+          const data = Array.isArray(chart?.data) ? chart.data : []
+          const closes = data
+            .map((c: any) => (typeof c.c === 'number' ? c.c : c.close))
+            .filter((n: number) => Number.isFinite(n))
+          if (!quote?.price) return null
+          const last = quote.price
+          const priorIdx = closes.length >= 6 ? closes.length - 6 : 0
+          const base = closes[priorIdx] || last
+          const momentum5d = base ? ((last - base) / base) * 100 : quote.changePercent || 0
+          let momentumLabel = 'Steady Momentum'
+          if (momentum5d >= 3) momentumLabel = 'Strong Momentum'
+          else if (momentum5d <= -3) momentumLabel = 'Weak Momentum'
+
+          return {
+            symbol,
+            name: quote?.name || symbol,
+            momentum_5d: momentum5d,
+            price: last,
+            change: quote.changePercent || 0,
+            momentumLabel,
+            rationale: `5-day momentum ${momentum5d.toFixed(2)}%.`,
+          }
+        } catch {
+          return null
         }
       })
-      .filter((s: any) => s.price > 0 && s.symbol && s.symbol !== 'UNKNOWN')
-      .sort((a: any, b: any) => b.momentum_5d - a.momentum_5d)
+    )
+
+    const filtered = stocks
+      .filter((s): s is NonNullable<typeof s> => !!s && s.price > 0)
+      .sort((a, b) => b.momentum_5d - a.momentum_5d)
       .slice(0, 10)
-    
-    // Ensure we always return at least some stocks
-    if (stocks.length === 0) {
-      stocks.push(...fallbackStocks.slice(0, 5).map((stock, idx) => ({
-        symbol: stock.symbol,
-        name: stock.name,
-        momentum_5d: (Math.random() - 0.3) * 10, // Positive momentum
-        volume: 1000000 + Math.random() * 5000000,
-        price: 100 + Math.random() * 200,
-        change: (Math.random() - 0.3) * 5,
-      })))
-    }
 
     return NextResponse.json({
-      stocks,
+      stocks: filtered,
       timestamp: Date.now(),
     })
   } catch (error: any) {
@@ -107,4 +96,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-
