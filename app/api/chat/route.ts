@@ -373,7 +373,7 @@ export async function POST(req: NextRequest) {
             const holding = holdings.find((item: any) => String(item.symbol || '').toUpperCase() === symbol)
             quantity = holding?.totalShares || holding?.shares || 0
           } else {
-            const walletRes = await fetch(`${req.nextUrl.origin}/api/wallet`, {
+            const walletRes = await fetch(`${req.nextUrl.origin}/api/wallet?fresh=1`, {
               headers: { cookie: req.headers.get('cookie') || '' },
               cache: 'no-store',
             })
@@ -445,7 +445,12 @@ export async function POST(req: NextRequest) {
         const totalCost = price * quantity
         const newBalance = Number(tradeJson?.wallet?.balance)
         const balanceLine = Number.isFinite(newBalance) ? ` New wallet balance: $${newBalance.toFixed(2)}.` : ''
-        const summary = `${tradeIntent.action === 'buy' ? 'Bought' : 'Sold'} ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)} (${tradeIntent.amountType === 'dollars' ? `$${tradeIntent.amount.toFixed(2)}` : `${tradeIntent.amount} shares`}) on ${timeLabel} ET.${balanceLine}`
+        const amountValue = tradeIntent.amount ?? (tradeIntent.amountType === 'dollars' ? totalCost : quantity)
+        const normalizedAmount = Number.isFinite(amountValue) ? amountValue : (tradeIntent.amountType === 'dollars' ? totalCost : quantity)
+        const amountLabel = tradeIntent.amountType === 'dollars'
+          ? `$${normalizedAmount.toFixed(2)}`
+          : `${normalizedAmount} shares`
+        const summary = `${tradeIntent.action === 'buy' ? 'Bought' : 'Sold'} ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)} (${amountLabel}) on ${timeLabel} ET.${balanceLine}`
 
         return NextResponse.json({
           answer: buildUnifiedResponse({
