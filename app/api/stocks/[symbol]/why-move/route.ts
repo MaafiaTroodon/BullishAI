@@ -18,9 +18,10 @@ function classifyCatalyst(text: string) {
   return 'general'
 }
 
-export async function GET(req: NextRequest, { params }: { params: { symbol: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
   try {
-    const symbol = params.symbol.toUpperCase()
+    const { symbol: rawSymbol } = await params
+    const symbol = rawSymbol.toUpperCase()
     const cacheKey = buildCacheKey('why-move', { symbol, day: new Date().toISOString().split('T')[0] })
     const cached = aiCache.get(cacheKey)
     if (cached && cached.expires > Date.now()) {

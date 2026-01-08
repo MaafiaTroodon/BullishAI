@@ -4,9 +4,10 @@ import { finnhubFetch } from '@/lib/finnhub-client'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(_req: NextRequest, { params }: { params: { symbol: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
   try {
-    const symbol = params.symbol.toUpperCase()
+    const { symbol: rawSymbol } = await params
+    const symbol = rawSymbol.toUpperCase()
     const [listRes, transcriptRes] = await Promise.all([
       finnhubFetch('stock/transcripts/list', { symbol }, { cacheSeconds: 3600 }),
       finnhubFetch('stock/transcripts', { symbol }, { cacheSeconds: 3600 }),

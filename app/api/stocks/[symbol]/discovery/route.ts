@@ -4,9 +4,10 @@ import { finnhubFetch } from '@/lib/finnhub-client'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(_req: NextRequest, { params }: { params: { symbol: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
   try {
-    const symbol = params.symbol.toUpperCase()
+    const { symbol: rawSymbol } = await params
+    const symbol = rawSymbol.toUpperCase()
     const [similarRes, themeRes, supplyRes] = await Promise.all([
       finnhubFetch('stock/similarity-index', { symbol }, { cacheSeconds: 86400 }),
       finnhubFetch('stock/investment-theme', { symbol }, { cacheSeconds: 86400 }),
