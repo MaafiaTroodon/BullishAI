@@ -501,7 +501,7 @@ export async function POST(req: NextRequest) {
     // 1. Recommended preset questions (top movers, news, earnings, etc.)
     const recommendedCheck = isRecommendedQuestion(query)
     let recommendedType: RecommendedType | null = null
-    if (followUp && previousContext?.type) {
+    if (followUp && previousContext?.type && previousContext.type !== 'trade') {
       recommendedType = previousContext.type
     } else if (presetId && PRESET_TYPE_MAP[presetId]) {
       recommendedType = PRESET_TYPE_MAP[presetId]

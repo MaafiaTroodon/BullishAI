@@ -33,7 +33,7 @@ export function GlobalNavbar() {
   
   // Use SWR with proper caching to prevent $0 flicker during navigation
   const { data: wallet, mutate: mutateWallet } = useSWR(
-    session?.user ? '/api/wallet' : null, // Only fetch when user is logged in
+    session?.user ? '/api/wallet?fresh=1' : null, // Only fetch when user is logged in
     async (url) => {
       const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error('Failed to fetch wallet')
@@ -60,7 +60,7 @@ export function GlobalNavbar() {
       // User logged out - clear all cached data
       lastBalanceRef.current = null
       // Clear SWR cache for wallet and portfolio
-      globalMutate('/api/wallet', undefined, { revalidate: false })
+      globalMutate('/api/wallet?fresh=1', undefined, { revalidate: false })
       globalMutate('/api/portfolio', undefined, { revalidate: false })
       globalMutate('/api/portfolio?enrich=1', undefined, { revalidate: false })
       globalMutate((key) => typeof key === 'string' && key.startsWith('/api/portfolio'), undefined, { revalidate: false })

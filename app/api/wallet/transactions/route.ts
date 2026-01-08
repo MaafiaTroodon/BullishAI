@@ -17,8 +17,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Ensure in-memory store is hydrated from DB for accurate balances
-    const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
-    await ensurePortfolioLoaded(userId)
+    const { ensurePortfolioLoaded, refreshPortfolioFromDB } = await import('@/lib/portfolio')
+    const url = new URL(req.url)
+    const forceFresh = url.searchParams.get('fresh') === '1'
+    if (forceFresh) {
+      await refreshPortfolioFromDB(userId)
+    } else {
+      await ensurePortfolioLoaded(userId)
+    }
     
     // User-specific cookie name to prevent cross-user data sharing
     const cookieName = `bullish_wallet_${userId}`

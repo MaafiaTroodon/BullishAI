@@ -10,10 +10,17 @@ export async function GET(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const url = new URL(req.url)
+  const forceFresh = url.searchParams.get('fresh') === '1'
   
   // Load portfolio from database first (ensures data persists across logouts)
-  const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
-  await ensurePortfolioLoaded(userId)
+  const { ensurePortfolioLoaded, refreshPortfolioFromDB } = await import('@/lib/portfolio')
+  if (forceFresh) {
+    await refreshPortfolioFromDB(userId)
+  } else {
+    await ensurePortfolioLoaded(userId)
+  }
   
   // Get current balance from in-memory store (now loaded from DB)
   // It already accounts for deposits, withdrawals, buys, and sells
@@ -63,6 +70,8 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
+    const { refreshPortfolioFromDB } = await import('@/lib/portfolio')
+    await refreshPortfolioFromDB(userId)
     const body = await req.json()
     const { action, amount } = body || {}
     
@@ -145,5 +154,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e?.message || 'wallet_error' }, { status: 400 })
   }
 }
-
 

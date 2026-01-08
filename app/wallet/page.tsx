@@ -19,7 +19,7 @@ export default function WalletPage() {
   const lastBalanceRef = useRef<number | null>(null)
   
   // Use SWR for wallet data with proper caching
-  const { data: wallet, mutate: mutateWallet } = useSWR('/api/wallet', walletFetcher, {
+  const { data: wallet, mutate: mutateWallet } = useSWR('/api/wallet?fresh=1', walletFetcher, {
     refreshInterval: 10000,
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
@@ -232,4 +232,3 @@ export default function WalletPage() {
     </div>
   )
 }
-

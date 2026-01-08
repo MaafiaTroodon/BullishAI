@@ -363,11 +363,19 @@ export async function POST(req: NextRequest) {
         // Ensure portfolio is loaded before trade
         const { ensurePortfolioLoaded } = await import('@/lib/portfolio')
         await ensurePortfolioLoaded(userId)
-        
+
+        if (process.env.NODE_ENV !== 'production') {
+          const preBalance = getWalletBalance(userId)
+          console.log('[trade] wallet before', preBalance, 'cost', input.price * input.quantity)
+        }
+
         const result = await upsertTrade(userId, input)
         
         // Get fresh snapshot of all holdings and wallet after trade
         const updatedBal = getWalletBalance(userId)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[trade] wallet after', updatedBal)
+        }
         const allPositions = listPositions(userId)
         
         // Calculate mark-to-market totals using live prices
@@ -456,5 +464,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e?.message || 'invalid_trade' }, { status: 400 })
   }
 }
-
 

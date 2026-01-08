@@ -276,6 +276,146 @@ export async function updateWalletBalanceInDB(
   }
 }
 
+export async function executeTradeAtomic(
+  userId: string,
+  trade: {
+    id: string
+    symbol: string
+    action: 'buy' | 'sell'
+    price: number
+    quantity: number
+    timestamp: number
+    note?: string
+  }
+): Promise<{
+  position: { symbol: string; totalShares: number; avgPrice: number; totalCost: number; realizedPnl: number }
+  walletBalance: number
+  transaction: { id: string; symbol: string; action: 'buy' | 'sell'; price: number; quantity: number; timestamp: number; note?: string }
+}> {
+  const portfolioId = await getOrCreatePortfolio(userId)
+  const client = await pool.connect()
+
+  const symbol = trade.symbol.toUpperCase()
+  const quantity = trade.quantity
+  const price = trade.price
+
+  try {
+    await client.query('BEGIN')
+
+    try {
+      const walletRes = await client.query(
+        'SELECT "walletBalance" FROM portfolios WHERE id = $1 FOR UPDATE',
+        [portfolioId]
+      )
+      const currentBalance = parseFloat(walletRes.rows[0]?.walletBalance) || 0
+
+      const posRes = await client.query(
+        'SELECT "totalShares", "avgPrice", "totalCost", "realizedPnl" FROM positions WHERE "portfolioId" = $1 AND symbol = $2 FOR UPDATE',
+        [portfolioId, symbol]
+      )
+      const existing = posRes.rows[0]
+      const existingShares = parseFloat(existing?.totalShares) || 0
+      const existingAvg = parseFloat(existing?.avgPrice) || 0
+      const existingCost = parseFloat(existing?.totalCost) || 0
+      const existingRealized = parseFloat(existing?.realizedPnl) || 0
+
+      let newBalance = currentBalance
+      let newShares = existingShares
+      let newAvg = existingAvg
+      let newCost = existingCost
+      let newRealized = existingRealized
+
+      if (trade.action === 'buy') {
+        const totalCost = price * quantity
+        if (currentBalance < totalCost) {
+          throw new Error('insufficient_funds')
+        }
+        newBalance = currentBalance - totalCost
+        newShares = existingShares + quantity
+        newCost = existingCost + totalCost
+        newAvg = newShares > 0 ? newCost / newShares : 0
+      } else {
+        if (quantity > existingShares) {
+          throw new Error('insufficient_shares')
+        }
+        const proceeds = price * quantity
+        newBalance = currentBalance + proceeds
+        newShares = existingShares - quantity
+        newRealized = existingRealized + (price - existingAvg) * quantity
+        newCost = existingAvg * newShares
+        newAvg = existingAvg
+      }
+
+      if (newShares <= 0) {
+        await client.query(
+          'DELETE FROM positions WHERE "portfolioId" = $1 AND symbol = $2',
+          [portfolioId, symbol]
+        )
+      } else {
+        await client.query(
+          `INSERT INTO positions (id, "portfolioId", symbol, "totalShares", "avgPrice", "totalCost", "realizedPnl", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())
+           ON CONFLICT ("portfolioId", symbol)
+           DO UPDATE SET
+             "totalShares" = EXCLUDED."totalShares",
+             "avgPrice" = EXCLUDED."avgPrice",
+             "totalCost" = EXCLUDED."totalCost",
+             "realizedPnl" = EXCLUDED."realizedPnl",
+             "updatedAt" = NOW()`,
+          [portfolioId, symbol, newShares, newAvg, newCost, newRealized]
+        )
+      }
+
+      await client.query(
+        'UPDATE portfolios SET "walletBalance" = $1, "updatedAt" = NOW() WHERE id = $2',
+        [newBalance, portfolioId]
+      )
+
+      await client.query(
+        `INSERT INTO trades (id, "portfolioId", symbol, action, price, quantity, timestamp, note, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+        [
+          trade.id,
+          portfolioId,
+          symbol,
+          trade.action,
+          price,
+          quantity,
+          new Date(trade.timestamp),
+          trade.note || null,
+        ]
+      )
+
+      await client.query('COMMIT')
+
+      return {
+        position: {
+          symbol,
+          totalShares: newShares,
+          avgPrice: newAvg,
+          totalCost: newCost,
+          realizedPnl: newRealized,
+        },
+        walletBalance: newBalance,
+        transaction: {
+          id: trade.id,
+          symbol,
+          action: trade.action,
+          price,
+          quantity,
+          timestamp: trade.timestamp,
+          note: trade.note,
+        },
+      }
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    }
+  } finally {
+    client.release()
+  }
+}
+
 /**
  * Sync all positions to database (bulk update)
  */

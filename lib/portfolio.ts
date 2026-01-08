@@ -131,6 +131,10 @@ export async function ensurePortfolioLoaded(userId: string): Promise<void> {
   }
 }
 
+export async function refreshPortfolioFromDB(userId: string): Promise<void> {
+  await loadPortfolioFromDB(userId)
+}
+
 // Initialize wallet from persisted balance (called from API routes)
 // Only initializes if user has no existing transactions (new user)
 export function initializeWalletFromBalance(userId: string, balance: number): void {
@@ -200,76 +204,46 @@ export async function mergePositions(userId: string, positions: Position[]): Pro
 }
 
 export async function upsertTrade(userId: string, input: TradeInput): Promise<{ position: Position; transaction: Transaction }> {
-  // Ensure portfolio is loaded from DB
-  await ensurePortfolioLoaded(userId)
-  
+  await refreshPortfolioFromDB(userId)
+
   const pf = getPf(userId)
   const s = input.symbol.toUpperCase()
-  const existing = pf.positions[s] || { symbol: s, totalShares: 0, avgPrice: 0, marketValue: 0, totalCost: 0, realizedPnl: 0 }
+  const transactionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  const timestamp = Date.now()
 
-  // Create transaction record with timestamp
-  const transaction: Transaction = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const { executeTradeAtomic } = await import('@/lib/db-sql')
+  const result = await executeTradeAtomic(userId, {
+    id: transactionId,
     symbol: s,
     action: input.action,
     price: input.price,
     quantity: input.quantity,
-    timestamp: Date.now(), // Store current timestamp
+    timestamp,
     note: input.note,
-  }
-  
-  // Add transaction to history
-  pf.transactions.push(transaction)
-
-  if (input.action === 'buy') {
-    const totalCost = input.price * input.quantity
-    const currentBalance = pf.walletBalance || 0
-    if (currentBalance < totalCost) {
-      throw new Error('insufficient_funds')
-    }
-    // Subtract cost from wallet (simple subtraction)
-    pf.walletBalance = currentBalance - totalCost
-    const newTotalCost = existing.totalCost + input.price * input.quantity
-    const newTotalShares = existing.totalShares + input.quantity
-    const newAvg = newTotalShares > 0 ? newTotalCost / newTotalShares : 0
-    pf.positions[s] = { ...existing, totalShares: newTotalShares, avgPrice: newAvg, totalCost: newTotalCost }
-  } else {
-    if (input.quantity > existing.totalShares) {
-      throw new Error('insufficient_shares')
-    }
-    const sellQty = input.quantity
-    const newTotalShares = existing.totalShares - sellQty
-    const realized = (input.price - existing.avgPrice) * sellQty
-    const newTotalCost = existing.avgPrice * newTotalShares
-    pf.positions[s] = { ...existing, totalShares: newTotalShares, totalCost: newTotalCost, realizedPnl: existing.realizedPnl + realized }
-    // Add proceeds to wallet (simple addition)
-    const currentBalance = pf.walletBalance || 0
-    const proceeds = input.price * sellQty
-    pf.walletBalance = currentBalance + proceeds
-  }
-
-  // Save to database (non-blocking, graceful failure)
-  Promise.all([
-    import('@/lib/db-sql').then(({ savePositionToDB }) => 
-      savePositionToDB(userId, pf.positions[s]).catch(err => {
-        console.error('Error saving position to DB:', err)
-      })
-    ),
-    import('@/lib/db-sql').then(({ saveTradeToDB }) => 
-      saveTradeToDB(userId, transaction).catch(err => {
-        console.error('Error saving trade to DB:', err)
-      })
-    ),
-    import('@/lib/db-sql').then(({ updateWalletBalanceInDB }) => 
-      updateWalletBalanceInDB(userId, pf.walletBalance).catch(err => {
-        console.error('Error updating wallet balance in DB:', err)
-      })
-    ),
-  ]).catch(() => {
-    // Silently handle import or execution errors
   })
 
-  return { position: pf.positions[s], transaction }
+  pf.walletBalance = result.walletBalance
+  if (result.position.totalShares <= 0) {
+    delete pf.positions[s]
+  } else {
+    pf.positions[s] = {
+      ...result.position,
+      marketValue: 0,
+    }
+  }
+
+  const exists = pf.transactions.some((t) => t.id === result.transaction.id)
+  if (!exists) {
+    pf.transactions.push(result.transaction)
+  }
+
+  return {
+    position: pf.positions[s] || {
+      ...result.position,
+      marketValue: 0,
+    },
+    transaction: result.transaction,
+  }
 }
 
 // Wallet helpers
@@ -324,14 +298,8 @@ export async function depositToWallet(userId: string, amount: number, method: st
     pf.walletTransactions.push(transaction)
   } catch {}
   
-  // Save to database (non-blocking, graceful failure)
-  import('@/lib/db-sql').then(({ saveWalletTransactionToDB }) => 
-    saveWalletTransactionToDB(userId, transaction).catch(err => {
-      console.error('Error saving wallet transaction to DB:', err)
-    })
-  ).catch(() => {
-    // Silently handle import errors
-  })
+  const { saveWalletTransactionToDB } = await import('@/lib/db-sql')
+  await saveWalletTransactionToDB(userId, transaction)
   
   return { balance: pf.walletBalance, transaction }
 }
@@ -382,14 +350,8 @@ export async function withdrawFromWallet(userId: string, amount: number, method:
     pf.walletTransactions.push(transaction)
   } catch {}
   
-  // Save to database (non-blocking, graceful failure)
-  import('@/lib/db-sql').then(({ saveWalletTransactionToDB }) => 
-    saveWalletTransactionToDB(userId, transaction).catch(err => {
-      console.error('Error saving wallet transaction to DB:', err)
-    })
-  ).catch(() => {
-    // Silently handle import errors
-  })
+  const { saveWalletTransactionToDB } = await import('@/lib/db-sql')
+  await saveWalletTransactionToDB(userId, transaction)
   
   return { balance: pf.walletBalance, transaction }
 }
@@ -425,5 +387,3 @@ export function syncWalletTransactions(userId: string, walletTx: Array<{ action:
   }
   pf.walletTransactions.sort((a, b) => a.timestamp - b.timestamp)
 }
-
-

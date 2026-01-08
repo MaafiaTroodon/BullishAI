@@ -36,6 +36,8 @@ export function DemoTradeBox({ symbol, price }: Props) {
   const [orderType, setOrderType] = useState<'dollars'|'shares'>('dollars')
   const [amount, setAmount] = useState<number>(0)
   const [isSubmitting, setSubmitting] = useState(false)
+  const [isSyncingBalance, setSyncingBalance] = useState(false)
+  const [latestWalletBalance, setLatestWalletBalance] = useState<number | null>(null)
   
   // Fetch portfolio data with SWR for real-time updates
   // Only fetch when user is logged in
@@ -114,11 +116,45 @@ export function DemoTradeBox({ symbol, price }: Props) {
     return orderType==='dollars' ? amount : estShares * currentPrice
   }, [amount, orderType, currentPrice, estShares])
   const walletBalance = portfolioData?.wallet?.balance ?? 0
-  const insufficientFunds = mode === 'buy' && estCost > 0 && walletBalance < estCost
+  const effectiveWalletBalance = latestWalletBalance ?? walletBalance
+  const insufficientFunds = mode === 'buy' && estCost > 0 && effectiveWalletBalance < estCost
+
+  useEffect(() => {
+    if (walletBalance !== undefined && walletBalance !== null) {
+      setLatestWalletBalance(walletBalance)
+    }
+  }, [walletBalance])
 
   async function submit() {
     if (!currentPrice || estShares<=0) return
-    if (insufficientFunds) {
+    setSyncingBalance(true)
+    let freshBalance = effectiveWalletBalance
+    try {
+      if (session?.user) {
+        const walletRes = await fetch('/api/wallet?fresh=1', { cache: 'no-store' })
+        const walletJson = await walletRes.json().catch(() => null)
+        if (walletRes.ok && typeof walletJson?.balance === 'number') {
+          freshBalance = walletJson.balance
+          setLatestWalletBalance(walletJson.balance)
+          globalMutate('/api/wallet?fresh=1', walletJson, { revalidate: false })
+        }
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[DemoTradeBox] balance sync', {
+          uiBalance: effectiveWalletBalance,
+          freshBalance,
+          estCost,
+        })
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[DemoTradeBox] Balance sync failed:', error)
+      }
+    } finally {
+      setSyncingBalance(false)
+    }
+
+    if (mode === 'buy' && estCost > 0 && freshBalance < estCost) {
       showToastWithAction('Not enough balance. Please deposit funds to your wallet.', 'error', 'Deposit', '/wallet')
       return
     }
@@ -217,10 +253,15 @@ export function DemoTradeBox({ symbol, price }: Props) {
             revalidate: false,
           })
         }
+
+        if (j?.wallet?.balance !== undefined && j?.wallet?.balance !== null) {
+          setLatestWalletBalance(j.wallet.balance)
+          globalMutate('/api/wallet?fresh=1', { balance: j.wallet.balance, cap: 1_000_000 }, { revalidate: false })
+        }
         
         // Then revalidate in background to ensure consistency
         mutate()
-        globalMutate('/api/wallet')
+        globalMutate('/api/wallet?fresh=1')
         
         try {
           // Trigger global events for other components (navbar, wallet page, etc.)
@@ -245,7 +286,8 @@ export function DemoTradeBox({ symbol, price }: Props) {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xl font-bold text-white">Demo Trade</h3>
         <div className="bg-slate-900 rounded-md p-1">
-          <button onClick={()=>{ 
+          <button
+            onClick={() => {
             setMode('buy')
             mutate()
             // Reload positions
@@ -257,7 +299,11 @@ export function DemoTradeBox({ symbol, price }: Props) {
                 setLocalItems(items)
               }
             }
-          }} className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}>Buy</button>
+          }}
+            className={`px-3 py-1 rounded ${mode==='buy'?'bg-emerald-600 text-white':'text-slate-300'}`}
+          >
+            Buy
+          </button>
           <button onClick={()=>{ 
             setMode('sell')
             mutate()
@@ -449,15 +495,19 @@ export function DemoTradeBox({ symbol, price }: Props) {
       <button 
         onClick={submit} 
         disabled={
+          isSyncingBalance ||
           isSubmitting || 
           !currentPrice || 
           estShares<=0 || 
-          (mode === 'sell' && (!pos || pos.totalShares <= 0)) ||
-          insufficientFunds
+          (mode === 'sell' && (!pos || pos.totalShares <= 0))
         } 
         className={`w-full py-2 rounded-lg font-semibold transition ${mode==='buy' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white disabled:opacity-50 disabled:cursor-not-allowed`}
       >
-        {isSubmitting ? 'Submitting...' : mode==='buy' ? 'Buy' : 'Sell'} {symbol}
+        {isSyncingBalance
+          ? 'Syncing balance...'
+          : isSubmitting
+            ? 'Submitting...'
+            : `${mode === 'buy' ? 'Buy' : 'Sell'} ${symbol}`}
       </button>
 
       {pos && (
