@@ -125,9 +125,9 @@ function computeMomentum(quotes: QuoteEntry['data'][]) {
 function computeVolatility(quotes: QuoteEntry['data'][]) {
   const ranges = quotes
     .map((q) => {
-      const price = Number(q.price || 0)
-      const high = Number(q.high || 0)
-      const low = Number(q.low || 0)
+      const price = Number(q?.price || 0)
+      const high = Number(q?.high || 0)
+      const low = Number(q?.low || 0)
       if (price > 0 && high > 0 && low > 0) {
         return ((high - low) / price) * 100
       }
