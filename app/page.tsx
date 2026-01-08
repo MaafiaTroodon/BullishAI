@@ -897,7 +897,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {radarItems.map((item) => (
+                    {radarItems.map((item: any) => (
                       <div key={`${item.type}-${item.symbol}`} className="flex items-center justify-between text-sm text-slate-300">
                         <div className="flex items-center gap-2">
                           <span className="text-slate-400">{item.emoji ? `${item.emoji} ${item.type}` : item.type}</span>
