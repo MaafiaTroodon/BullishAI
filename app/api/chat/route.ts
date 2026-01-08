@@ -37,6 +37,17 @@ type TradeFollowUpContext = {
   tradeIntent: TradeIntent
 }
 
+function isFollowUpContext(context: FollowUpContext | TradeFollowUpContext | null | undefined): context is FollowUpContext {
+  return (
+    !!context &&
+    typeof context === 'object' &&
+    context.type !== 'trade' &&
+    'stage' in context &&
+    'limit' in context &&
+    'domain' in context
+  )
+}
+
 type ChatIntent =
   | 'TRADE_INTENT'
   | 'MARKET_DATA_INTENT'
@@ -511,11 +522,12 @@ export async function POST(req: NextRequest) {
 
     if (recommendedType && recommendedType !== 'technical') {
       try {
+        const safePreviousContext = isFollowUpContext(previousContext) ? previousContext : null
         const recommendedResult = await handleRecommendedQuery({
           type: recommendedType,
           origin: req.nextUrl.origin,
           followUp,
-          previousContext,
+          previousContext: safePreviousContext,
         })
 
         const {
