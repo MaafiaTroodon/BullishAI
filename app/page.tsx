@@ -346,7 +346,7 @@ export default function Home() {
       const raw = Math.abs(Number(s.changePercent ?? s.strength ?? 0))
       return raw > 0 ? raw : 0.3
     })
-    const total = weights.reduce((sum, w) => sum + w, 0) || 1
+    const total = weights.reduce((sum: number, w: number) => sum + w, 0) || 1
     let angle = 0
     return sectorWheel.map((sector: any, idx: number) => {
       const value = weights[idx]
