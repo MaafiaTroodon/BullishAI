@@ -116,7 +116,7 @@ function computeBreadth(quotes: QuoteEntry['data'][]) {
 
 function computeMomentum(quotes: QuoteEntry['data'][]) {
   const changes = quotes
-    .map((q) => Number(q.dp ?? q.changePercent ?? 0))
+    .map((q) => Number(q?.dp ?? q?.changePercent ?? 0))
     .filter((v) => Number.isFinite(v))
   if (changes.length === 0) return 0
   return changes.reduce((sum, v) => sum + v, 0) / changes.length
