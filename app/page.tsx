@@ -982,7 +982,7 @@ export default function Home() {
                         className="h-28 w-28 motion-safe:animate-[spin_18s_linear_infinite]"
                         onMouseLeave={() => setHoveredSector(null)}
                       >
-                        {sectorSegments.map((seg) => {
+                        {sectorSegments.map((seg: any) => {
                           const startRad = (Math.PI / 180) * (seg.startAngle - 90)
                           const endRad = (Math.PI / 180) * (seg.endAngle - 90)
                           const radius = 50
