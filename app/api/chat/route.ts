@@ -572,9 +572,10 @@ Answer using the rules above.`
           /^[A-Z]{1,5}(?:\.[A-Z]{1,3})?$/.test(item),
         )
 
+        const previousPresetId = isFollowUpContext(previousContext) ? previousContext.presetId : undefined
         const payloadFollowUp: FollowUpContext = {
           ...followUpContext,
-          presetId: presetId || previousContext?.presetId || undefined,
+          presetId: presetId || previousPresetId || undefined,
         }
 
         const recommendedBadge = dataSource
