@@ -508,6 +508,7 @@ export async function POST(req: NextRequest) {
     }
 
     const tickers = extractTickers(query) || (symbol ? [symbol.toUpperCase()] : [])
+    const section = detectSection(query)
 
     // 1. Recommended preset questions (top movers, news, earnings, etc.)
     const recommendedCheck = isRecommendedQuestion(query)
@@ -905,10 +906,7 @@ Do NOT:
       }
     }
 
-    // 3. Detect section/intent
-    const section = detectSection(query)
-    
-    // 4. Load BullishAI playbook entries (for tone/style on general questions)
+    // 3. Load BullishAI playbook entries (for tone/style on general questions)
     let kb: any[] = []
     let relevantContext: any[] = []
     try {
