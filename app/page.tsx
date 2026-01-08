@@ -548,15 +548,23 @@ export default function Home() {
       const isCanadian = symbol.includes('.TO')
       if (selectedExchange === 'CAN' && !isCanadian) return false
       if (selectedExchange === 'USA' && isCanadian) return false
-      const riskMeta = earningsRiskLabels.get(symbol)
-      return riskMeta && riskMeta.label !== '—'
+      return true
     })
     const deduped = new Map<string, any>()
     allEligible.forEach((item: any) => {
       const symbol = String(item.symbol || '').toUpperCase()
       if (!deduped.has(symbol)) deduped.set(symbol, item)
     })
-    const unique = Array.from(deduped.values())
+    let unique = Array.from(deduped.values())
+    if (!unique.length) {
+      const fallback = items.filter((item: any) => item?.symbol)
+      const sortedFallback = [...fallback].sort((a: any, b: any) => {
+        const dateA = new Date(a.date || 0).getTime()
+        const dateB = new Date(b.date || 0).getTime()
+        return dateA - dateB
+      })
+      unique = sortedFallback.slice(0, 7)
+    }
     const inWeek = unique.filter((item: any) => {
       const d = new Date(item.date)
       return d >= now && d <= sevenDays
@@ -1255,7 +1263,10 @@ export default function Home() {
 
             {/* Row 5: Upcoming Earnings & Dividends */}
             <div className="mt-6 grid lg:grid-cols-2 gap-4">
-                <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+                <div
+                  className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card"
+                  title="Upcoming earnings within the next 30 days based on the selected exchange."
+                >
                   <div className="flex items-center justify-between mb-3">
                     <Link href="/calendar?tab=earnings" className="text-lg font-semibold text-white hover:underline">
                       Earnings
@@ -1264,7 +1275,10 @@ export default function Home() {
                       View calendar <span>›</span>
                     </Link>
                   </div>
-                  <div className="text-xs text-slate-500 mb-2">
+                  <div
+                    className="text-xs text-slate-500 mb-2"
+                    title="Risk indicates expected earnings volatility (High = larger swing, Low = smaller)."
+                  >
                     Risk = expected earnings volatility (High = larger swing, Medium = moderate, Low = smaller).
                   </div>
                   {!earningsData ? (
@@ -1298,6 +1312,7 @@ export default function Home() {
                             key={`${symbol}-${item.date}`}
                             onClick={() => window.location.assign(`/stocks/${symbol}`)}
                             className="w-full text-left flex items-center justify-between text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+                            title={`${symbol} • ${item.date || '—'} • ${timeTag} • ${countdown} • Risk: ${riskLabel} • AI: ${bias}`}
                           >
                             <div>
                               <div className="text-white font-semibold">{symbol}</div>
@@ -1306,7 +1321,10 @@ export default function Home() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-slate-400">{countdown}</span>
-                              <span className={`px-2 py-0.5 rounded-full border text-[11px] ${riskColor}`}>
+                              <span
+                                className={`px-2 py-0.5 rounded-full border text-[11px] ${riskColor}`}
+                                title={`Risk: ${riskLabel} (expected earnings volatility)`}
+                              >
                                 {riskLabel.replace(' Risk', '')}
                               </span>
                             </div>
@@ -1316,7 +1334,10 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+                <div
+                  className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card"
+                  title="Upcoming dividends within the next 30 days with declared dates and yields."
+                >
                   <div className="flex items-center justify-between mb-3">
                     <Link href="/calendar?tab=dividends" className="text-lg font-semibold text-white hover:underline">
                       Dividends
@@ -1348,6 +1369,7 @@ export default function Home() {
                             key={`${symbol}-${exDate || payDate}`}
                             onClick={() => window.location.assign(`/stocks/${symbol}`)}
                             className="w-full text-left flex items-center justify-between text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+                            title={`${symbol} • Ex: ${exDate || '—'} • Record: ${recordDate || '—'} • Pay: ${payDate || '—'} • Declared: ${declarationDate || '—'} • Amount: ${amount ? `$${amount.toFixed(2)}` : '—'} • Yield: ${yieldPct ? `${yieldPct.toFixed(2)}%` : '—'}`}
                           >
                             <div>
                               <div className="text-white font-semibold">{symbol}</div>
