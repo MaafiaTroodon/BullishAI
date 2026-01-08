@@ -98,7 +98,7 @@ function normalizeQuotes(quotes: QuoteEntry[]) {
 
 function computeBreadth(quotes: QuoteEntry['data'][]) {
   const changes = quotes
-    .map((q) => Number(q.dp ?? q.changePercent ?? 0))
+    .map((q) => Number(q?.dp ?? q?.changePercent ?? 0))
     .filter((v) => Number.isFinite(v))
   if (changes.length === 0) {
     return { advancing: 0, declining: 0, breadthPct: 0, advDecRatio: 1 }
