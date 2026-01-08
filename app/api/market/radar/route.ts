@@ -55,12 +55,12 @@ export async function GET(req: NextRequest) {
         action: 'buy',
         timestamp: { gte: buysWindow },
       },
-      _count: { _all: true },
-      orderBy: { _count: { _all: 'desc' } },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
       take: 1,
     })
     if (buyGroups.length > 0) {
-      mostBuys = { symbol: buyGroups[0].symbol, count: buyGroups[0]._count._all }
+      mostBuys = { symbol: buyGroups[0].symbol, count: buyGroups[0]._count.id }
     }
   } catch (error: any) {
     console.warn('[radar] trade query failed:', error?.message || error)
@@ -72,12 +72,12 @@ export async function GET(req: NextRequest) {
       where: {
         createdAt: { gte: watchlistWindow },
       },
-      _count: { _all: true },
-      orderBy: { _count: { _all: 'desc' } },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
       take: 1,
     })
     if (watchlistGroups.length > 0) {
-      watchlistSurge = { symbol: watchlistGroups[0].symbol, count: watchlistGroups[0]._count._all }
+      watchlistSurge = { symbol: watchlistGroups[0].symbol, count: watchlistGroups[0]._count.id }
     }
   } catch (error: any) {
     console.warn('[radar] watchlist query failed:', error?.message || error)
