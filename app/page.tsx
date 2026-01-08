@@ -858,7 +858,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {confidenceBars.map((bar) => (
+                    {confidenceBars.map((bar: any) => (
                       <div key={bar.symbol || bar.label} className="space-y-1">
                         <div className="flex items-center justify-between text-xs text-slate-400">
                           <span>{bar.label}</span>
