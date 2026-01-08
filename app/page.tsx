@@ -1019,7 +1019,7 @@ export default function Home() {
                       )}
                     </div>
                     <div className="space-y-2 text-sm text-slate-300">
-                      {sectorWheel.map((sector) => {
+                      {sectorWheel.map((sector: any) => {
                         const info = sectorInfo[sector.name]
                         const includes = info?.includes?.join(', ')
                         const change = Number(sector.changePercent ?? sector.strength ?? 0)
