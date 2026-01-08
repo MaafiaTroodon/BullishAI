@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { getFromCache, setCache } from '@/lib/providers/cache'
-
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY
+import { finnhubFetch } from '@/lib/finnhub-client'
 const MASSIVE_KEY = process.env.POLYGON_API_KEY
 const TWELVE_KEY = process.env.TWELVEDATA_API_KEY || process.env.TWELVE_DATA_API_KEY
 const ALPHA_KEY = process.env.ALPHAVANTAGE_API_KEY
@@ -41,15 +40,13 @@ async function safeGet<T>(url: string, timeout = 4000) {
 }
 
 async function fetchFromFinnhub(symbol: string): Promise<QuoteResult | null> {
-  if (!FINNHUB_KEY) return null
   try {
-    const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`
-    const profileUrl = `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_KEY}`
-
-    const [quote, profile] = await Promise.all([
-      safeGet<any>(quoteUrl),
-      safeGet<any>(profileUrl).catch(() => null),
+    const [quoteRes, profileRes] = await Promise.all([
+      finnhubFetch<any>('quote', { symbol }, { cacheSeconds: 30 }),
+      finnhubFetch<any>('stock/profile2', { symbol }, { cacheSeconds: 3600 }),
     ])
+    const quote = quoteRes.data
+    const profile = profileRes.data
 
     if (!quote || !quote.c) return null
 
@@ -223,5 +220,4 @@ export async function getQuoteWithFallback(symbolInput: string): Promise<QuoteRe
   const message = errors.length > 0 ? errors.join('; ') : 'All providers unavailable'
   throw new Error(`Quote unavailable for ${symbol}: ${message}`)
 }
-
 

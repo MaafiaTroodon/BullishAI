@@ -1,6 +1,4 @@
-import axios from 'axios'
-
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY
+import { finnhubFetch } from '@/lib/finnhub-client'
 const TWELVEDATA_KEY = process.env.TWELVEDATA_API_KEY
 const ALPHAVANTAGE_KEY = process.env.ALPHAVANTAGE_API_KEY
 
@@ -54,24 +52,22 @@ async function fetchJSON(url: string, timeoutMs = 2000): Promise<any> {
 
 export async function getQuote(symbol: string): Promise<QuoteResult> {
   // Try Finnhub first
-  if (FINNHUB_KEY) {
-    try {
-      const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`
-      const data = await fetchJSON(url, 2000)
-      if (data && data.c) {
-        return {
-          price: data.c,
-          change: data.d,
-          changePct: data.dp,
-          high: data.h,
-          low: data.l,
-          open: data.o,
-          previousClose: data.pc,
-        }
+  try {
+    const res = await finnhubFetch<any>('quote', { symbol }, { cacheSeconds: 30 })
+    const data = res.data
+    if (data && data.c) {
+      return {
+        price: data.c,
+        change: data.d,
+        changePct: data.dp,
+        high: data.h,
+        low: data.l,
+        open: data.o,
+        previousClose: data.pc,
       }
-    } catch (error) {
-      console.log('Finnhub quote failed')
     }
+  } catch (error) {
+    console.log('Finnhub quote failed')
   }
 
   // Fallback to Twelve Data
@@ -189,12 +185,36 @@ export async function getCompanyNews(symbol: string): Promise<NewsItem[]> {
   const to = today.toISOString().split('T')[0]
 
   // Try Finnhub company news first
-  if (FINNHUB_KEY) {
-    try {
-      const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${FINNHUB_KEY}`
-      const data = await fetchJSON(url, 2000)
-      if (Array.isArray(data) && data.length > 0) {
-        return data.slice(0, 10).map((item: any) => ({
+  try {
+    const res = await finnhubFetch<any[]>('company-news', { symbol, from, to }, { cacheSeconds: 600 })
+    const data = res.data
+    if (Array.isArray(data) && data.length > 0) {
+      return data.slice(0, 10).map((item: any) => ({
+        id: String(item.id),
+        datetime: item.datetime,
+        headline: item.headline,
+        source: item.source,
+        url: item.url,
+        image: item.image,
+        summary: item.summary,
+      }))
+    }
+  } catch (error) {
+    console.log('Finnhub company news failed, trying general news')
+  }
+
+  // Fallback to general news and filter
+  try {
+    const res = await finnhubFetch<any[]>('news', { category: 'general' }, { cacheSeconds: 600 })
+    const data = res.data
+    if (Array.isArray(data)) {
+      return data
+        .filter((item: any) => 
+          item.headline?.toUpperCase().includes(symbol.toUpperCase()) ||
+          item.related?.includes(symbol.toUpperCase())
+        )
+        .slice(0, 10)
+        .map((item: any) => ({
           id: String(item.id),
           datetime: item.datetime,
           headline: item.headline,
@@ -203,37 +223,10 @@ export async function getCompanyNews(symbol: string): Promise<NewsItem[]> {
           image: item.image,
           summary: item.summary,
         }))
-      }
-    } catch (error) {
-      console.log('Finnhub company news failed, trying general news')
     }
-
-    // Fallback to general news and filter
-    try {
-      const url = `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_KEY}`
-      const data = await fetchJSON(url, 2000)
-      if (Array.isArray(data)) {
-        return data
-          .filter((item: any) => 
-            item.headline?.toUpperCase().includes(symbol.toUpperCase()) ||
-            item.related?.includes(symbol.toUpperCase())
-          )
-          .slice(0, 10)
-          .map((item: any) => ({
-            id: String(item.id),
-            datetime: item.datetime,
-            headline: item.headline,
-            source: item.source,
-            url: item.url,
-            image: item.image,
-            summary: item.summary,
-          }))
-      }
-    } catch (error) {
-      console.log('Finnhub general news failed')
-    }
+  } catch (error) {
+    console.log('Finnhub general news failed')
   }
 
   return []
 }
-

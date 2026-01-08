@@ -126,7 +126,7 @@ export function isRecommendedQuestion(query: string): {
   }
   
   // Breakouts
-  if (lower.includes('breakout') || lower.includes('new high')) {
+  if (lower.includes('breakout') || lower.includes('new high') || lower.includes('fresh high') || lower.includes('fresh highs')) {
     return { type: 'breakouts', needsLiveData: true }
   }
   
@@ -294,15 +294,19 @@ export async function fetchMarketNews(origin: string, limit: number = 10): Promi
  */
 export async function fetchRecommendedStocks(origin: string, type: 'value' | 'momentum' | 'breakout' | 'rebound' | 'dividend'): Promise<any> {
   try {
-    // Use the AI recommended endpoint or screener
-    const endpoint = type === 'dividend' 
-      ? `${origin}/api/screeners/dividend-momentum`
-      : `${origin}/api/ai/recommended?theme=${type}`
+    // Use computed screeners for momentum/breakouts to avoid empty results
+    const endpoint = type === 'breakout'
+      ? `${origin}/api/screeners/breakouts?universe=default`
+      : type === 'momentum'
+        ? `${origin}/api/screeners/momentum?universe=default`
+        : type === 'dividend'
+          ? `${origin}/api/screeners/dividend-momentum`
+          : `${origin}/api/ai/recommended?theme=${type}`
     
     const res = await fetch(endpoint)
-    const data = await res.json().catch(() => ({ data: [], stocks: [] }))
+    const data = await res.json().catch(() => ({ data: [], stocks: [], items: [] }))
     
-    const stocks = (data.data || data.stocks || []).slice(0, 10)
+    const stocks = (data.data || data.stocks || data.items || []).slice(0, 10)
     
     return {
       stocks,
@@ -389,4 +393,3 @@ export function formatET(timestamp?: string | number): string {
     hour12: true,
   }) + ' ET'
 }
-

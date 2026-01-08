@@ -449,7 +449,7 @@ export async function runHybridLLM(request: HybridLLMRequest): Promise<HybridLLM
   // Only use remote models if local models completely failed
   const remoteModels: RemoteModelKey[] = []
   if (process.env.GROQ_API_KEY) remoteModels.push('groq-llama')
-  if (process.env.GEMINI_API_KEY) remoteModels.push('gemini')
+  if (process.env.GEMINI_KEY || process.env.GEMINI_API_KEY) remoteModels.push('gemini')
 
   // Try remote models in parallel for speed
   const remotePromises = remoteModels.map(async (remoteModel) => {

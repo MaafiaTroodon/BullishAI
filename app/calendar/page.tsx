@@ -10,14 +10,14 @@ import { ChevronRight } from 'lucide-react'
 
 function CalendarPageContent() {
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<'dividends' | 'earnings'>('earnings')
+  const [activeTab, setActiveTab] = useState<'dividends' | 'earnings' | 'macro'>('earnings')
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month'>('week')
   const [dividendSearch, setDividendSearch] = useState('')
 
   // Read tab from URL query parameter
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'dividends' || tab === 'earnings') {
+    if (tab === 'dividends' || tab === 'earnings' || tab === 'macro') {
       setActiveTab(tab)
     }
   }, [searchParams])
@@ -38,9 +38,27 @@ function CalendarPageContent() {
     }).format(d)
   }
 
+  const rangeToDates = (range: 'today' | 'week' | 'month') => {
+    const start = new Date()
+    const end = new Date()
+    if (range === 'today') {
+      start.setHours(0, 0, 0, 0)
+      end.setHours(23, 59, 59, 999)
+    } else if (range === 'week') {
+      end.setDate(end.getDate() + 7)
+    } else {
+      end.setDate(end.getDate() + 30)
+    }
+    return {
+      from: start.toISOString().split('T')[0],
+      to: end.toISOString().split('T')[0],
+    }
+  }
+
   // Fetch earnings data
+  const { from: earningsFrom, to: earningsTo } = rangeToDates(dateRange)
   const { data: earningsData, isLoading: isLoadingEarnings, error: earningsError } = useSWR(
-    activeTab === 'earnings' ? `/api/calendar/earnings?range=${dateRange}` : null,
+    activeTab === 'earnings' ? `/api/calendar/earnings?from=${earningsFrom}&to=${earningsTo}` : null,
     safeJsonFetcher,
     { refreshInterval: 15 * 60 * 1000 } // 15 min cache
   )
@@ -70,12 +88,21 @@ function CalendarPageContent() {
     { refreshInterval: 15 * 60 * 1000 }
   )
 
-  const isLoading = activeTab === 'earnings' ? isLoadingEarnings : isLoadingDividends
-  const error = activeTab === 'earnings' ? earningsError : dividendsError
-  const data = activeTab === 'earnings' ? earningsData : dividendsData
+  const { data: macroData, isLoading: isLoadingMacro, error: macroError } = useSWR(
+    activeTab === 'macro' ? `/api/calendar/macro` : null,
+    safeJsonFetcher,
+    { refreshInterval: 30 * 60 * 1000 }
+  )
+
+  const isLoading = activeTab === 'earnings' ? isLoadingEarnings : activeTab === 'dividends' ? isLoadingDividends : isLoadingMacro
+  const error = activeTab === 'earnings' ? earningsError : activeTab === 'dividends' ? dividendsError : macroError
+  const data = activeTab === 'earnings' ? earningsData : activeTab === 'dividends' ? dividendsData : macroData
   const rawItems = useMemo(() => {
     if (activeTab === 'earnings') {
       return earningsItems
+    }
+    if (activeTab === 'macro') {
+      return Array.isArray(data?.items) ? data.items : []
     }
     const primary = Array.isArray(data?.items) ? data.items : []
     if (primary.length > 0) return primary
@@ -132,6 +159,18 @@ function CalendarPageContent() {
             role="tab"
           >
             Dividends
+          </button>
+          <button
+            onClick={() => setActiveTab('macro')}
+            className={`px-4 py-2 font-semibold transition ${
+              activeTab === 'macro'
+                ? 'text-blue-400 border-b-2 border-blue-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            aria-selected={activeTab === 'macro'}
+            role="tab"
+          >
+            Macro
           </button>
         </div>
 
@@ -238,6 +277,28 @@ function CalendarPageContent() {
                       <ChevronRight className="h-5 w-5 text-slate-400" />
                     </div>
                   </Link>
+                )
+              }
+
+              if (activeTab === 'macro') {
+                const dateLabel = formatDateOnly(item.date || item.eventDate || item.time || item.period)
+                return (
+                  <div
+                    key={`${item.event || item.title || 'macro'}-${idx}`}
+                    className="block bg-slate-800 rounded-lg p-4 border border-slate-700"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-white font-semibold">{item.event || item.title || 'Macro Event'}</div>
+                        <div className="text-xs text-slate-400">
+                          {item.country || item.region || 'Global'} • {dateLabel}
+                        </div>
+                      </div>
+                      <span className="text-xs text-slate-400">
+                        {item.impact || item.importance || 'Medium'}
+                      </span>
+                    </div>
+                  </div>
                 )
               }
 

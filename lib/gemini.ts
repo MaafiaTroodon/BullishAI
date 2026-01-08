@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'gen-lang-client-0642332103'
+const GEMINI_API_KEY = process.env.GEMINI_KEY || process.env.GEMINI_API_KEY || 'gen-lang-client-0642332103'
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
 
@@ -67,4 +67,3 @@ Always be helpful, clear, and professional. If you don't have specific informati
     return 'I apologize, but I encountered an error processing your request. Please try again or ask a different question.'
   }
 }
-

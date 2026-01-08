@@ -3,13 +3,13 @@ import { getQuoteWithFallback } from '@/lib/providers/market-data'
 import { getCandles } from '@/lib/market-data'
 import { getMultiSourceNews } from '@/lib/news-multi-source'
 import { resolveMarketCapUSD, formatMarketCapShort, formatMarketCapFull } from '@/lib/finance/marketCap'
+import { finnhubFetch } from '@/lib/finnhub-client'
 import axios from 'axios'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 10
 
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY
 let loggedMetrics = false
 
 export async function GET(
@@ -149,13 +149,9 @@ export async function GET(
       week52Low?: number | null
       avgVolume?: number | null
     } = {}
-    if (FINNHUB_KEY) {
-      try {
-        const metricsResponse = await axios.get(
-          `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${FINNHUB_KEY}`,
-          { timeout: 4000 }
-        )
-        const metric = metricsResponse?.data?.metric || {}
+    try {
+      const metricsResponse = await finnhubFetch('stock/metric', { symbol, metric: 'all' }, { cacheSeconds: 3600 })
+      const metric = metricsResponse?.data?.metric || {}
         finnhubMetrics = {
           peRatio: safeNumber(metric.peTTM ?? metric.peBasicExclExtraTTM),
           week52High: safeNumber(metric['52WeekHigh'] ?? metric['52WeekHighWithDate']),
@@ -173,9 +169,8 @@ export async function GET(
             volume: quote.volume ?? finnhubMetrics.avgVolume,
           })
         }
-      } catch (error: any) {
-        console.warn(`Finnhub metrics failed for ${symbol}:`, error?.message || error)
-      }
+    } catch (error: any) {
+      console.warn(`Finnhub metrics failed for ${symbol}:`, error?.message || error)
     }
 
     const enrichedMarketCap = fundamentals.marketCap || marketCap

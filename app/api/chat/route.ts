@@ -4,7 +4,8 @@ import { detectSection, extractTickers, loadKnowledgeBase } from '@/lib/chat-kno
 import { findBestMatch } from '@/lib/ai-knowledge-trainer'
 import { getSession } from '@/lib/auth-server'
 import { classifyChatDomain, ChatDomain } from '@/lib/chat-domains'
-import { runHybridLLM, getModelBadge } from '@/lib/hybrid-llm-router'
+import { getModelBadge } from '@/lib/hybrid-llm-router'
+import { routeAIQuery } from '@/lib/ai-router'
 import { handleRecommendedQuery, FollowUpContext, RecommendedType } from '@/lib/chat-recommended'
 import { isRecommendedQuestion } from '@/lib/chat-data-fetchers'
 import { isStockRecommendationQuery, handleStockRecommendation } from '@/lib/chat-stock-recommendations'
@@ -850,14 +851,14 @@ Do NOT:
 - Say "I don't have data" or "unavailable"
 - Change the structure`
 
-        const llmResponse = await runHybridLLM({
-          userPrompt: `User asked: "${query}"\n\nHere's my prepared answer:\n\n${recommendation.answer}\n\nEnhance this answer while keeping all the exact data, numbers, and structure.`,
+        const llmResponse = await routeAIQuery(
+          `User asked: "${query}"\n\nHere's my prepared answer:\n\n${recommendation.answer}\n\nEnhance this answer while keeping all the exact data, numbers, and structure.`,
+          recommendation.ragContext,
           systemPrompt,
-          context: recommendation.ragContext,
-          domain: recommendation.domain,
-          requiredPhrases: recommendation.ragContext.lists?.gainers?.map((g: any) => g.symbol) || [],
-          minLength: 200,
-        })
+          undefined,
+          'groq-llama',
+          { forceGroqPrimaryFirst: true },
+        )
 
         let finalAnswer = llmResponse.answer || recommendation.answer
         
@@ -866,7 +867,11 @@ Do NOT:
           finalAnswer += '\n\n⚠️ *This is for educational purposes only and not financial advice.*'
         }
 
-        const modelBadge = getModelBadge(llmResponse.metadata) || recommendation.dataSource
+        const modelBadge = llmResponse.model === 'groq-llama'
+          ? 'Groq'
+          : llmResponse.model === 'gemini'
+            ? 'Gemini'
+            : recommendation.dataSource
 
         return NextResponse.json({
           answer: finalAnswer,
@@ -1022,14 +1027,14 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
 
     const requiredPhrases = tickers.slice(0, 5)
 
-    const llmResponse = await runHybridLLM({
-      userPrompt,
-      systemPrompt,
-      context: ragContext,
-      domain,
-      requiredPhrases,
-      minLength: 140,
-    })
+        const llmResponse = await routeAIQuery(
+          userPrompt,
+          ragContext,
+          systemPrompt,
+          undefined,
+          'groq-llama',
+          { forceGroqPrimaryFirst: true },
+        )
 
     let answer = llmResponse.answer?.trim() || "I'm still thinking about that. Can you rephrase or point me to a ticker?"
 
@@ -1085,7 +1090,11 @@ ${styleExamples ? `Tone guide (BullishAI playbook excerpts):\n${styleExamples}\n
       next: hooks[0],
     })
 
-    const modelBadge = getModelBadge(llmResponse.metadata) || 'Multi-Model Engine'
+    const modelBadge = llmResponse.model === 'groq-llama'
+      ? 'Groq'
+      : llmResponse.model === 'gemini'
+        ? 'Gemini'
+        : getModelBadge(llmResponse.metadata) || 'Multi-Model Engine'
 
     return NextResponse.json({
       answer,

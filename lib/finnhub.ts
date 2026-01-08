@@ -1,6 +1,4 @@
-import axios from 'axios'
-
-const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY
+import { finnhubFetch } from '@/lib/finnhub-client'
 
 interface QuoteResponse {
   c: number // current price
@@ -14,65 +12,27 @@ interface QuoteResponse {
 }
 
 export async function getQuote(symbol: string): Promise<QuoteResponse | null> {
-  if (!FINNHUB_API_KEY) return null
-
-  try {
-    const response = await axios.get('https://finnhub.io/api/v1/quote', {
-      params: {
-        symbol,
-        token: FINNHUB_API_KEY,
-      },
-    })
-    return response.data
-  } catch (error: any) {
-    if (error.response?.status === 429) {
-      throw new Error('RATE_LIMIT')
-    }
-    throw error
-  }
+  const response = await finnhubFetch<QuoteResponse>('quote', { symbol }, { cacheSeconds: 60 })
+  if (!response.ok) return null
+  return response.data
 }
 
 export async function getCompanyNews(symbol: string, limit = 5) {
-  if (!FINNHUB_API_KEY) return []
-
-  try {
-    const from = new Date()
-    from.setDate(from.getDate() - 7)
-    
-    const response = await axios.get('https://finnhub.io/api/v1/company-news', {
-      params: {
-        symbol,
-        from: from.toISOString().split('T')[0],
-        to: new Date().toISOString().split('T')[0],
-        token: FINNHUB_API_KEY,
-      },
-    })
-    return response.data.slice(0, limit) || []
-  } catch (error: any) {
-    if (error.response?.status === 429) {
-      throw new Error('RATE_LIMIT')
-    }
-    throw error
-  }
+  const from = new Date()
+  from.setDate(from.getDate() - 7)
+  const response = await finnhubFetch<any[]>(
+    'company-news',
+    { symbol, from: from.toISOString().split('T')[0], to: new Date().toISOString().split('T')[0] },
+    { cacheSeconds: 600 }
+  )
+  if (!response.ok || !Array.isArray(response.data)) return []
+  return response.data.slice(0, limit) || []
 }
 
 export async function searchSymbol(query: string) {
-  if (!FINNHUB_API_KEY) return []
-
-  try {
-    const response = await axios.get('https://finnhub.io/api/v1/search', {
-      params: {
-        q: query,
-        token: FINNHUB_API_KEY,
-      },
-    })
-    return response.data.result || []
-  } catch (error: any) {
-    if (error.response?.status === 429) {
-      throw new Error('RATE_LIMIT')
-    }
-    throw error
-  }
+  const response = await finnhubFetch<any>('search', { q: query }, { cacheSeconds: 300 })
+  if (!response.ok) return []
+  return response.data?.result || []
 }
 
 export async function getHistoricalData(
@@ -81,24 +41,7 @@ export async function getHistoricalData(
   from: number,
   to: number
 ) {
-  if (!FINNHUB_API_KEY) return []
-
-  try {
-    const response = await axios.get('https://finnhub.io/api/v1/stock/candle', {
-      params: {
-        symbol,
-        resolution,
-        from,
-        to,
-        token: FINNHUB_API_KEY,
-      },
-    })
-    return response.data
-  } catch (error: any) {
-    if (error.response?.status === 429) {
-      throw new Error('RATE_LIMIT')
-    }
-    throw error
-  }
+  const response = await finnhubFetch<any>('stock/candle', { symbol, resolution, from, to }, { cacheSeconds: 300 })
+  if (!response.ok) return []
+  return response.data
 }
-

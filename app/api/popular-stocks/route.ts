@@ -5,9 +5,8 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 600 // Cache for 10 minutes
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+const groqPrimary = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null
+const groqSecondary = process.env.GROQ_API_KEY_SECONDARY ? new Groq({ apiKey: process.env.GROQ_API_KEY_SECONDARY }) : null
 
 // Popular stocks for demo (US + Canadian mix)
 const DEFAULT_POPULAR_STOCKS = [
@@ -29,20 +28,31 @@ Return ONLY a JSON array of exactly 10 ticker symbols (uppercase, use .TO suffix
 Do not include any explanation or other text, just the JSON array.`
 
     let stocks
+    const clients = [groqPrimary, groqSecondary].filter(Boolean) as Groq[]
     try {
-      const completion = await groq.chat.completions.create({
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        model: 'llama-3.3-70b-versatile',
-        temperature: 0.7,
-        max_tokens: 200,
-      })
+      let completion
+      for (const client of clients) {
+        try {
+          completion = await client.chat.completions.create({
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            model: 'llama-3.3-70b-versatile',
+            temperature: 0.7,
+            max_tokens: 200,
+          })
+          if (completion) break
+        } catch (error: any) {
+          if (error?.status !== 429 && error?.status < 500) {
+            throw error
+          }
+        }
+      }
 
-      const content = completion.choices[0]?.message?.content?.trim()
+      const content = completion?.choices[0]?.message?.content?.trim()
       if (content) {
         // Try to parse JSON from the response
         const jsonMatch = content.match(/\[.*?\]/)
@@ -68,4 +78,3 @@ Do not include any explanation or other text, just the JSON array.`
     )
   }
 }
-

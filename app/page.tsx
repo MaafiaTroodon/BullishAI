@@ -231,6 +231,11 @@ export default function Home() {
     fetcher,
     { refreshInterval: 3600000 }
   )
+  const { data: homeMovers } = useSWR('/api/home/movers', fetcher, { refreshInterval: 120000 })
+  const { data: topMoversData } = useSWR('/api/market/top-movers?limit=6', fetcher, { refreshInterval: 60000 })
+  const { data: valuePicksData } = useSWR('/api/screeners/value-quality', fetcher, { refreshInterval: 300000 })
+  const { data: momentumPicksData } = useSWR('/api/screeners/momentum?universe=default', fetcher, { refreshInterval: 300000 })
+  const { data: breakoutPicksData } = useSWR('/api/screeners/breakouts?universe=default', fetcher, { refreshInterval: 300000 })
   const earningsSymbols = useMemo(() => {
     const items = earningsData?.items || []
     return Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 30)
@@ -503,6 +508,25 @@ export default function Home() {
     return change >= 0.3 ? 'Mixed expectations' : 'Balanced expectations'
   }
 
+  const InfoTooltip = ({ content, className }: { content: string; className?: string }) => (
+    <span className={`relative inline-flex group ${className || ''}`}>
+      <span
+        className="text-slate-500 text-sm cursor-help"
+        aria-label={content}
+        title={content}
+        tabIndex={0}
+      >
+        ⓘ
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-md border border-slate-700 bg-slate-900/95 px-3 py-2 text-[11px] text-slate-200 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {content}
+      </span>
+    </span>
+  )
+
   const upcomingDividends = useMemo(() => {
     const items = dividendsData?.items || []
     if (!items.length) return []
@@ -583,6 +607,27 @@ export default function Home() {
       .map((s: any) => s.name)
     return leaders.length ? leaders.join(', ') : 'Mixed'
   }, [sectorWheel])
+
+  const topPicksPreview = useMemo(() => {
+    const items = breakoutPicksData?.items || breakoutPicksData?.stocks || []
+    return items.slice(0, 3)
+  }, [breakoutPicksData])
+
+  const strongestTodayPreview = useMemo(() => {
+    const movers = topMoversData?.movers || []
+    if (movers.length >= 6) return movers.slice(3, 6)
+    return movers.slice(0, 3)
+  }, [topMoversData])
+
+  const valuePicksPreview = useMemo(() => {
+    const stocks = valuePicksData?.stocks || []
+    return stocks.slice(0, 3)
+  }, [valuePicksData])
+
+  const momentumPicksPreview = useMemo(() => {
+    const stocks = momentumPicksData?.stocks || []
+    return stocks.slice(0, 3)
+  }, [momentumPicksData])
 
   const marketMeaning = useMemo(() => {
     const volatility = Number(marketPulse.components.volatilityProxy || 0)
@@ -794,6 +839,66 @@ export default function Home() {
             </div>
           </StaggerGrid>
 
+          {/* AI Picks Preview */}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[
+              {
+                title: 'Top Stock Picks',
+                href: '/ai/top-picks',
+                items: topPicksPreview,
+                getChange: (item: any) => Number(item.changePercent ?? item.change ?? 0),
+              },
+              {
+                title: 'Best Value Stocks',
+                href: '/ai/value',
+                items: valuePicksPreview,
+                getChange: (item: any) => Number(item.changePercent ?? item.change ?? 0),
+              },
+              {
+                title: 'Strongest Momentum',
+                href: '/ai/momentum',
+                items: momentumPicksPreview,
+                getChange: (item: any) => Number(item.momentum_5d ?? item.changePercent ?? 0),
+              },
+              {
+                title: 'Strongest Today',
+                href: '/ai/strongest-today',
+                items: strongestTodayPreview,
+                getChange: (item: any) => Number(item.changePercent ?? item.change ?? 0),
+              },
+            ].map((card) => (
+              <div key={card.title} className="bg-slate-800/80 rounded-xl border border-slate-700 p-4 hover-card">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-white">{card.title}</h3>
+                  <Link href={card.href} className="text-xs text-slate-400 hover:text-slate-200">
+                    View more →
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {(card.items || []).slice(0, 3).map((item: any, idx: number) => {
+                    const symbol = String(item.symbol || '').toUpperCase()
+                    const change = card.getChange(item)
+                    return (
+                      <button
+                        key={`${card.title}-${symbol}-${idx}`}
+                        onClick={() => symbol && window.location.assign(`/stocks/${symbol}`)}
+                        className="w-full text-left flex items-center justify-between text-sm text-slate-300 border-b border-slate-700/40 pb-2 last:border-b-0 hover:text-white transition"
+                      >
+                        <span className="font-semibold text-white">{symbol || '—'}</span>
+                        <span className={`${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {Number.isFinite(change) ? `${change >= 0 ? '+' : ''}${change.toFixed(2)}%` : '—'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  {(card.items || []).length === 0 && (
+                    <div className="text-xs text-slate-500">Loading picks...</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* Market Signals */}
           <div className="mt-10">
             <Reveal variant="fade">
@@ -809,18 +914,18 @@ export default function Home() {
             {/* Row 1: 3 columns */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Market Pulse Ring */}
-              <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
+              <div
+                className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card"
+                title="Market Pulse Ring: overall market health score from breadth, momentum, and volatility."
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-semibold text-white">Market Pulse Ring</h4>
                     <p className="text-xs text-slate-400">Overall market health score</p>
                   </div>
-                  <span
-                    className="text-slate-500 text-sm"
-                    title={`Components: breadth ${marketPulse.components.breadthPct?.toFixed?.(1) ?? marketPulse.components.breadthPct}%, adv/dec ${Number(marketPulse.components.advDecRatio || 0).toFixed(2)}, volatility ${Number(marketPulse.components.volatilityProxy || 0).toFixed(2)}%, momentum ${Number(marketPulse.components.momentumAvg || 0).toFixed(2)}%`}
-                  >
-                    ⓘ
-                  </span>
+                  <InfoTooltip
+                    content={`Components: breadth ${marketPulse.components.breadthPct?.toFixed?.(1) ?? marketPulse.components.breadthPct}%, adv/dec ${Number(marketPulse.components.advDecRatio || 0).toFixed(2)}, volatility ${Number(marketPulse.components.volatilityProxy || 0).toFixed(2)}%, momentum ${Number(marketPulse.components.momentumAvg || 0).toFixed(2)}%`}
+                  />
                 </div>
                 {!signalsData ? (
                   <div className="animate-pulse space-y-3">
@@ -850,13 +955,16 @@ export default function Home() {
               </div>
 
               {/* AI Confidence Meter */}
-              <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
+              <div
+                className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card"
+                title="AI Confidence Meter: probabilistic short-term bias for major indices."
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-semibold text-white">AI Confidence Meter</h4>
                     <p className="text-xs text-slate-400">Next 24–48h directional bias</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="AI-generated estimate, not financial advice.">ⓘ</span>
+                  <InfoTooltip content="AI-generated estimate, not financial advice." />
                 </div>
                 {!signalsData ? (
                   <div className="animate-pulse space-y-3">
@@ -889,13 +997,16 @@ export default function Home() {
               </div>
 
               {/* Live Trade Radar */}
-              <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
+              <div
+                className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card"
+                title="Live Trade Radar: aggregated demo trades and watchlist activity."
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-semibold text-white">Live Trade Radar</h4>
                     <p className="text-xs text-slate-400">BullishAI activity signals</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="Aggregated demo trades and watchlist interest.">ⓘ</span>
+                  <InfoTooltip content="Aggregated demo trades and watchlist interest." />
                 </div>
                 {!radarData ? (
                   <div className="animate-pulse space-y-3">
@@ -922,13 +1033,16 @@ export default function Home() {
             {/* Row 2: 2 columns */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               {/* Market Weather */}
-              <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
+              <div
+                className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card"
+                title="Market Weather Forecast: short AI-style summary based on live signals."
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-semibold text-white">Market Weather Forecast</h4>
                     <p className="text-xs text-slate-400">Short, AI-style market read</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="Derived from pulse, breadth, and sector momentum.">ⓘ</span>
+                  <InfoTooltip content="Derived from pulse, breadth, and sector momentum." />
                 </div>
                 {!weatherData ? (
                   <div className="animate-pulse space-y-3">
@@ -960,13 +1074,16 @@ export default function Home() {
               </div>
 
               {/* Sector Rotation Wheel */}
-              <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
+              <div
+                className="bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card"
+                title="Sector Rotation Wheel: shows which sectors are gaining or losing strength."
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-semibold text-white">Sector Rotation Wheel</h4>
                     <p className="text-xs text-slate-400">{signalsData?.market === 'CA' ? 'TSX sector flows' : 'US sector flows'}</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="Approximation using sector ETF momentum.">ⓘ</span>
+                  <InfoTooltip content="Approximation using sector ETF momentum." />
                 </div>
                 {moneyFlowSummary && (
                   <div className="text-xs text-slate-400 mb-4">
@@ -1089,13 +1206,16 @@ export default function Home() {
 
             {/* Row 3: Earnings Timeline */}
             {earningsItems.length > 0 && (
-              <div className="mt-6 bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
+              <div
+                className="mt-6 bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card"
+                title="Earnings Impact Timeline: upcoming earnings with expected volatility indicators."
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="text-lg font-semibold text-white">Earnings Impact Timeline</h4>
                     <p className="text-xs text-slate-400">Next 7–14 days catalysts</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="Expected volatility and historical reaction indicators.">ⓘ</span>
+                  <InfoTooltip content="Expected volatility and historical reaction indicators." />
                 </div>
                 {!earningsData ? (
                   <div className="animate-pulse space-y-3">
@@ -1224,7 +1344,7 @@ export default function Home() {
                     <h4 className="text-lg font-semibold text-white">Because You Viewed…</h4>
                     <p className="text-xs text-slate-400">Personalized watchlist ideas</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="Based on your recent searches and views.">ⓘ</span>
+                  <InfoTooltip content="Based on your recent searches and views." />
                 </div>
                 <div className="text-sm text-slate-300 mb-3">
                   Because you viewed <span className="text-white font-semibold">{viewedWidgetData.base.join(' & ')}</span>:
@@ -1263,17 +1383,17 @@ export default function Home() {
 
             {/* Row 5: Upcoming Earnings & Dividends */}
             <div className="mt-6 grid lg:grid-cols-2 gap-4">
-                <div
-                  className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card"
-                  title="Upcoming earnings within the next 30 days based on the selected exchange."
-                >
+                <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
                   <div className="flex items-center justify-between mb-3">
                     <Link href="/calendar?tab=earnings" className="text-lg font-semibold text-white hover:underline">
                       Earnings
                     </Link>
-                    <Link href="/calendar?tab=earnings" className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
-                      View calendar <span>›</span>
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <InfoTooltip content="Upcoming earnings within the next 30 days based on the selected exchange." />
+                      <Link href="/calendar?tab=earnings" className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                        View calendar <span>›</span>
+                      </Link>
+                    </div>
                   </div>
                   <div
                     className="text-xs text-slate-500 mb-2"
@@ -1297,8 +1417,20 @@ export default function Home() {
                           ? 'AMC'
                           : 'BMO'
                         const countdown = formatCountdown(item.date, timeTag)
-                        const riskMeta = earningsRiskLabels.get(symbol) || { label: '—' }
-                        const riskLabel = riskMeta.label
+                        const riskMeta = earningsRiskLabels.get(symbol)
+                        const rawRiskLabel = (riskMeta?.label && riskMeta.label !== '—')
+                          ? riskMeta.label
+                          : (item.riskLabel || item.risk || '')
+                        const normalizedRiskLabel = (() => {
+                          const label = String(rawRiskLabel || '').trim()
+                          if (!label || label === '—' || label === '-') return 'Medium Risk'
+                          const lower = label.toLowerCase()
+                          if (lower.includes('high')) return 'High Risk'
+                          if (lower.includes('medium')) return 'Medium Risk'
+                          if (lower.includes('low')) return 'Low Risk'
+                          return lower.includes('risk') ? label : `${label} Risk`
+                        })()
+                        const riskLabel = normalizedRiskLabel
                         const riskColor = riskLabel === 'High Risk'
                           ? 'bg-red-500/20 text-red-300 border-red-500/40'
                           : riskLabel === 'Medium Risk'
@@ -1334,17 +1466,17 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <div
-                  className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card"
-                  title="Upcoming dividends within the next 30 days with declared dates and yields."
-                >
+                <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
                   <div className="flex items-center justify-between mb-3">
                     <Link href="/calendar?tab=dividends" className="text-lg font-semibold text-white hover:underline">
                       Dividends
                     </Link>
-                    <Link href="/calendar?tab=dividends" className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
-                      View calendar <span>›</span>
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <InfoTooltip content="Upcoming dividends within the next 30 days with declared dates and yields." />
+                      <Link href="/calendar?tab=dividends" className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                        View calendar <span>›</span>
+                      </Link>
+                    </div>
                   </div>
                   {!dividendsData ? (
                     <div className="animate-pulse space-y-2">
@@ -1396,7 +1528,7 @@ export default function Home() {
                     <h4 className="text-lg font-semibold text-white">Portfolio Simulation Preview</h4>
                     <p className="text-xs text-slate-400">Demo-only, not a guarantee</p>
                   </div>
-                  <span className="text-slate-500 text-sm" title="Simulation based on historical demo data. Not financial advice.">ⓘ</span>
+                  <InfoTooltip content="Simulation based on historical demo data. Not financial advice." />
                 </div>
                 <div className="grid md:grid-cols-[2fr_1fr] gap-6 items-center">
                   <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
@@ -1446,6 +1578,63 @@ export default function Home() {
             )}
           </div>
         </section>
+
+      {/* Today's Movers */}
+      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-white">Today’s Movers</h3>
+              <span className="text-xs font-semibold text-slate-200">Gainers</span>
+            </div>
+            <div className="space-y-2">
+              {(homeMovers?.gainers || []).slice(0, 5).map((item: any) => (
+                <Link
+                  key={`gainer-${item.symbol}`}
+                  href={`/stocks/${item.symbol}`}
+                  className="block text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">{item.symbol}</span>
+                    <span className="text-emerald-400">
+                      {item.changePercent >= 0 ? '+' : ''}{Number(item.changePercent).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {item.headline?.headline || 'No major company-specific headline today — move may be sector/macro driven.'}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-white">Today’s Movers</h3>
+              <span className="text-xs font-semibold text-slate-200">Losers</span>
+            </div>
+            <div className="space-y-2">
+              {(homeMovers?.losers || []).slice(0, 5).map((item: any) => (
+                <Link
+                  key={`loser-${item.symbol}`}
+                  href={`/stocks/${item.symbol}`}
+                  className="block text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">{item.symbol}</span>
+                    <span className="text-red-400">
+                      {item.changePercent >= 0 ? '+' : ''}{Number(item.changePercent).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {item.headline?.headline || 'No major company-specific headline today — move may be sector/macro driven.'}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Features */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">

@@ -11,8 +11,11 @@ const secondaryGroqKey = process.env.GROQ_API_KEY_SECONDARY
 
 const groqPrimary = primaryGroqKey ? new Groq({ apiKey: primaryGroqKey }) : null
 const groqSecondary = secondaryGroqKey ? new Groq({ apiKey: secondaryGroqKey }) : null
+const GROQ_TIMEOUT_MS = 12000
+let groqRotate = 0
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const geminiKey = process.env.GEMINI_KEY || process.env.GEMINI_API_KEY || ''
+const genAI = new GoogleGenerativeAI(geminiKey)
 
 export type AIModel = 'groq-llama' | 'gemini' | 'local-pytorch'
 
@@ -173,7 +176,7 @@ ${SAFETY_DISCLAIMER}`
         { role: 'user', content: fullPrompt },
       ],
       temperature: 0.2,
-      max_tokens: 1000,
+      max_tokens: 750,
       response_format: jsonSchema ? { type: 'json_object' } : undefined,
     })
     
@@ -199,38 +202,65 @@ ${SAFETY_DISCLAIMER}`
   }
 }
 
-async function callGroq(
+async function callGroqWithTimeout(
+  client: Groq,
   query: string,
   context: RAGContext,
   systemPrompt?: string,
   jsonSchema?: any
 ): Promise<AIResponse> {
-  if (groqPrimary) {
+  return await Promise.race([
+    callGroqClient(client, query, context, systemPrompt, jsonSchema),
+    new Promise<AIResponse>((_, reject) => {
+      setTimeout(() => {
+        const timeoutError: any = new Error('Groq API timeout')
+        timeoutError.status = 408
+        timeoutError.isRecoverable = true
+        reject(timeoutError)
+      }, GROQ_TIMEOUT_MS)
+    }),
+  ])
+}
+
+async function callGroq(
+  query: string,
+  context: RAGContext,
+  systemPrompt?: string,
+  jsonSchema?: any,
+  forcePrimaryFirst?: boolean
+): Promise<AIResponse> {
+  const clients = [groqPrimary, groqSecondary].filter(Boolean) as Groq[]
+  if (clients.length === 0) throw new Error('Groq API key missing')
+
+  const ordered = (() => {
+    if (clients.length === 1) return clients
+    if (forcePrimaryFirst) return clients
+    const startIndex = groqRotate % clients.length
+    groqRotate += 1
+    return [clients[startIndex], clients[(startIndex + 1) % clients.length]]
+  })()
+
+  let lastError: any
+  for (const client of ordered) {
     try {
-      return await callGroqClient(groqPrimary, query, context, systemPrompt, jsonSchema)
+      return await callGroqWithTimeout(client, query, context, systemPrompt, jsonSchema)
     } catch (error: any) {
+      lastError = error
       const status = error.status || error.statusCode
       const message = String(error.message || '')
-      const shouldTrySecondary =
-        !!groqSecondary &&
-        (status === 401 ||
-          status === 403 ||
-          status === 429 ||
-          message.toLowerCase().includes('invalid') ||
-          message.toLowerCase().includes('unauthorized'))
-
-      if (shouldTrySecondary) {
-        return await callGroqClient(groqSecondary as Groq, query, context, systemPrompt, jsonSchema)
+      const recoverable = error.isRecoverable || isRecoverableError(error)
+      const authIssue =
+        status === 401 ||
+        status === 403 ||
+        message.toLowerCase().includes('invalid') ||
+        message.toLowerCase().includes('unauthorized')
+      if (!recoverable && !authIssue) {
+        throw error
       }
-      throw error
     }
   }
 
-  if (groqSecondary) {
-    return await callGroqClient(groqSecondary, query, context, systemPrompt, jsonSchema)
-  }
-
-  throw new Error('Groq API key missing')
+  throw lastError || new Error('Groq API failed')
 }
 
 /**
@@ -244,7 +274,7 @@ async function callGemini(
 ): Promise<AIResponse> {
   const startTime = Date.now()
 
-  if (!process.env.GEMINI_API_KEY) {
+  if (!geminiKey) {
     return {
       answer: buildContextFallbackAnswer(context),
       model: 'gemini',
@@ -397,20 +427,21 @@ export async function routeAIQuery(
   context: RAGContext = {},
   systemPrompt?: string,
   jsonSchema?: any,
-  preferredModel?: AIModel
+  preferredModel?: AIModel,
+  options?: { forceGroqPrimaryFirst?: boolean }
 ): Promise<AIResponse> {
   const model = selectModel(query, context, preferredModel)
   
   try {
     switch (model) {
       case 'groq-llama':
-        return await callGroq(query, context, systemPrompt, jsonSchema)
+        return await callGroq(query, context, systemPrompt, jsonSchema, options?.forceGroqPrimaryFirst)
       case 'gemini':
         return await callGemini(query, context, systemPrompt, jsonSchema)
       case 'local-pytorch':
         return await callLocalPyTorch(query, context, systemPrompt)
       default:
-        return await callGroq(query, context, systemPrompt, jsonSchema)
+        return await callGroq(query, context, systemPrompt, jsonSchema, options?.forceGroqPrimaryFirst)
     }
   } catch (error: any) {
     // If Groq fails (rate limit, etc.), ALWAYS fallback to Gemini
