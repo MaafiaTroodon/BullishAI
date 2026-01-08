@@ -117,8 +117,11 @@ export async function GET(req: NextRequest) {
 Use ONLY the provided context for numbers. Be concise and factual.`
 
     const fallbackThesis = () => {
-      const trend = calc.trend.toLowerCase()
+      const trend = calc.trend?.toLowerCase()
       const momentum = calc.momentum_score
+      if (momentum == null) {
+        return `${symbol} technical momentum data is currently unavailable.`
+      }
       if (trend === 'up' && momentum >= 60) {
         return `${symbol} shows a constructive uptrend with above-average momentum. Buyers are holding recent gains.`
       }
@@ -128,10 +131,14 @@ Use ONLY the provided context for numbers. Be concise and factual.`
       return `${symbol} is range-bound with mixed momentum. Price is oscillating between support and resistance.`
     }
     const fallbackRisk = () => {
-      if (calc.momentum_score >= 65) {
+      const momentum = calc.momentum_score
+      if (momentum == null) {
+        return 'Momentum data is limited, so risk signals may be incomplete.'
+      }
+      if (momentum >= 65) {
         return 'Momentum can fade quickly if volume dries up near resistance.'
       }
-      if (calc.momentum_score <= 35) {
+      if (momentum <= 35) {
         return 'Downside follow-through remains possible if support breaks.'
       }
       return 'Choppy price action can trigger false breakouts in a range.'
