@@ -1003,8 +1003,11 @@ export default function Home() {
                               stroke="rgba(15,23,42,0.9)"
                               strokeWidth={1}
                               onMouseEnter={() => setHoveredSector(seg.name)}
-                              title={`${seg.name}: ${seg.changePercent >= 0 ? '+' : ''}${seg.changePercent.toFixed(2)}% • ${rotation.label}`}
-                            />
+                            >
+                              <title>
+                                {`${seg.name}: ${seg.changePercent >= 0 ? '+' : ''}${seg.changePercent.toFixed(2)}% • ${rotation.label}`}
+                              </title>
+                            </path>
                           )
                         })}
                         <circle cx="60" cy="60" r="30" fill="#0f172a" />
