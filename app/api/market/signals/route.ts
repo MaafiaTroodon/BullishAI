@@ -131,7 +131,7 @@ function computeVolatility(quotes: QuoteEntry['data'][]) {
       if (price > 0 && high > 0 && low > 0) {
         return ((high - low) / price) * 100
       }
-      const change = Number(q.dp ?? q.changePercent ?? 0)
+      const change = Number(q?.dp ?? q?.changePercent ?? 0)
       return Math.abs(change) * 0.7
     })
     .filter((v) => Number.isFinite(v))
