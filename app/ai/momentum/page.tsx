@@ -11,7 +11,7 @@ import { AIGate } from '@/components/AIGate'
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export default function MomentumPage() {
-  const { data, error, isLoading } = useSWR('/api/screeners/momentum?window=5d', fetcher, {
+  const { data, error, isLoading } = useSWR('/api/picks/momentum', fetcher, {
     refreshInterval: 60000,
   })
 

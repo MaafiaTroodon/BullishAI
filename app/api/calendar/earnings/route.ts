@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { finnhubFetch } from '@/lib/finnhub-client'
+import { getFromCache, setCache } from '@/lib/providers/cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,14 @@ export async function GET(req: NextRequest) {
     const range = url.searchParams.get('range') || 'week'
     const fromParam = url.searchParams.get('from')
     const toParam = url.searchParams.get('to')
+
+    const cacheKey = `calendar:earnings:${range}:${fromParam || 'auto'}:${toParam || 'auto'}`
+    const cached = getFromCache<any>(cacheKey)
+    if (cached && !cached.isStale) {
+      return NextResponse.json(cached.value, {
+        headers: { 'Cache-Control': 's-maxage=1800, stale-while-revalidate=3600' },
+      })
+    }
     
     // Determine date range (forward-looking)
     const now = new Date()
@@ -98,20 +107,18 @@ export async function GET(req: NextRequest) {
       lastQuarter: beatMap.get(item.symbol) || null,
     }))
 
-    return NextResponse.json(
-      {
-        items: enriched,
-        count: enriched.length,
-        range,
-        from,
-        to,
-      },
-      {
-        headers: {
-          'Cache-Control': 's-maxage=900, stale-while-revalidate=1800',
-        },
-      }
-    )
+    const payload = {
+      items: enriched,
+      count: enriched.length,
+      range,
+      from,
+      to,
+    }
+    setCache(cacheKey, payload, 60 * 60 * 1000)
+
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 's-maxage=1800, stale-while-revalidate=3600' },
+    })
   } catch (error: any) {
     console.error('Earnings calendar API error:', error)
     return NextResponse.json(

@@ -4,3 +4,9 @@ export const DEFAULT_UNIVERSE = [
   'SPY', 'QQQ', 'IWM',
   'RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'ENB.TO', 'SU.TO', 'TRP.TO', 'SHOP.TO',
 ]
+
+export const DIVIDEND_UNIVERSE = [
+  'AAPL', 'MSFT', 'JNJ', 'PG', 'KO', 'PEP', 'COST', 'UNH', 'XOM', 'CVX', 'JPM', 'BAC', 'WFC', 'V', 'MA',
+  'SPY', 'VYM', 'SCHD', 'DVY',
+  'RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'MFC.TO', 'ENB.TO', 'SU.TO', 'TRP.TO',
+]

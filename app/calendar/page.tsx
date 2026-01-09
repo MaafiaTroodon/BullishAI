@@ -38,35 +38,16 @@ function CalendarPageContent() {
     }).format(d)
   }
 
-  const rangeToDates = (range: 'today' | 'week' | 'month') => {
-    const start = new Date()
-    const end = new Date()
-    if (range === 'today') {
-      start.setHours(0, 0, 0, 0)
-      end.setHours(23, 59, 59, 999)
-    } else if (range === 'week') {
-      end.setDate(end.getDate() + 7)
-    } else {
-      end.setDate(end.getDate() + 30)
-    }
-    return {
-      from: start.toISOString().split('T')[0],
-      to: end.toISOString().split('T')[0],
-    }
-  }
-
-  // Fetch earnings data
-  const { from: earningsFrom, to: earningsTo } = rangeToDates(dateRange)
-  const { data: earningsData, isLoading: isLoadingEarnings, error: earningsError } = useSWR(
-    activeTab === 'earnings' ? `/api/calendar/earnings?from=${earningsFrom}&to=${earningsTo}` : null,
+  const { data, isLoading, error } = useSWR(
+    `/api/calendar?tab=${activeTab}&range=${dateRange}`,
     safeJsonFetcher,
-    { refreshInterval: 15 * 60 * 1000 } // 15 min cache
+    { refreshInterval: 15 * 60 * 1000 }
   )
-  
+
   // Map earnings data to items format
   const earningsItems = useMemo(() => {
-    if (!earningsData || !earningsData.items) return []
-    return earningsData.items.map((e: any) => ({
+    if (!data || !data.items || activeTab !== 'earnings') return []
+    return data.items.map((e: any) => ({
       symbol: e.symbol,
       company: e.company || e.name,
       date: e.date,
@@ -74,29 +55,7 @@ function CalendarPageContent() {
       estimate: e.estimate || e.estimated_eps,
       actual: e.actual || e.epsActual,
     }))
-  }, [earningsData])
-
-  // Fetch dividends data
-  const { data: dividendsData, isLoading: isLoadingDividends, error: dividendsError } = useSWR(
-    activeTab === 'dividends' ? `/api/calendar/dividends?range=${dateRange}` : null,
-    safeJsonFetcher,
-    { refreshInterval: 15 * 60 * 1000 } // 15 min cache
-  )
-  const { data: dividendsFallback } = useSWR(
-    activeTab === 'dividends' && dateRange === 'week' ? '/api/calendar/dividends?range=month' : null,
-    safeJsonFetcher,
-    { refreshInterval: 15 * 60 * 1000 }
-  )
-
-  const { data: macroData, isLoading: isLoadingMacro, error: macroError } = useSWR(
-    activeTab === 'macro' ? `/api/calendar/macro` : null,
-    safeJsonFetcher,
-    { refreshInterval: 30 * 60 * 1000 }
-  )
-
-  const isLoading = activeTab === 'earnings' ? isLoadingEarnings : activeTab === 'dividends' ? isLoadingDividends : isLoadingMacro
-  const error = activeTab === 'earnings' ? earningsError : activeTab === 'dividends' ? dividendsError : macroError
-  const data = activeTab === 'earnings' ? earningsData : activeTab === 'dividends' ? dividendsData : macroData
+  }, [data, activeTab])
   const rawItems = useMemo(() => {
     if (activeTab === 'earnings') {
       return earningsItems
@@ -105,12 +64,8 @@ function CalendarPageContent() {
       return Array.isArray(data?.items) ? data.items : []
     }
     const primary = Array.isArray(data?.items) ? data.items : []
-    if (primary.length > 0) return primary
-    if (dateRange === 'week') {
-      return Array.isArray(dividendsFallback?.items) ? dividendsFallback.items : []
-    }
-    return []
-  }, [activeTab, earningsItems, data, dateRange, dividendsFallback])
+    return primary
+  }, [activeTab, earningsItems, data])
   const filteredItems = useMemo(() => {
     if (activeTab !== 'dividends') {
       return rawItems

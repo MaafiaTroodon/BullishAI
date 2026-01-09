@@ -3,6 +3,8 @@ import { finnhubFetch } from '@/lib/finnhub-client'
 import { getSession } from '@/lib/auth-server'
 import { db } from '@/lib/db'
 import { ensurePortfolioLoaded, listPositions } from '@/lib/portfolio'
+import { DIVIDEND_UNIVERSE } from '@/lib/universe'
+import { getFromCache, setCache } from '@/lib/providers/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -47,6 +49,14 @@ export async function GET(req: NextRequest) {
     const range = url.searchParams.get('range') || 'week'
     const symbolsParam = url.searchParams.get('symbols')
 
+    const cacheKey = `calendar:dividends:${range}:${symbolsParam || 'auto'}`
+    const cached = getFromCache<any>(cacheKey)
+    if (cached && !cached.isStale) {
+      return NextResponse.json(cached.value, {
+        headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      })
+    }
+
     const now = new Date()
     const startDate = new Date(now)
     const endDate = new Date(now)
@@ -81,11 +91,7 @@ export async function GET(req: NextRequest) {
       } catch {}
     }
 
-    try {
-      const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`, { cache: 'no-store' })
-      const popular = await popularRes.json().catch(() => ({ stocks: [] }))
-      ;(popular.stocks || []).forEach((s: any) => universe.add(String(s.symbol || s).toUpperCase()))
-    } catch {}
+    DIVIDEND_UNIVERSE.forEach((symbol) => universe.add(symbol.toUpperCase()))
 
     if (symbolsParam) {
       symbolsParam
@@ -96,26 +102,32 @@ export async function GET(req: NextRequest) {
     }
 
     if (universe.size === 0) {
-      return NextResponse.json(
-        { type: 'dividends', range, items: [], count: 0 },
-        { headers: { 'Cache-Control': 's-maxage=1200, stale-while-revalidate=1800' } }
-      )
+      const payload = { type: 'dividends', range, items: [], count: 0 }
+      setCache(cacheKey, payload, 60 * 60 * 1000)
+      return NextResponse.json(payload, {
+        headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      })
     }
 
-    const rawItems = await fetchFmp(from, to)
+    const maxEnd = new Date(startDate)
+    maxEnd.setDate(maxEnd.getDate() + 90)
+    const maxTo = maxEnd.toISOString().split('T')[0]
+    const rawItems = await fetchFmp(from, maxTo)
     if (!rawItems.length) {
-      return NextResponse.json(
-        { type: 'dividends', range, items: [], count: 0 },
-        { headers: { 'Cache-Control': 's-maxage=1200, stale-while-revalidate=1800' } }
-      )
+      const payload = { type: 'dividends', range, items: [], count: 0 }
+      setCache(cacheKey, payload, 60 * 60 * 1000)
+      return NextResponse.json(payload, {
+        headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      })
     }
 
     const filteredByUniverse = rawItems.filter((item) => universe.has(String(item.symbol || '').toUpperCase()))
     if (!filteredByUniverse.length) {
-      return NextResponse.json(
-        { type: 'dividends', range, items: [], count: 0 },
-        { headers: { 'Cache-Control': 's-maxage=1200, stale-while-revalidate=1800' } }
-      )
+      const payload = { type: 'dividends', range, items: [], count: 0 }
+      setCache(cacheKey, payload, 60 * 60 * 1000)
+      return NextResponse.json(payload, {
+        headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      })
     }
 
     const validated = await Promise.all(
@@ -125,17 +137,24 @@ export async function GET(req: NextRequest) {
         const profile = profileRes.data || {}
         const name = profile?.name
         const exchange = String(profile?.exchange || '').toUpperCase()
-        if (!name || !exchange) return null
-        const exchangeOk = ALLOWED_EXCHANGES.some((ex) => exchange.includes(ex))
-        if (!exchangeOk) {
+        const exchangeOk = exchange && ALLOWED_EXCHANGES.some((ex) => exchange.includes(ex))
+
+        if (!name || !exchangeOk) {
           const metricRes = await finnhubFetch('stock/metric', { symbol, metric: 'all' }, { cacheSeconds: 3600 })
           const marketCap = Number(metricRes.data?.metric?.marketCapitalization || 0) * 1_000_000
-          if (!Number.isFinite(marketCap) || marketCap < MIN_MARKET_CAP) return null
+          const metricOk = Number.isFinite(marketCap) && marketCap >= MIN_MARKET_CAP
+          if (!metricOk) {
+            if (!profileRes.ok && !metricRes.ok) {
+              // Finnhub rate limits/unavailable; fall back to universe-only validation.
+            } else {
+              return null
+            }
+          }
         }
 
         return {
           symbol,
-          company: name,
+          company: name || symbol,
           date: item.date,
           exDate: item.date,
           recordDate: item.recordDate || null,
@@ -150,14 +169,32 @@ export async function GET(req: NextRequest) {
       })
     )
 
-    const items = validated
+    let items = validated
       .filter((item): item is NonNullable<typeof item> => !!item && !!item.amount)
       .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
 
-    return NextResponse.json(
-      { type: 'dividends', range, items, count: items.length },
-      { headers: { 'Cache-Control': 's-maxage=1200, stale-while-revalidate=1800' } }
-    )
+    items = items.filter((item) => {
+      const t = new Date(item.date || 0).getTime()
+      return t >= startDate.getTime() && t <= endDate.getTime()
+    })
+
+    if (items.length === 0) {
+      const fallback = validated
+        .filter((item): item is NonNullable<typeof item> => !!item && !!item.amount)
+        .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
+        .slice(0, 10)
+      const payload = { type: 'dividends', range, items: fallback, count: fallback.length }
+      setCache(cacheKey, payload, 60 * 60 * 1000)
+      return NextResponse.json(payload, {
+        headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      })
+    }
+
+    const payload = { type: 'dividends', range, items, count: items.length }
+    setCache(cacheKey, payload, 60 * 60 * 1000)
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+    })
   } catch (error: any) {
     console.error('Dividends calendar API error:', error)
     return NextResponse.json(

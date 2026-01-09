@@ -22,12 +22,12 @@ export default function TopPicksPage() {
   const { data: session, isPending } = authClient.useSession()
   const isLoggedIn = !!session?.user
 
-  // Use direct screener endpoints instead of AI screener to avoid JSON format issues
+  // Use cached pick endpoints for faster loads
   const getEndpoint = () => {
-    if (selectedTheme === 'value') return '/api/screeners/value-quality'
-    if (selectedTheme === 'momentum') return '/api/screeners/momentum?window=5d'
+    if (selectedTheme === 'value') return '/api/picks/value'
+    if (selectedTheme === 'momentum') return '/api/picks/momentum'
     if (selectedTheme === 'dividend') return '/api/screeners/dividend-momentum'
-    return '/api/screeners/value-quality' // quality uses value-quality
+    return '/api/picks/top' // quality uses top picks
   }
 
   const { data, error, isLoading } = useSWR(
@@ -106,7 +106,7 @@ export default function TopPicksPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {data?.stocks?.slice(0, isLoggedIn ? 10 : 3).map((stock: any, idx: number) => {
                 // Handle different data formats from different endpoints
-                const changePercent = stock.changePercent || stock.change || 0
+                const changePercent = stock.changePercent || stock.change || stock.momentum_5d || 0
                 const price = stock.price || 0
                 const name = stock.name || stock.symbol
                 
@@ -132,7 +132,7 @@ export default function TopPicksPage() {
                             {selectedTheme === 'value'
                               ? (stock.valueLabel || 'Value')
                               : selectedTheme === 'quality'
-                              ? (stock.qualityLabel || 'Quality')
+                              ? (stock.reasonTag || 'Quality')
                               : selectedTheme === 'momentum'
                               ? (stock.momentumLabel || 'Momentum')
                               : selectedTheme === 'dividend'
@@ -143,6 +143,7 @@ export default function TopPicksPage() {
                         
                         <p className="text-sm text-slate-300 leading-relaxed">
                           {stock.rationale ||
+                            stock.reason ||
                             (selectedTheme === 'value'
                               ? 'Valuation is in-line with peers based on available fundamentals.'
                               : selectedTheme === 'momentum'

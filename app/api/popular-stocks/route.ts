@@ -5,8 +5,14 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const revalidate = 600 // Cache for 10 minutes
 
-const groqPrimary = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null
-const groqSecondary = process.env.GROQ_API_KEY_SECONDARY ? new Groq({ apiKey: process.env.GROQ_API_KEY_SECONDARY }) : null
+const groqKeys = [
+  process.env.GROQ_API_KEY,
+  process.env.GROQ_API_KEY_SECONDARY,
+  process.env.GROQ_API_KEY_THIRD,
+  process.env.GROQ_API_KEY_FOURTH,
+].filter(Boolean) as string[]
+const groqClients = groqKeys.map((key) => new Groq({ apiKey: key }))
+let groqIndex = 0
 
 // Popular stocks for demo (US + Canadian mix)
 const DEFAULT_POPULAR_STOCKS = [
@@ -28,10 +34,16 @@ Return ONLY a JSON array of exactly 10 ticker symbols (uppercase, use .TO suffix
 Do not include any explanation or other text, just the JSON array.`
 
     let stocks
-    const clients = [groqPrimary, groqSecondary].filter(Boolean) as Groq[]
+    const clients = groqClients
     try {
       let completion
-      for (const client of clients) {
+      const startIndex = groqIndex % Math.max(clients.length, 1)
+      groqIndex += 1
+      const ordered = clients.length <= 1
+        ? clients
+        : [clients[startIndex], ...clients.filter((_, idx) => idx !== startIndex)]
+
+      for (const client of ordered) {
         try {
           completion = await client.chat.completions.create({
             messages: [

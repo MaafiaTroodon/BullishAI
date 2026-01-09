@@ -38,12 +38,6 @@ const fetcher = async (url: string) => {
 
 const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
 const CANADIAN_STOCKS = ['CLS.TO', 'BMO.TO', 'TD.TO', 'DOL.TO', 'L.TO'] // Celestica, BMO, TD, Dollarama, Loblaw
-const GOOD_DIVIDEND_TICKERS = [
-  'AAPL', 'MSFT', 'JNJ', 'PG', 'KO', 'PEP', 'COST', 'UNH', 'XOM', 'CVX', 'JPM', 'BAC', 'WFC', 'V', 'MA',
-  'SPY', 'VYM', 'SCHD', 'DVY',
-  'RY.TO', 'TD.TO', 'BMO.TO', 'BNS.TO', 'CM.TO', 'MFC.TO', 'ENB.TO', 'SU.TO', 'TRP.TO',
-]
-
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedExchange, setSelectedExchange] = useState<'USA' | 'CAN'>('USA')
@@ -58,6 +52,7 @@ export default function Home() {
   const [recommendationPool, setRecommendationPool] = useState<string[]>([])
   const [pricesByTicker, setPricesByTicker] = useState<Record<string, number>>({})
   const [hoveredSector, setHoveredSector] = useState<string | null>(null)
+  const [deferredLoad, setDeferredLoad] = useState(false)
   
   // Get current stock list based on exchange
   const currentStocks = selectedExchange === 'USA' ? US_STOCKS : CANADIAN_STOCKS
@@ -99,6 +94,11 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     }
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDeferredLoad(true), 500)
+    return () => clearTimeout(timer)
   }, [])
 
   // Load recently viewed tickers (for "Because you viewed..." widget)
@@ -211,37 +211,35 @@ export default function Home() {
 
   const marketCode = selectedExchange === 'CAN' ? 'CA' : 'US'
   const { data: signalsData } = useSWR(
-    `/api/market/signals?market=${marketCode}`,
+    deferredLoad ? `/api/market/signals?market=${marketCode}` : null,
     fetcher,
     { refreshInterval: 30000 }
   )
   const { data: radarData } = useSWR(
-    `/api/market/radar?market=${marketCode}`,
+    deferredLoad ? `/api/market/radar?market=${marketCode}` : null,
     fetcher,
     { refreshInterval: 15000 }
   )
   const { data: weatherData } = useSWR(
-    `/api/market/weather?market=${marketCode}`,
+    deferredLoad ? `/api/market/weather?market=${marketCode}` : null,
     fetcher,
     { refreshInterval: 180000 }
   )
-  const { data: earningsData } = useSWR('/api/calendar/earnings?range=month', fetcher, { refreshInterval: 60000 })
-  const { data: dividendsData } = useSWR(
-    `/api/calendar/dividends?range=month`,
-    fetcher,
-    { refreshInterval: 3600000 }
-  )
-  const { data: homeMovers } = useSWR('/api/home/movers', fetcher, { refreshInterval: 120000 })
-  const { data: topMoversData } = useSWR('/api/market/top-movers?limit=6', fetcher, { refreshInterval: 60000 })
-  const { data: valuePicksData } = useSWR('/api/screeners/value-quality', fetcher, { refreshInterval: 300000 })
-  const { data: momentumPicksData } = useSWR('/api/screeners/momentum?universe=default', fetcher, { refreshInterval: 300000 })
-  const { data: breakoutPicksData } = useSWR('/api/screeners/breakouts?universe=default', fetcher, { refreshInterval: 300000 })
+  const { data: homeData } = useSWR('/api/home', fetcher, { refreshInterval: 60000 })
+  const earningsData = homeData?.earnings
+  const dividendsData = homeData?.dividends
+  const homeMovers = homeData?.movers
+  const topPicksData = homeData?.picks?.top ? { stocks: homeData.picks.top } : null
+  const valuePicksData = homeData?.picks?.value ? { stocks: homeData.picks.value } : null
+  const momentumPicksData = homeData?.picks?.momentum ? { stocks: homeData.picks.momentum } : null
+  const strongestTodayData = homeData?.picks?.strongestToday ? { stocks: homeData.picks.strongestToday } : null
+  const picksLoaded = !!homeData
   const earningsSymbols = useMemo(() => {
     const items = earningsData?.items || []
     return Array.from(new Set(items.map((item: any) => String(item.symbol || '').toUpperCase()).filter(Boolean))).slice(0, 30)
   }, [earningsData])
   const { data: earningsInsights } = useSWR(
-    earningsSymbols.length ? `/api/market/earnings-insights?symbols=${earningsSymbols.join(',')}` : null,
+    deferredLoad && earningsSymbols.length ? `/api/market/earnings-insights?symbols=${earningsSymbols.join(',')}` : null,
     fetcher,
     { refreshInterval: 90000 }
   )
@@ -609,15 +607,14 @@ export default function Home() {
   }, [sectorWheel])
 
   const topPicksPreview = useMemo(() => {
-    const items = breakoutPicksData?.items || breakoutPicksData?.stocks || []
+    const items = topPicksData?.stocks || []
     return items.slice(0, 3)
-  }, [breakoutPicksData])
+  }, [topPicksData])
 
   const strongestTodayPreview = useMemo(() => {
-    const movers = topMoversData?.movers || []
-    if (movers.length >= 6) return movers.slice(3, 6)
+    const movers = strongestTodayData?.stocks || []
     return movers.slice(0, 3)
-  }, [topMoversData])
+  }, [strongestTodayData])
 
   const valuePicksPreview = useMemo(() => {
     const stocks = valuePicksData?.stocks || []
@@ -892,7 +889,9 @@ export default function Home() {
                     )
                   })}
                   {(card.items || []).length === 0 && (
-                    <div className="text-xs text-slate-500">Loading picks...</div>
+                    <div className="text-xs text-slate-500">
+                      {picksLoaded ? 'No picks available.' : 'Loading picks...'}
+                    </div>
                   )}
                 </div>
               </div>

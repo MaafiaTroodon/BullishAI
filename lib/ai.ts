@@ -1,8 +1,36 @@
 import Groq from 'groq-sdk'
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+const groqKeys = [
+  process.env.GROQ_API_KEY,
+  process.env.GROQ_API_KEY_SECONDARY,
+  process.env.GROQ_API_KEY_THIRD,
+  process.env.GROQ_API_KEY_FOURTH,
+].filter(Boolean) as string[]
+const groqClients = groqKeys.map((key) => new Groq({ apiKey: key }))
+let groqIndex = 0
+
+async function callGroqCompletion(params: Groq.Chat.Completions.CompletionCreateParams) {
+  if (groqClients.length === 0) {
+    throw new Error('Groq API key missing')
+  }
+  const startIndex = groqIndex % groqClients.length
+  groqIndex += 1
+  const ordered = groqClients.length === 1
+    ? groqClients
+    : [groqClients[startIndex], ...groqClients.filter((_, idx) => idx !== startIndex)]
+
+  let lastError: any
+  for (const client of ordered) {
+    try {
+      return await client.chat.completions.create(params)
+    } catch (error: any) {
+      lastError = error
+      const status = error?.status || error?.statusCode
+      if (status === 429 || status >= 500) continue
+    }
+  }
+  throw lastError || new Error('Groq completion failed')
+}
 
 const SYSTEM_PROMPT = `You are a financial analysis AI assistant. 
 Your role is to provide concise, factual analysis about stock market data and trends.
@@ -14,14 +42,14 @@ IMPORTANT DISCLAIMERS:
 - Never recommend buying or selling specific stocks`
 
 export async function getStockInsight(symbol: string, data: any, prompt: string): Promise<string> {
-  if (!process.env.GROQ_API_KEY) {
+  if (groqClients.length === 0) {
     return 'AI insights unavailable - API key not configured'
   }
 
   try {
     const context = JSON.stringify(data, null, 2)
     
-    const response = await groq.chat.completions.create({
+    const response = await callGroqCompletion({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -42,14 +70,14 @@ export async function getStockInsight(symbol: string, data: any, prompt: string)
 }
 
 export async function getWatchlistInsight(prompt: string, watchlistData: any[]): Promise<string> {
-  if (!process.env.GROQ_API_KEY) {
+  if (groqClients.length === 0) {
     return 'AI insights unavailable - API key not configured'
   }
 
   try {
     const context = JSON.stringify(watchlistData, null, 2)
     
-    const response = await groq.chat.completions.create({
+    const response = await callGroqCompletion({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -80,4 +108,3 @@ export async function summarizeWatchlist(watchlistData: any[]): Promise<string> 
 export async function getRiskCatalysts(symbol: string, quote: any): Promise<string> {
   return getStockInsight(symbol, quote, 'List 3 key risks and 3 potential catalysts for this quarter')
 }
-

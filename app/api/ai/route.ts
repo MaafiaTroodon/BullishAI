@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import Groq from 'groq-sdk'
 import * as Tools from '@/lib/tools'
-import { summarizeNews } from '@/lib/gemini'
 import { getSession } from '@/lib/auth-server'
 
 // Format timestamp to ET
@@ -18,7 +17,80 @@ function formatET(date: Date): string {
   }) + ' ET'
 }
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || '' })
+const groqKeys = [
+  process.env.GROQ_API_KEY,
+  process.env.GROQ_API_KEY_SECONDARY,
+  process.env.GROQ_API_KEY_THIRD,
+  process.env.GROQ_API_KEY_FOURTH,
+].filter(Boolean) as string[]
+
+const groqClients = groqKeys.map((key) => new Groq({ apiKey: key }))
+let groqIndex = 0
+
+function getGroqOrderedClients(task: 'chat' | 'stock') {
+  if (groqClients.length <= 1) return groqClients
+  const order = task === 'stock'
+    ? [2, 3, 0, 1]
+    : [0, 1, 2, 3]
+  return order
+    .map((idx) => groqClients[idx])
+    .filter(Boolean)
+    .slice(0, groqClients.length)
+}
+
+async function callGroqCompletion(params: Groq.Chat.Completions.CompletionCreateParams, task: 'chat' | 'stock' = 'chat') {
+  if (groqClients.length === 0) {
+    throw new Error('Groq API key missing')
+  }
+  const orderedBase = getGroqOrderedClients(task)
+  const startIndex = groqIndex % orderedBase.length
+  groqIndex += 1
+  const ordered = orderedBase.length === 1
+    ? orderedBase
+    : [orderedBase[startIndex], ...orderedBase.filter((_, idx) => idx !== startIndex)]
+
+  let lastError: any
+  for (const client of ordered) {
+    try {
+      return await client.chat.completions.create(params)
+    } catch (error: any) {
+      lastError = error
+      const status = error?.status || error?.statusCode
+      if (status === 429 || status >= 500) continue
+    }
+  }
+  throw lastError || new Error('Groq completion failed')
+}
+
+async function summarizeNewsWithGroq(items: any[], limit = 3, task: 'chat' | 'stock' = 'chat') {
+  const payload = items.slice(0, limit).map((item) => ({
+    headline: item.headline,
+    summary: item.summary,
+    source: item.source,
+  }))
+  const prompt = `Summarize each item in 1 concise sentence. Return JSON array of strings only.\nItems:\n${JSON.stringify(payload)}`
+  try {
+    const completion = await callGroqCompletion({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: 'Return JSON array only. No extra text.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 200,
+    }, task)
+    const raw = completion.choices?.[0]?.message?.content || '[]'
+    const jsonStart = raw.indexOf('[')
+    const jsonEnd = raw.lastIndexOf(']')
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1))
+      return Array.isArray(parsed) ? parsed : []
+    }
+  } catch (error) {
+    console.error('News summary groq error:', error)
+  }
+  return []
+}
 
 const GetQuoteArgs = z.object({ symbol: z.string() })
 const GetNewsArgs = z.object({ symbol: z.string(), lookbackHours: z.number().default(48) })
@@ -292,15 +364,16 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
       }
     }
 
+    const task: 'chat' | 'stock' = querySymbol ? 'stock' : 'chat'
     let first
     try {
-      first = await groq.chat.completions.create({
+      first = await callGroqCompletion({
         model: 'llama-3.3-70b-versatile',
         temperature: 0.2,
         messages,
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? 'auto' : undefined,
-      })
+      }, task)
     } catch (groqError: any) {
       console.error('Groq API error:', groqError)
       
@@ -321,7 +394,7 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
         }
         
         // Process these tool results and generate final response
-        const followResult = await groq.chat.completions.create({
+        const followResult = await callGroqCompletion({
           model: 'llama-3.3-70b-versatile',
           temperature: 0.2,
           messages: [
@@ -333,7 +406,7 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
               content: JSON.stringify({ name: r.name, data: r.data }, null, 2)
             }))
           ],
-        })
+        }, task)
         
         const finalMsg = followResult.choices[0]?.message
         return NextResponse.json({
@@ -345,14 +418,14 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
       // Fallback: try without tools if tool calling fails
       if (groqError.message?.includes('tool')) {
         try {
-          first = await groq.chat.completions.create({
+          first = await callGroqCompletion({
             model: 'llama-3.3-70b-versatile',
             temperature: 0.2,
             messages: [
               ...messages,
               { role: 'user', content: `${enhancedQuery}\n\nNote: Please provide a helpful answer based on general market knowledge. If you need specific data, mention that the user should specify a ticker symbol (e.g., "AMZN" for Amazon, "MSFT" for Microsoft).` }
             ],
-          })
+          }, task)
         } catch (fallbackError: any) {
           throw new Error(`Groq API failed: ${groqError.message || 'Unknown error'}`)
         }
@@ -445,7 +518,7 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
       const newsTool = enhancedToolResults.find(r => r.name === 'get_news')
       if (newsTool && newsTool.data?.itemsForSummarization && (!newsTool.data.summaries || newsTool.data.summaries.length === 0)) {
         try {
-          const summaries = await summarizeNews(newsTool.data.itemsForSummarization, 3)
+          const summaries = await summarizeNewsWithGroq(newsTool.data.itemsForSummarization, 3, task)
           if (summaries.length > 0) {
             newsTool.data.summaries = summaries
             newsTool.data.summariesFormatted = summaries.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')
@@ -456,7 +529,7 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
         }
       }
 
-      const follow = await groq.chat.completions.create({
+      const follow = await callGroqCompletion({
         model: 'llama-3.3-70b-versatile',
         temperature: 0.2,
         messages: [
@@ -464,7 +537,7 @@ When the user mentions a company name (e.g., "Amazon", "Microsoft", "Royal Bank"
           msg,
           ...enhancedToolResults.map(r => ({ role: 'tool' as const, tool_call_id: r.id, content: JSON.stringify({ name: r.name, data: r.data }, null, 2) })),
         ],
-      })
+      }, task)
       msg = follow.choices[0]?.message
     }
 
@@ -565,5 +638,3 @@ async function routeTool(name: string, rawArgs: any) {
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-

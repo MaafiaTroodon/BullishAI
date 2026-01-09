@@ -1,11 +1,10 @@
 import axios from 'axios'
 import { getFromCache, setCache } from '@/lib/providers/cache'
 import { finnhubFetch } from '@/lib/finnhub-client'
-const MASSIVE_KEY = process.env.POLYGON_API_KEY
 const TWELVE_KEY = process.env.TWELVEDATA_API_KEY || process.env.TWELVE_DATA_API_KEY
 const ALPHA_KEY = process.env.ALPHAVANTAGE_API_KEY
 
-export type QuoteSource = 'Finnhub' | 'Massive' | 'TwelveData' | 'AlphaVantage' | 'Cached'
+export type QuoteSource = 'Finnhub' | 'TwelveData' | 'AlphaVantage' | 'Cached'
 
 export interface QuoteResult {
   symbol: string
@@ -72,46 +71,6 @@ async function fetchFromFinnhub(symbol: string): Promise<QuoteResult | null> {
     }
   } catch (err) {
     console.warn('Finnhub quote failed', err instanceof Error ? err.message : err)
-    return null
-  }
-}
-
-async function fetchFromMassive(symbol: string): Promise<QuoteResult | null> {
-  if (!MASSIVE_KEY) return null
-  try {
-    // Massive.com (Polygon) previous close with latest trade
-    const lastUrl = `https://api.massive.com/v2/last/trade/${symbol}?apiKey=${MASSIVE_KEY}`
-    const prevUrl = `https://api.massive.com/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${MASSIVE_KEY}`
-
-    const [last, prev] = await Promise.all([
-      safeGet<any>(lastUrl),
-      safeGet<any>(prevUrl).catch(() => null),
-    ])
-
-    const lastTrade = last?.results
-    if (!lastTrade) return null
-
-    const price = Number(lastTrade.p)
-    let prevClose = price
-    if (prev?.results?.[0]?.c) {
-      prevClose = Number(prev.results[0].c)
-    }
-    const change = price - prevClose
-    const changePct = prevClose !== 0 ? (change / prevClose) * 100 : 0
-
-    return {
-      symbol,
-      price,
-      change,
-      changePct,
-      previousClose: prevClose,
-      volume: lastTrade.s ?? undefined,
-      currency: 'USD',
-      source: 'Massive',
-      fetchedAt: Date.now(),
-    }
-  } catch (err) {
-    console.warn('Massive quote failed', err instanceof Error ? err.message : err)
     return null
   }
 }
@@ -195,7 +154,7 @@ export async function getQuoteWithFallback(symbolInput: string): Promise<QuoteRe
     return { ...cached.value, source: `${cached.value.source}, Cached`, stale: false }
   }
 
-  const providers = [fetchFromFinnhub, fetchFromMassive, fetchFromTwelveData, fetchFromAlphaVantage]
+  const providers = [fetchFromFinnhub, fetchFromTwelveData, fetchFromAlphaVantage]
   const errors: string[] = []
   for (const provider of providers) {
     try {
@@ -220,4 +179,3 @@ export async function getQuoteWithFallback(symbolInput: string): Promise<QuoteRe
   const message = errors.length > 0 ? errors.join('; ') : 'All providers unavailable'
   throw new Error(`Quote unavailable for ${symbol}: ${message}`)
 }
-

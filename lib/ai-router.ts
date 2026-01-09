@@ -6,11 +6,14 @@
 import Groq from 'groq-sdk'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const primaryGroqKey = process.env.GROQ_API_KEY
-const secondaryGroqKey = process.env.GROQ_API_KEY_SECONDARY
+const groqKeys = [
+  process.env.GROQ_API_KEY,
+  process.env.GROQ_API_KEY_SECONDARY,
+  process.env.GROQ_API_KEY_THIRD,
+  process.env.GROQ_API_KEY_FOURTH,
+].filter(Boolean) as string[]
 
-const groqPrimary = primaryGroqKey ? new Groq({ apiKey: primaryGroqKey }) : null
-const groqSecondary = secondaryGroqKey ? new Groq({ apiKey: secondaryGroqKey }) : null
+const groqClients = groqKeys.map((key) => new Groq({ apiKey: key }))
 const GROQ_TIMEOUT_MS = 12000
 let groqRotate = 0
 
@@ -68,7 +71,7 @@ export function selectModel(query: string, context?: RAGContext, preferredModel?
   // Route to Gemini for PDF/filings/tables
   if (lowerQuery.includes('pdf') || lowerQuery.includes('filing') || lowerQuery.includes('sec') || 
       lowerQuery.includes('table') || lowerQuery.includes('financial statement')) {
-    return 'gemini'
+    return 'groq-llama'
   }
   
   // Route to Local PyTorch for domain-specific finance Q&A (if available)
@@ -229,7 +232,7 @@ async function callGroq(
   jsonSchema?: any,
   forcePrimaryFirst?: boolean
 ): Promise<AIResponse> {
-  const clients = [groqPrimary, groqSecondary].filter(Boolean) as Groq[]
+  const clients = groqClients
   if (clients.length === 0) throw new Error('Groq API key missing')
 
   const ordered = (() => {
@@ -437,72 +440,20 @@ export async function routeAIQuery(
       case 'groq-llama':
         return await callGroq(query, context, systemPrompt, jsonSchema, options?.forceGroqPrimaryFirst)
       case 'gemini':
-        return await callGemini(query, context, systemPrompt, jsonSchema)
+        return await callGroq(query, context, systemPrompt, jsonSchema, options?.forceGroqPrimaryFirst)
       case 'local-pytorch':
-        return await callLocalPyTorch(query, context, systemPrompt)
+        return await callGroq(query, context, systemPrompt, jsonSchema, options?.forceGroqPrimaryFirst)
       default:
         return await callGroq(query, context, systemPrompt, jsonSchema, options?.forceGroqPrimaryFirst)
     }
   } catch (error: any) {
-    // If Groq fails (rate limit, etc.), ALWAYS fallback to Gemini
-    if (model === 'groq-llama' || (model === 'local-pytorch' && error.message?.includes('Groq'))) {
-      // Always fallback to Gemini for any Groq error - Gemini never throws
-      console.warn(`Groq error detected, falling back to Gemini:`, error.message)
-      const geminiResponse = await callGemini(query, context, systemPrompt, jsonSchema)
-      // Add metadata to indicate this was a fallback
-      return {
-        ...geminiResponse,
-        metadata: {
-          ...geminiResponse.metadata,
-          originalModel: 'groq-llama',
-          fallbackReason: error.message,
-          fallback: true
-        }
-      }
-    }
-    
-    // For other models (local-pytorch), fallback to Groq first, then always to Gemini (which never throws)
-    if (model === 'local-pytorch') {
-      console.warn(`Model ${model} failed, falling back to Groq:`, error)
-      try {
-        return await callGroq(query, context, systemPrompt, jsonSchema)
-      } catch (groqError: any) {
-        // If Groq also fails, always use Gemini as final fallback (never throws)
-        console.warn('Groq fallback failed, using Gemini as final fallback:', groqError.message)
-        const geminiResponse = await callGemini(query, context, systemPrompt, jsonSchema)
-        return {
-          ...geminiResponse,
-          metadata: {
-            ...geminiResponse.metadata,
-            originalModel: model,
-            fallbackReason: `${error.message}; ${groqError.message}`,
-            fallback: true
-          }
-        }
-      }
-    }
-    
-    // If we're already on Gemini and it "failed", it still returned a response (never throws)
-    // But if somehow we get here, return a graceful fallback
-    if (model === 'gemini') {
-      const latency = Date.now()
-      return {
-        answer: `I encountered an issue processing your request. Based on the available context:\n\n${formatRAGContext(context)}\n\nPlease try rephrasing your question or try again in a moment.`,
-        model: 'gemini',
-        latency: 0,
-        riskNote: 'Service issue encountered. Please verify information independently.',
-        metadata: { error: error.message, fallback: true }
-      }
-    }
-    
-    // Last resort: return a helpful error message instead of throwing
     const latency = Date.now()
     return {
-      answer: `I'm experiencing technical difficulties. Here's what I know from the available context:\n\n${formatRAGContext(context)}\n\nError: ${error.message || 'Unknown error'}\n\nPlease try again or contact support.`,
-      model: model || 'unknown',
-      latency: 0,
+      answer: `I'm having trouble reaching the AI service right now. Please try again in a moment.`,
+      model: 'groq-llama',
+      latency,
       riskNote: 'Service unavailable. Please verify information independently.',
-      metadata: { error: error.message, fallback: true, critical: true }
+      metadata: { error: error.message || 'Groq error', fallback: false }
     }
   }
 }
