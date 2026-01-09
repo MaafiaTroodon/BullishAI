@@ -38,7 +38,7 @@ function getGroqOrderedClients(task: 'chat' | 'stock') {
     .slice(0, groqClients.length)
 }
 
-async function callGroqCompletion(params: Groq.Chat.Completions.CompletionCreateParams, task: 'chat' | 'stock' = 'chat') {
+async function callGroqCompletion(params: any, task: 'chat' | 'stock' = 'chat') {
   if (groqClients.length === 0) {
     throw new Error('Groq API key missing')
   }
