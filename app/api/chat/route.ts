@@ -168,6 +168,98 @@ function formatDataStamp(params: { provider?: string; symbol?: string; exchange?
   return parts.join(' | ')
 }
 
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  if (abs < 0.01) return `${value < 0 ? '-' : '+'}<0.01%`
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+}
+
+function summarizeRecommended(type: RecommendedType, result: any): string {
+  const rag = result?.ragContext || {}
+  if (type === 'market-summary') {
+    const indices = rag?.marketData?.indices || {}
+    const entries = Object.entries(indices).map(([symbol, payload]: any) => ({
+      symbol,
+      price: Number(payload?.value ?? payload?.price ?? 0),
+      changePercent: Number(payload?.changePercent ?? payload?.dp ?? 0),
+    }))
+    const ordered = ['SPY', 'QQQ', 'DIA', 'IWM', 'VIX']
+    const picked = ordered
+      .map((sym) => entries.find((item) => item.symbol === sym))
+      .filter(Boolean)
+      .slice(0, 5) as Array<{ symbol: string; price: number; changePercent: number }>
+    if (picked.length > 0) {
+      return `Market snapshot: ${picked
+        .map((item) => `${item.symbol} $${item.price.toFixed(2)} (${formatPercent(item.changePercent)})`)
+        .join(', ')}.`
+    }
+  }
+
+  if (type === 'top-movers') {
+    const gainers = (rag?.lists?.gainers || []).slice(0, 4)
+    const losers = (rag?.lists?.losers || []).slice(0, 4)
+    if (gainers.length || losers.length) {
+      const gainersLine = gainers.length
+        ? `Gainers: ${gainers.map((g: any) => `${g.symbol} ${formatPercent(Number(g.changePercent))}`).join(', ')}`
+        : 'Gainers: none'
+      const losersLine = losers.length
+        ? `Losers: ${losers.map((l: any) => `${l.symbol} ${formatPercent(Number(l.changePercent))}`).join(', ')}`
+        : 'Losers: none'
+      return `${gainersLine}. ${losersLine}.`
+    }
+  }
+
+  if (type === 'sectors') {
+    const sectors = (rag?.lists?.sectors || []).map((s: any) => ({
+      name: s.name,
+      symbol: s.symbol,
+      changePercent: Number(s.changePercent ?? s.change ?? 0),
+    }))
+    if (sectors.length) {
+      const sorted = [...sectors].sort((a, b) => b.changePercent - a.changePercent)
+      const leaders = sorted.slice(0, 3)
+      const laggards = sorted.slice(-3)
+      const leadersLine = `Leaders: ${leaders
+        .map((s) => `${s.name} ${formatPercent(s.changePercent)}`)
+        .join(', ')}`
+      const laggardsLine = `Laggards: ${laggards
+        .map((s) => `${s.name} ${formatPercent(s.changePercent)}`)
+        .join(', ')}`
+      return `${leadersLine}. ${laggardsLine}.`
+    }
+  }
+
+  if (type === 'news') {
+    const items = (rag?.news || []).slice(0, 3)
+    if (items.length) {
+      return `Top headlines: ${items
+        .map((item: any, idx: number) => `${idx + 1}) ${item.headline}${item.source ? ` — ${item.source}` : ''}`)
+        .join(' | ')}.`
+    }
+  }
+
+  if (type === 'earnings') {
+    const items = (rag?.calendar?.earnings || []).slice(0, 5)
+    if (items.length) {
+      return `Today’s earnings: ${items
+        .map((item: any) => `${item.symbol}${item.time ? ` (${item.time})` : ''}${item.estimate ? ` EPS est $${item.estimate}` : ''}`)
+        .join(', ')}.`
+    }
+  }
+
+  if (type === 'unusual-volume') {
+    const items = (rag?.lists?.unusualVolume || []).slice(0, 5)
+    if (items.length) {
+      return `Unusual volume: ${items
+        .map((item: any) => `${item.symbol} ${item.relativeVolume?.toFixed?.(2) ?? item.relativeVolume}x • ${formatPercent(Number(item.changePercent))}`)
+        .join(', ')}.`
+    }
+  }
+
+  return result?.liveDataText || 'I need a specific ticker or topic to respond.'
+}
+
 function buildUnifiedResponse(params: { understood: string; dataStamp: string; answer: string; next: string }) {
   return [
     `What I understood: ${params.understood}`,
@@ -305,8 +397,21 @@ export async function POST(req: NextRequest) {
     const previousContext: (FollowUpContext | TradeFollowUpContext) | null =
       body.previousContext && typeof body.previousContext === 'object' ? body.previousContext : null
 
+    const recommendedCheck = isRecommendedQuestion(query)
+    let recommendedType: RecommendedType | null = null
+    if (followUp && previousContext?.type && previousContext.type !== 'trade') {
+      recommendedType = previousContext.type as RecommendedType
+    } else if (presetId && PRESET_TYPE_MAP[presetId]) {
+      recommendedType = PRESET_TYPE_MAP[presetId]
+    } else if (recommendedCheck.needsLiveData && recommendedCheck.type) {
+      recommendedType = recommendedCheck.type as RecommendedType
+    }
+
+    const isTradeFollowUp = !!previousContext && (previousContext as TradeFollowUpContext).type === 'trade'
+    const skipTradeIntent = !isTradeFollowUp && !!recommendedType && recommendedType !== 'technical'
+
     // 0. Check if this is a trade command (buy/sell)
-    let tradeIntent = parseTradeIntent(query)
+    let tradeIntent = skipTradeIntent ? null : parseTradeIntent(query)
     if (!tradeIntent && previousContext && (previousContext as TradeFollowUpContext).type === 'trade') {
       tradeIntent = mergeTradeIntent((previousContext as TradeFollowUpContext).tradeIntent, query)
     } else if (tradeIntent && previousContext && (previousContext as TradeFollowUpContext).type === 'trade') {
@@ -512,16 +617,6 @@ export async function POST(req: NextRequest) {
     const section = detectSection(query)
 
     // 1. Recommended preset questions (top movers, news, earnings, etc.)
-    const recommendedCheck = isRecommendedQuestion(query)
-    let recommendedType: RecommendedType | null = null
-    if (followUp && previousContext?.type && previousContext.type !== 'trade') {
-      recommendedType = previousContext.type
-    } else if (presetId && PRESET_TYPE_MAP[presetId]) {
-      recommendedType = PRESET_TYPE_MAP[presetId]
-    } else if (recommendedCheck.needsLiveData && recommendedCheck.type) {
-      recommendedType = recommendedCheck.type as RecommendedType
-    }
-
     if (recommendedType && recommendedType !== 'technical') {
       try {
         const safePreviousContext = isFollowUpContext(previousContext) ? previousContext : null
@@ -563,10 +658,11 @@ ${liveDataText}
 
 Answer using the rules above.`
 
+        const conciseAnswer = summarizeRecommended(recommendedType, recommendedResult)
         let answer = buildUnifiedResponse({
           understood: query,
           dataStamp: `Updated ${dataTimestamp} • Source: ${dataSource}`,
-          answer: liveDataText,
+          answer: conciseAnswer,
           next: 'Want me to expand with more names or dig into a sector?',
         })
 

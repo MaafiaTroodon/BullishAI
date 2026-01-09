@@ -23,11 +23,13 @@ export async function GET(req: NextRequest) {
 
     const sectors = Object.entries(SECTOR_ETFS).map(([name, symbol]) => {
       const quote = quotes.quotes?.find((q: any) => q.symbol === symbol)
-      const changePercent = parseFloat(quote?.dp ?? quote?.changePercent ?? 0)
+      const payload = quote?.data ?? quote ?? {}
+      const changePercent = parseFloat(payload?.dp ?? payload?.changePercent ?? 0)
+      const change = parseFloat(payload?.change ?? 0)
       return {
         name,
         symbol,
-        change: parseFloat(quote?.change ?? 0),
+        change,
         changePercent,
         strength: Math.abs(changePercent),
       }

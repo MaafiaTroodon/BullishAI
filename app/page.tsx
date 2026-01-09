@@ -229,6 +229,63 @@ export default function Home() {
   const earningsData = homeData?.earnings
   const dividendsData = homeData?.dividends
   const homeMovers = homeData?.movers
+  const moversSection = (
+    <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-white">Today’s Movers</h3>
+            <span className="text-xs font-semibold text-slate-200">Gainers</span>
+          </div>
+          <div className="space-y-2">
+            {(homeMovers?.gainers || []).slice(0, 5).map((item: any) => (
+              <Link
+                key={`gainer-${item.symbol}`}
+                href={`/stocks/${item.symbol}`}
+                className="block text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-white">{item.symbol}</span>
+                  <span className="text-emerald-400">
+                    {item.changePercent >= 0 ? '+' : ''}{Number(item.changePercent).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {item.headline?.headline || 'No major company-specific headline today — move may be sector/macro driven.'}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-white">Today’s Movers</h3>
+            <span className="text-xs font-semibold text-slate-200">Losers</span>
+          </div>
+          <div className="space-y-2">
+            {(homeMovers?.losers || []).slice(0, 5).map((item: any) => (
+              <Link
+                key={`loser-${item.symbol}`}
+                href={`/stocks/${item.symbol}`}
+                className="block text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-white">{item.symbol}</span>
+                  <span className="text-red-400">
+                    {item.changePercent >= 0 ? '+' : ''}{Number(item.changePercent).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {item.headline?.headline || 'No major company-specific headline today — move may be sector/macro driven.'}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
   const topPicksData = homeData?.picks?.top ? { stocks: homeData.picks.top } : null
   const valuePicksData = homeData?.picks?.value ? { stocks: homeData.picks.value } : null
   const momentumPicksData = homeData?.picks?.momentum ? { stocks: homeData.picks.momentum } : null
@@ -1519,6 +1576,8 @@ export default function Home() {
                 </div>
             </div>
 
+            {!isLoggedIn && moversSection}
+
             {/* Row 6: Portfolio Simulation Preview (logged-out only) */}
             {!isLoggedIn && (
               <div className="mt-6 bg-slate-800/80 rounded-xl border border-slate-700 p-6 hover-card">
@@ -1578,62 +1637,7 @@ export default function Home() {
           </div>
         </section>
 
-      {/* Today's Movers */}
-      <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">Today’s Movers</h3>
-              <span className="text-xs font-semibold text-slate-200">Gainers</span>
-            </div>
-            <div className="space-y-2">
-              {(homeMovers?.gainers || []).slice(0, 5).map((item: any) => (
-                <Link
-                  key={`gainer-${item.symbol}`}
-                  href={`/stocks/${item.symbol}`}
-                  className="block text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">{item.symbol}</span>
-                    <span className="text-emerald-400">
-                      {item.changePercent >= 0 ? '+' : ''}{Number(item.changePercent).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {item.headline?.headline || 'No major company-specific headline today — move may be sector/macro driven.'}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-slate-800/80 rounded-xl border border-slate-700 p-5 hover-card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">Today’s Movers</h3>
-              <span className="text-xs font-semibold text-slate-200">Losers</span>
-            </div>
-            <div className="space-y-2">
-              {(homeMovers?.losers || []).slice(0, 5).map((item: any) => (
-                <Link
-                  key={`loser-${item.symbol}`}
-                  href={`/stocks/${item.symbol}`}
-                  className="block text-sm text-slate-300 border-b border-slate-700/40 pb-2 hover:text-white transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">{item.symbol}</span>
-                    <span className="text-red-400">
-                      {item.changePercent >= 0 ? '+' : ''}{Number(item.changePercent).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {item.headline?.headline || 'No major company-specific headline today — move may be sector/macro driven.'}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {isLoggedIn && moversSection}
 
       {/* Features */}
       <section className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-20">

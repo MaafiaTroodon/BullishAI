@@ -196,40 +196,39 @@ export async function fetchMarketSummary(origin: string): Promise<MarketSummaryD
 export async function fetchTopMovers(origin: string, limit: number = 10): Promise<TopMoversData | null> {
   try {
     const cappedLimit = Math.max(5, Math.min(limit, 100))
-    const res = await fetch(`${origin}/api/market/top-movers?limit=${cappedLimit}`)
+    const res = await fetch(`${origin}/api/home/movers`, { cache: 'no-store' })
     const data = await res.json().catch(() => ({ gainers: [], losers: [] }))
-    
-    const gainers = (data.gainers || data.data?.gainers || [])
-      .slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
-      .map((m: any) => ({
-      symbol: m.symbol,
-      name: m.name,
-      price: parseFloat(m.price || m.currentPrice || 0),
-      changePercent: parseFloat(m.changePercent || m.changePct || 0),
-      change: parseFloat(m.change || 0),
-      sector: m.sector,
-      volume: Number(m.volume || m.totalVolume || 0),
-      avgVolume: Number(m.avgVolume || m.averageVolume || 0),
-    }))
-    
-    const losers = (data.losers || data.data?.losers || [])
-      .slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
-      .map((m: any) => ({
-      symbol: m.symbol,
-      name: m.name,
-      price: parseFloat(m.price || m.currentPrice || 0),
-      changePercent: parseFloat(m.changePercent || m.changePct || 0),
-      change: parseFloat(m.change || 0),
-      sector: m.sector,
-      volume: Number(m.volume || m.totalVolume || 0),
-      avgVolume: Number(m.avgVolume || m.averageVolume || 0),
-    }))
-    
+
+    const normalize = (entry: any) => {
+      const price = parseFloat(entry.price || entry.currentPrice || 0)
+      const changePercent = parseFloat(entry.changePercent || entry.changePct || 0)
+      const change = parseFloat(entry.change || (price && changePercent ? (price * changePercent) / 100 : 0))
+      return {
+        symbol: entry.symbol,
+        name: entry.name,
+        price,
+        changePercent,
+        change,
+        sector: entry.sector,
+        volume: Number(entry.volume || entry.totalVolume || 0),
+        avgVolume: Number(entry.avgVolume || entry.averageVolume || 0),
+      }
+    }
+
+    const rawGainers = (data.gainers || data.data?.gainers || []).map(normalize)
+    const rawLosers = (data.losers || data.data?.losers || []).map(normalize)
+
+    const filteredGainers = rawGainers.filter((m) => Number.isFinite(m.price) && m.price > 0 && Number.isFinite(m.changePercent))
+    const filteredLosers = rawLosers.filter((m) => Number.isFinite(m.price) && m.price > 0 && Number.isFinite(m.changePercent))
+
+    const gainers = (filteredGainers.length ? filteredGainers : rawGainers).slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
+    const losers = (filteredLosers.length ? filteredLosers : rawLosers).slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
+
     return {
       gainers,
       losers,
-      timestamp: new Date().toISOString(),
-      source: 'BullishAI Top Movers'
+      timestamp: data.timestamp || new Date().toISOString(),
+      source: data.source || 'BullishAI Top Movers'
     }
   } catch (error) {
     console.error('Failed to fetch top movers:', error)
@@ -330,9 +329,9 @@ export async function fetchSectorLeaders(origin: string): Promise<SectorLeadersD
     const sectors: SectorSnapshot[] = (data.sectors || []).map((sector: any) => ({
       name: sector.name,
       symbol: sector.symbol,
-      changePercent: parseFloat(sector.changePercent || 0),
-      change: parseFloat(sector.change || 0),
-      strength: Math.abs(parseFloat(sector.strength || sector.changePercent || 0)),
+      changePercent: parseFloat(sector.changePercent ?? sector.dp ?? 0),
+      change: parseFloat(sector.change ?? 0),
+      strength: Math.abs(parseFloat(sector.strength ?? sector.changePercent ?? 0)),
     }))
 
     return {

@@ -213,8 +213,41 @@
   }
 }
 
+@media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden;
+  }
+
+  .max-w-\[95\%\] {
+    max-width: 100% !important;
+  }
+
+  .pill-nav-container {
+    max-width: 100%;
+  }
+
+  .pill-nav-items {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .pill-list {
+    flex-wrap: nowrap;
+  }
+
+  .pill {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .mask-btn {
+    min-height: 34px;
+    padding: 2px 10px;
+    font-size: 0.9rem;
+  }
+}
+
 /* Hide all TradingView copyright notices */
 .tradingview-widget-copyright {
   display: none !important;
 }
-
