@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
       currentPrice = lastClose
     }
 
-    const derivedChange = lastClose && prevClose ? lastClose - prevClose : null
+    const derivedChange = lastClose && prevClose ? lastClose - prevClose : 0
     const derivedChangePct = lastClose && prevClose ? (derivedChange / prevClose) * 100 : null
 
     // Calculate technical indicators deterministically (no LLM for numbers)
