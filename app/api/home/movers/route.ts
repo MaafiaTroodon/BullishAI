@@ -105,8 +105,8 @@ export async function GET(req: NextRequest) {
     }
 
     const popular = await loadUniverse(origin)
-    popular.forEach((s) => universe.add(String(s).toUpperCase()))
-    DEFAULT_UNIVERSE.forEach((s) => universe.add(s))
+    popular.forEach((s: unknown) => universe.add(String(s).toUpperCase()))
+    DEFAULT_UNIVERSE.forEach((s: string) => universe.add(s))
 
     const symbols = Array.from(universe).slice(0, 50)
     const quotes = await mapWithConcurrency(symbols, 8, async (symbol: string) => {
