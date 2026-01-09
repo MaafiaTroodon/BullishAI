@@ -41,13 +41,15 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => a.pe - b.pe)
     }
 
-    let top = ranked.slice(0, 5)
+    let top = ranked.slice(0, 5) as Array<{ symbol: string; marketCap: number; pe: number }>
     if (top.length === 0) {
       const quotesFallback = await mapWithConcurrency(getHomeUniverse(20), 5, async (symbol) => {
         const quoteRes = await finnhubFetch('quote', { symbol }, { cacheSeconds: 120 })
         const quote = quoteRes.data || {}
         return {
           symbol,
+          marketCap: 0,
+          pe: 0,
           price: Number(quote.c ?? 0),
           changePercent: Number(quote.dp ?? 0),
           valueLabel: 'Value',
