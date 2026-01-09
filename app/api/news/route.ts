@@ -16,7 +16,7 @@ const groqKeys = [
 const groqClients = groqKeys.map((key) => new Groq({ apiKey: key }))
 let groqIndex = 0
 
-async function callGroqCompletion(params: Groq.Chat.Completions.CompletionCreateParams) {
+async function callGroqCompletion(params: any) {
   if (groqClients.length === 0) throw new Error('Groq API key missing')
   const startIndex = groqIndex % groqClients.length
   groqIndex += 1
