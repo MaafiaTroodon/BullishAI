@@ -1,7 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { finnhubFetch } from '@/lib/finnhub-client'
+import { mapWithConcurrency } from '@/lib/async-limit'
+import { getFromCache, setCache } from '@/lib/providers/cache'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
+
+const FMP_KEYS = [
+  process.env.FINANCIALMODELINGPREP_API_KEY,
+  process.env.FINANCIALMODELINGPREP_API_KEY_SECONDARY,
+].filter(Boolean) as string[]
+
+async function fetchFmp<T>(url: string) {
+  let lastStatus = 500
+  for (const key of FMP_KEYS) {
+    const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}apikey=${key}`, { cache: 'no-store' })
+    lastStatus = res.status
+    if (!res.ok && (res.status === 429 || res.status >= 500)) continue
+    const data = await res.json().catch(() => null)
+    return { ok: res.ok, status: res.status, data }
+  }
+  return { ok: false, status: lastStatus, data: null }
+}
+
+function safeNumber(value: any) {
+  if (value === null || value === undefined) return null
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 export async function GET(req: NextRequest) {
   try {
+    const cacheKey = 'value-quality:v2'
+    const cached = getFromCache<any>(cacheKey)
+    if (cached && !cached.isStale) {
+      return NextResponse.json(cached.value, {
+        headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate=1200' },
+      })
+    }
+
     // Fetch popular stocks
     const popularRes = await fetch(`${req.nextUrl.origin}/api/popular-stocks`)
     const popular = await popularRes.json().catch(() => ({ stocks: [] }))
@@ -39,28 +74,61 @@ export async function GET(req: NextRequest) {
 
     const symbolList = [...new Set([...symbols, ...fallbackStocks.map((s) => s.symbol)])].slice(0, 20)
 
-    const stockDetails = await Promise.all(
-      symbolList.map(async (symbol) => {
-        try {
-          const res = await fetch(`${req.nextUrl.origin}/api/stocks/${symbol}`)
-          const data = await res.json().catch(() => null)
-          if (!data?.quote) return null
-          return {
-            symbol: data.symbol || symbol,
-            name: data.companyName || symbol,
-            price: data.quote.price || 0,
-            change: data.quote.changePct || 0,
-            peRatio: data.quote.peRatio ?? data.fundamentals?.peRatio ?? null,
-            week52High: data.quote.week52High ?? data.fundamentals?.week52High ?? null,
-            week52Low: data.quote.week52Low ?? data.fundamentals?.week52Low ?? null,
-            marketCap: data.quote.marketCap ?? data.fundamentals?.marketCap ?? null,
-            dividendYield: data.fundamentals?.dividendYield ?? null,
-          }
-        } catch {
-          return null
+    const stockDetails = await mapWithConcurrency(symbolList, 6, async (symbol) => {
+      try {
+        const [quote, finnhubMetricRes, fmpMetricsRes, fmpIncomeRes] = await Promise.all([
+          getQuoteWithFallback(symbol).catch(() => null),
+          finnhubFetch('stock/metric', { symbol, metric: 'all' }, { cacheSeconds: 3600 }).catch(() => null),
+          fetchFmp(`https://financialmodelingprep.com/api/v3/key-metrics-ttm/${symbol}`),
+          fetchFmp(`https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=2`),
+        ])
+
+        const finnhubMetric = finnhubMetricRes?.data?.metric || {}
+        const fmpMetrics = fmpMetricsRes.ok ? fmpMetricsRes.data?.[0] : null
+        const fmpIncome = fmpIncomeRes.ok ? fmpIncomeRes.data || [] : []
+
+        const latestIncome = fmpIncome?.[0]
+        const prevIncome = fmpIncome?.[1]
+        const revenueGrowth = (() => {
+          const latest = safeNumber(latestIncome?.revenue)
+          const prev = safeNumber(prevIncome?.revenue)
+          if (!latest || !prev || prev === 0) return null
+          return ((latest - prev) / prev) * 100
+        })()
+
+        const metricGrowth = safeNumber(finnhubMetric.revenueGrowthTTM ?? finnhubMetric.revenueGrowth5Y)
+        const fmpGrowth = safeNumber(fmpMetrics?.revenueGrowthTTM ?? fmpMetrics?.revenueGrowth)
+        const resolvedGrowth = revenueGrowth ?? metricGrowth ?? fmpGrowth
+
+        const marketCap = safeNumber(finnhubMetric.marketCapitalization)
+        const peRatio = safeNumber(finnhubMetric.peTTM) ?? safeNumber(fmpMetrics?.peRatioTTM)
+        const roe = safeNumber(finnhubMetric.roeTTM) ?? safeNumber(fmpMetrics?.roeTTM) ?? safeNumber(fmpMetrics?.roe)
+        const price = safeNumber(quote?.price)
+        const change = safeNumber(quote?.changePct)
+        const week52High = safeNumber(finnhubMetric['52WeekHigh'])
+        const week52Low = safeNumber(finnhubMetric['52WeekLow'])
+        const dividendYield = safeNumber(finnhubMetric.dividendYieldIndicatedAnnual)
+
+        if (!price) return null
+
+        return {
+          symbol,
+          name: symbol,
+          price,
+          change: change ?? 0,
+          peRatio,
+          roe,
+          revenue_growth: resolvedGrowth,
+          quality_score: (Number.isFinite(roe) ? roe : null),
+          week52High,
+          week52Low,
+          marketCap: marketCap ? marketCap * 1_000_000 : null,
+          dividendYield,
         }
-      })
-    )
+      } catch {
+        return null
+      }
+    })
 
     const stocks = stockDetails
       .filter((item): item is NonNullable<typeof item> => !!item && item.price > 0)
@@ -102,7 +170,10 @@ export async function GET(req: NextRequest) {
           name: item.name,
           price: item.price,
           change: item.change,
-          peRatio: item.peRatio,
+          pe: item.peRatio,
+          roe: item.roe,
+          revenue_growth: item.revenue_growth,
+          quality_score: item.quality_score,
           week52High: item.week52High,
           week52Low: item.week52Low,
           marketCap: item.marketCap,
@@ -112,12 +183,14 @@ export async function GET(req: NextRequest) {
           rationale,
         }
       })
-      .sort((a, b) => (a.peRatio ?? 99) - (b.peRatio ?? 99))
+      .sort((a, b) => (a.pe ?? 99) - (b.pe ?? 99))
       .slice(0, 10)
 
-    return NextResponse.json({
-      stocks,
-      timestamp: Date.now(),
+    const payload = { stocks, timestamp: Date.now() }
+    setCache(cacheKey, payload, 15 * 60 * 1000)
+
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate=1200' },
     })
   } catch (error: any) {
     console.error('Value-quality screener API error:', error)

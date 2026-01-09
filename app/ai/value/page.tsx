@@ -79,29 +79,38 @@ export default function ValuePage() {
                         </div>
                         
                         <div className="mb-3">
-                          <span className="px-2 py-1 bg-green-600/20 text-green-400 text-xs font-semibold rounded">
-                            Analyst Undervalued
+                          <span className="px-2 py-1 bg-emerald-600/20 text-emerald-300 text-xs font-semibold rounded">
+                            {stock.valueLabel || stock.qualityLabel || 'Value'}
                           </span>
                         </div>
                         
                         <div className="grid grid-cols-3 gap-3 text-sm">
                           <div>
                             <div className="text-slate-400 mb-1">P/E</div>
-                            <div className="font-semibold text-white">{stock.pe?.toFixed(1)}</div>
+                            <div className="font-semibold text-white">
+                              {Number.isFinite(stock.pe) ? stock.pe.toFixed(1) : '—'}
+                            </div>
                           </div>
                           <div>
                             <div className="text-slate-400 mb-1">ROE</div>
-                            <div className="font-semibold text-white">{stock.roe?.toFixed(1)}%</div>
+                            <div className="font-semibold text-white">
+                              {Number.isFinite(stock.roe) ? `${stock.roe.toFixed(1)}%` : '—'}
+                            </div>
                           </div>
                           <div>
                             <div className="text-slate-400 mb-1">Growth</div>
-                            <div className="font-semibold text-white">{stock.revenue_growth?.toFixed(1)}%</div>
+                            <div className="font-semibold text-white">
+                              {Number.isFinite(stock.revenue_growth) ? `${stock.revenue_growth.toFixed(1)}%` : '—'}
+                            </div>
                           </div>
                         </div>
                         
                         <div className="mt-3 pt-3 border-t border-slate-700">
                           <div className="text-xs text-slate-400">
-                            Quality Score: <span className="text-white font-semibold">{stock.quality_score?.toFixed(1)}</span>
+                            Quality Score:{' '}
+                            <span className="text-white font-semibold">
+                              {Number.isFinite(stock.quality_score) ? stock.quality_score.toFixed(1) : '—'}
+                            </span>
                           </div>
                         </div>
                       </div>

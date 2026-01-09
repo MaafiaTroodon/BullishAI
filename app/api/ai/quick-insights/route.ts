@@ -143,12 +143,20 @@ Use ONLY the provided context for numbers. Be concise, factual, and cite specifi
     
     try {
       const response = await routeAIQuery(query, context, systemPrompt, undefined, 'groq-llama')
-      snapshot = response.answer || snapshot
-      provider = response.model || provider
-      latency = response.latency || 0
-      if (response.model === 'gemini' && response.metadata?.fallback) {
+      const aiAnswer = response.answer || ''
+      const aiFailed =
+        !aiAnswer ||
+        aiAnswer.toLowerCase().includes('trouble reaching the ai service') ||
+        !!response.metadata?.error
+
+      if (aiFailed) {
         snapshot = buildSnapshotFallback()
         provider = 'deterministic'
+        latency = 0
+      } else {
+        snapshot = aiAnswer
+        provider = response.model || provider
+        latency = response.latency || 0
       }
     } catch (error) {
       snapshot = buildSnapshotFallback()

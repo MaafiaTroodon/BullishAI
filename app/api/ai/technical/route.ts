@@ -18,15 +18,36 @@ export async function GET(req: NextRequest) {
     const symbol = searchParams.get('symbol')?.toUpperCase() || 'AAPL'
 
     // Fetch quote and chart data (chart API returns OHLC format)
-    const [quoteRes, chartRes] = await Promise.all([
+    const [quoteRes, chartRes, stockRes] = await Promise.all([
       fetch(`${req.nextUrl.origin}/api/quote?symbol=${symbol}`).catch(() => null),
       fetch(`${req.nextUrl.origin}/api/chart?symbol=${symbol}&range=1m`).catch(() => null), // 1m = 1 month for more data points
+      fetch(`${req.nextUrl.origin}/api/stocks/${symbol}`).catch(() => null),
     ])
 
-    const quote = quoteRes ? await quoteRes.json().catch(() => null) : null
-    const chart = chartRes ? await chartRes.json().catch(() => null) : null
+    const quote = quoteRes?.ok ? await quoteRes.json().catch(() => null) : null
+    const chart = chartRes?.ok ? await chartRes.json().catch(() => null) : null
+    const stock = stockRes?.ok ? await stockRes.json().catch(() => null) : null
 
-    const currentPrice = parseFloat(quote?.price || 0)
+    const toNumber = (value: any): number | null => {
+      if (value === null || value === undefined) return null
+      const num = Number(value)
+      return Number.isFinite(num) ? num : null
+    }
+
+    const pickFirstNumber = (...values: Array<number | null | undefined>) => {
+      for (const value of values) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return value
+        }
+      }
+      return null
+    }
+
+    let currentPrice = pickFirstNumber(
+      toNumber(quote?.price),
+      toNumber(stock?.quote?.price),
+      null
+    )
 
     // Format chart data to OHLC format
     // Chart API returns: { data: Candle[] } where Candle = { t, o, h, l, c, v }
@@ -76,7 +97,7 @@ export async function GET(req: NextRequest) {
     }
 
     // If still no data, generate mock data from current price for basic calculations
-    if (ohlcData.length === 0 && currentPrice > 0) {
+    if (ohlcData.length === 0 && currentPrice !== null && currentPrice > 0) {
       // Generate 60 days of mock data based on current price
       const now = Date.now()
       const oneDay = 24 * 60 * 60 * 1000
@@ -94,41 +115,115 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const lastClose = ohlcData.length ? ohlcData[ohlcData.length - 1].close : null
+    const prevClose = ohlcData.length > 1 ? ohlcData[ohlcData.length - 2].close : null
+    if ((currentPrice === null || currentPrice === 0) && lastClose) {
+      currentPrice = lastClose
+    }
+
+    const derivedChange = lastClose && prevClose ? lastClose - prevClose : null
+    const derivedChangePct = lastClose && prevClose ? (derivedChange / prevClose) * 100 : null
+
     // Calculate technical indicators deterministically (no LLM for numbers)
-    const calc = calculateTechnical(ohlcData, currentPrice)
+    const calc = calculateTechnical(ohlcData, currentPrice || 0)
 
     // Generate text explanations using LLM (text only)
+    const price = pickFirstNumber(
+      toNumber(quote?.price),
+      toNumber(stock?.quote?.price),
+      toNumber(lastClose)
+    )
+    const change = pickFirstNumber(
+      toNumber(quote?.change),
+      toNumber(stock?.quote?.change),
+      derivedChange
+    )
+    const changePercent = pickFirstNumber(
+      toNumber(quote?.changePercent),
+      toNumber(stock?.quote?.changePct),
+      derivedChangePct
+    )
+    const marketCap = toNumber(stock?.quote?.marketCap)
+    const week52High = toNumber(stock?.quote?.week52High)
+    const week52Low = toNumber(stock?.quote?.week52Low)
+    const volume = pickFirstNumber(
+      toNumber(quote?.volume),
+      toNumber(stock?.quote?.volume)
+    )
+    const displayChangePct = changePercent
+
     const context: RAGContext = {
       symbol,
-      prices: quote ? {
+      prices: price != null ? {
         [symbol]: {
-          price: currentPrice,
-          change: parseFloat(quote.change || 0),
-          changePercent: parseFloat(quote.changePercent || 0),
+          price,
+          change: change ?? 0,
+          changePercent: changePercent ?? 0,
           timestamp: Date.now(),
         },
       } : undefined,
+      fundamentals: {
+        marketCap,
+        week52High,
+        week52Low,
+        volume,
+      },
+      news: Array.isArray(stock?.news) ? stock.news.slice(0, 3) : [],
     }
 
-    const query = `Provide a brief technical analysis explanation for ${symbol}:
-1. Investment thesis (2 short sentences about the technical setup)
-2. Risk note (1 short sentence about key risks)
+    const query = `Summarize ${symbol} with:
+1) Current price & daily change
+2) Trend + support/resistance from the technical data
+3) 1-2 recent headlines (if provided)
+4) Key facts if available (52w range, market cap, volume)
+5) One short risk note
 
 Use ONLY the provided context for numbers. Be concise and factual.`
 
     const fallbackThesis = () => {
+      const changePct = displayChangePct
+      const priceValue = price
       const trend = calc.trend?.toLowerCase()
       const momentum = calc.momentum_score
-      if (momentum == null) {
-        return `${symbol} technical momentum data is currently unavailable.`
+      if (!priceValue) {
+        return `${symbol} price data is currently unavailable.`
       }
-      if (trend === 'up' && momentum >= 60) {
-        return `${symbol} shows a constructive uptrend with above-average momentum. Buyers are holding recent gains.`
+      const priceLine = `${symbol} is $${priceValue.toFixed(2)} (${changePct != null ? `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%` : '—'}).`
+      const rangeLine = calc.support && calc.resistance
+        ? `Support ~$${Number(calc.support).toFixed(2)}, resistance ~$${Number(calc.resistance).toFixed(2)}.`
+        : 'Key levels are still forming.'
+      const newsItems = (context.news || [])
+        .map((item) => item.headline)
+        .filter(Boolean)
+        .slice(0, 2)
+      const newsLine = newsItems.length
+        ? `Headlines: ${newsItems.join(' | ')}.`
+        : 'No major company-specific headline found today.'
+      const facts: string[] = []
+      if (context.fundamentals?.marketCap) {
+        const cap = context.fundamentals.marketCap
+        const capLabel = cap >= 1e12
+          ? `${(cap / 1e12).toFixed(2)}T`
+          : cap >= 1e9
+            ? `${(cap / 1e9).toFixed(2)}B`
+            : `${(cap / 1e6).toFixed(2)}M`
+        facts.push(`Market cap ${capLabel}`)
       }
-      if (trend === 'down' && momentum <= 40) {
-        return `${symbol} remains in a weak trend with soft momentum. Sellers still control near-term direction.`
+      if (context.fundamentals?.week52Low && context.fundamentals?.week52High) {
+        facts.push(`52w range $${context.fundamentals.week52Low.toFixed(2)}–$${context.fundamentals.week52High.toFixed(2)}`)
       }
-      return `${symbol} is range-bound with mixed momentum. Price is oscillating between support and resistance.`
+      if (context.fundamentals?.volume) {
+        facts.push(`Vol ${Math.round(context.fundamentals.volume).toLocaleString()}`)
+      }
+      const factsLine = facts.length ? `Facts: ${facts.join(', ')}.` : ''
+
+      if (trend === 'up' && momentum != null && momentum >= 60) {
+        return `${priceLine} Trend remains constructive with above-average momentum. ${rangeLine} ${factsLine} ${newsLine}`.trim()
+      }
+      if (trend === 'down' && momentum != null && momentum <= 40) {
+        return `${priceLine} Trend is weak with soft momentum. ${rangeLine} ${factsLine} ${newsLine}`.trim()
+      }
+      return `${priceLine} Range-bound setup with mixed momentum. ${rangeLine} ${factsLine} ${newsLine}`.trim()
     }
     const fallbackRisk = () => {
       const momentum = calc.momentum_score
@@ -151,23 +246,28 @@ Use ONLY the provided context for numbers. Be concise and factual.`
 
     try {
       const response = await routeAIQuery(query, context, undefined, undefined, 'groq-llama')
-      // Try to parse thesis and risk from response
       const answer = response.answer || ''
-      const lines = answer.split('\n').filter(l => l.trim())
-      if (lines.length >= 2) {
-        thesis = lines[0].trim()
-        risk = lines[1].trim()
-      } else if (lines.length === 1) {
-        thesis = lines[0].trim()
-      }
-      if (response.model === 'gemini' && response.metadata?.fallback) {
+      const aiFailed =
+        !answer ||
+        answer.toLowerCase().includes('trouble reaching the ai service') ||
+        !!response.metadata?.error
+
+      if (aiFailed || (response.model === 'gemini' && response.metadata?.fallback)) {
         thesis = fallbackThesis()
         risk = fallbackRisk()
         provider = 'deterministic'
+        latency = 0
       } else {
+        const lines = answer.split('\n').filter(l => l.trim())
+        if (lines.length >= 2) {
+          thesis = lines[0].trim()
+          risk = lines[1].trim()
+        } else if (lines.length === 1) {
+          thesis = lines[0].trim()
+        }
         provider = response.model || provider
+        latency = response.latency || 0
       }
-      latency = response.latency || 0
     } catch (error) {
       // Fallback explanations if LLM fails
       thesis = fallbackThesis()
