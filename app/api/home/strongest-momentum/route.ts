@@ -75,7 +75,10 @@ export async function GET(req: NextRequest) {
           volume: Number(quote.v ?? 0),
         }
       })
-      selected = quotes.filter((q) => q.price > 0).slice(0, 5)
+      selected = quotes
+        .map((q) => ({ ...q, volumeOk: true }))
+        .filter((q) => q.price > 0)
+        .slice(0, 5)
     }
 
     if (selected.length < 3) {
