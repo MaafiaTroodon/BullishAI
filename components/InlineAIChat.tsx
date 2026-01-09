@@ -34,6 +34,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const [selectedCategory, setSelectedCategory] = useState<'quick-insights' | 'recommended' | 'technical' | 'all'>('all')
   const [lastPresetId, setLastPresetId] = useState<string | null>(null)
   const [lastFollowUpContext, setLastFollowUpContext] = useState<any>(null)
+  const [lastSymbol, setLastSymbol] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -152,6 +153,13 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
       setLastFollowUpContext(null)
     }
 
+    const detectedSymbol = (messageToSend.match(/\b[A-Z]{1,5}(?:\.TO)?\b/g) || [])
+      .map((s) => s.toUpperCase())
+      .find((s) => s.length > 1)
+    if (detectedSymbol) {
+      setLastSymbol(detectedSymbol)
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: rawMessage,
@@ -176,7 +184,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: effectiveQuery,
-          symbol: focusSymbol,
+          symbol: detectedSymbol || focusSymbol || lastSymbol || undefined,
           presetId: presetIdToUse || undefined,
           followUp: isAffirmativeFollowUp || isTradeFollowUp,
           previousContext: isTradeFollowUp ? lastFollowUpContext : (isAffirmativeFollowUp ? lastFollowUpContext : undefined),
@@ -244,6 +252,9 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
         }
       } else {
         setLastFollowUpContext(null)
+      }
+      if (Array.isArray(data.tickers) && data.tickers.length > 0) {
+        setLastSymbol(String(data.tickers[0]).toUpperCase())
       }
     } catch (error) {
       console.error('Chat API error:', error)

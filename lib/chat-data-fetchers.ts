@@ -218,8 +218,12 @@ export async function fetchTopMovers(origin: string, limit: number = 10): Promis
     const rawGainers = (data.gainers || data.data?.gainers || []).map(normalize)
     const rawLosers = (data.losers || data.data?.losers || []).map(normalize)
 
-    const filteredGainers = rawGainers.filter((m) => Number.isFinite(m.price) && m.price > 0 && Number.isFinite(m.changePercent))
-    const filteredLosers = rawLosers.filter((m) => Number.isFinite(m.price) && m.price > 0 && Number.isFinite(m.changePercent))
+    const filteredGainers = rawGainers.filter((m: TopMoversEntry) =>
+      Number.isFinite(m.price) && m.price > 0 && Number.isFinite(m.changePercent)
+    )
+    const filteredLosers = rawLosers.filter((m: TopMoversEntry) =>
+      Number.isFinite(m.price) && m.price > 0 && Number.isFinite(m.changePercent)
+    )
 
     const gainers = (filteredGainers.length ? filteredGainers : rawGainers).slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))
     const losers = (filteredLosers.length ? filteredLosers : rawLosers).slice(0, Math.min(25, Math.ceil(cappedLimit / 2)))

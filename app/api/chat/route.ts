@@ -9,6 +9,7 @@ import { routeAIQuery } from '@/lib/ai-router'
 import { handleRecommendedQuery, FollowUpContext, RecommendedType } from '@/lib/chat-recommended'
 import { isRecommendedQuestion } from '@/lib/chat-data-fetchers'
 import { isStockRecommendationQuery, handleStockRecommendation } from '@/lib/chat-stock-recommendations'
+import { fetchMarketSummary, fetchSectorLeaders } from '@/lib/chat-data-fetchers'
 
 const PRESET_TYPE_MAP: Record<string, RecommendedType> = {
   'market-summary': 'market-summary',
@@ -118,6 +119,7 @@ const MARKET_KEYWORDS = [
 
 const PORTFOLIO_KEYWORDS = ['wallet', 'portfolio', 'holdings', 'positions', 'p&l', 'balance']
 const PRODUCT_KEYWORDS = ['what is bullishai', 'what is this', 'what do you do', 'who are you', 'about bullishai', 'about this', 'platform', 'website']
+const RISK_KEYWORDS = ['risk', 'caution', 'warning', 'pullback', 'volatility']
 
 const TRADE_STOPWORDS = new Set([
   'BUY',
@@ -173,6 +175,47 @@ function formatPercent(value: number) {
   const abs = Math.abs(value)
   if (abs < 0.01) return `${value < 0 ? '-' : '+'}<0.01%`
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+}
+
+function resolveContextSymbol(previousContext?: FollowUpContext | TradeFollowUpContext | null) {
+  if (!previousContext || typeof previousContext !== 'object') return undefined
+  const meta = (previousContext as FollowUpContext).meta
+  const last = meta?.lastSymbol
+  return last ? String(last).toUpperCase() : undefined
+}
+
+async function buildRiskNote(origin: string) {
+  const [summary, sectors] = await Promise.all([
+    fetchMarketSummary(origin),
+    fetchSectorLeaders(origin),
+  ])
+
+  const indices = summary?.indices || []
+  const lines: string[] = []
+  if (indices.length) {
+    const key = ['SPY', 'QQQ', 'DIA', 'IWM'].map((sym) => indices.find((idx) => idx.symbol === sym)).filter(Boolean)
+    if (key.length) {
+      lines.push(
+        `Major indices: ${key
+          .map((idx: any) => `${idx.symbol} ${formatPercent(Number(idx.changePercent))}`)
+          .join(', ')}.`
+      )
+    }
+  }
+
+  const sectorList = sectors?.sectors || []
+  if (sectorList.length) {
+    const sorted = [...sectorList].sort((a, b) => b.changePercent - a.changePercent)
+    const leaders = sorted.slice(0, 2)
+    const laggards = sorted.slice(-2)
+    lines.push(
+      `Sector split: ${leaders.map((s) => `${s.name} ${formatPercent(s.changePercent)}`).join(', ')} leading; ` +
+        `${laggards.map((s) => `${s.name} ${formatPercent(s.changePercent)}`).join(', ')} lagging.`
+    )
+  }
+
+  const fallback = 'Volatility risk is elevated when leaders and laggards diverge — keep position sizes smaller and use tighter stops.'
+  return lines.length ? `${lines.join(' ')} Watch for volatility spikes and avoid over‑sizing.` : fallback
 }
 
 function summarizeRecommended(type: RecommendedType, result: any): string {
@@ -730,6 +773,56 @@ Answer using the rules above.`
 
     const intent = classifyIntent(query, tickers, previousContext)
 
+    if (intent === 'UNKNOWN' && tickers.length > 0) {
+      const targetSymbol = tickers[0]
+      const quoteResult = await fetchQuote(req.nextUrl.origin, targetSymbol, req.headers.get('cookie') || '')
+      const quote = quoteResult.data
+      if (quoteResult.ok && quote?.price) {
+        const dataStamp = formatDataStamp({
+          provider: quote.source || 'Market Data',
+          symbol: targetSymbol,
+          exchange: getExchangeForSymbol(targetSymbol),
+          currency: quote.currency || 'USD',
+          timestamp: quote.fetchedAt || Date.now(),
+        })
+        const answer = `${targetSymbol} is $${quote.price.toFixed(2)} (${formatPercent(Number(quote.changePercent || 0))}). Volume: ${quote.volume ? quote.volume.toLocaleString() : '—'}.`
+        return NextResponse.json({
+          answer: buildUnifiedResponse({
+            understood: query,
+            dataStamp,
+            answer,
+            next: 'Want trend analysis, news, or key levels?',
+          }),
+          model: 'bullishai-market',
+          modelBadge: 'BullishAI Data Engine',
+          latency: 0,
+          tickers: [targetSymbol],
+          followUpContext: {
+            type: 'market-summary',
+            stage: 'summary',
+            limit: 1,
+            domain: 'market_overview',
+            meta: { lastSymbol: targetSymbol },
+          },
+        })
+      }
+    }
+
+    if (intent === 'UNKNOWN' && RISK_KEYWORDS.some((word) => query.toLowerCase().includes(word))) {
+      const riskNote = await buildRiskNote(req.nextUrl.origin)
+      return NextResponse.json({
+        answer: buildUnifiedResponse({
+          understood: query,
+          dataStamp: 'Data: BullishAI Market Snapshot',
+          answer: riskNote,
+          next: 'Want a deeper risk check on a specific ticker?',
+        }),
+        model: 'bullishai-risk',
+        modelBadge: 'BullishAI Risk Desk',
+        latency: 0,
+      })
+    }
+
     // 2. Strict intent router (trade already handled)
     if (intent === 'PRODUCT_INFO_INTENT') {
       const answer = [
@@ -855,11 +948,18 @@ Answer using the rules above.`
         modelBadge: 'BullishAI Data Engine',
         latency: 0,
         tickers: [targetSymbol],
+        followUpContext: {
+          type: 'market-summary',
+          stage: 'summary',
+          limit: 1,
+          domain: 'market_overview',
+          meta: { lastSymbol: targetSymbol },
+        },
       })
     }
 
     if (intent === 'TECHNICAL_ANALYSIS_INTENT') {
-      const targetSymbol = tickers[0]
+      const targetSymbol = tickers[0] || resolveContextSymbol(previousContext)
       if (!targetSymbol) {
         return NextResponse.json({
           answer: buildUnifiedResponse({
