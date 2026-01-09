@@ -120,7 +120,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
       Number(fmpProfile?.price)
     )
     const changePercent = pickFirst(Number(finnhubQuote.dp), Number(alphaQuote?.dp), 0)
-    const volume = pickFirst(Number(finnhubQuote.v), Number(twelveQuote?.v), Number(alphaQuote?.v), null)
+    const volume = pickFirst(Number((finnhubQuote as any).v), Number((twelveQuote as any)?.v), Number((alphaQuote as any)?.v), null)
 
     const marketCap = pickFirst(
       Number(finnhubMetric.marketCapitalization) * 1_000_000,
