@@ -1,172 +1,124 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseSymbol } from '@/lib/market-symbol-parser'
+import { TOP_US_UNIVERSE, TOP_CANADA_UNIVERSE } from '@/lib/universe'
+import { mapWithConcurrency } from '@/lib/async-limit'
+import { getFromCache, setCache } from '@/lib/providers/cache'
+import { getQuoteWithFallback } from '@/lib/providers/market-data'
 
-// Known dividend stocks (NYSE, NASDAQ, TSX)
-const DIVIDEND_STOCKS = [
-  // US High Yield
-  'T', 'VZ', 'MO', 'PM', 'XOM', 'CVX', 'KO', 'PEP', 'JNJ', 'PG', 'WMT', 'JPM', 'BAC', 'C',
-  // Canadian High Yield
-  'RY.TO', 'TD.TO', 'BNS.TO', 'BMO.TO', 'CM.TO', 'ENB.TO', 'TRP.TO', 'CNQ.TO', 'SU.TO',
-]
+const FMP_KEYS = [
+  process.env.FINANCIALMODELINGPREP_API_KEY,
+  process.env.FINANCIALMODELINGPREP_API_KEY_SECONDARY,
+].filter(Boolean) as string[]
+
+async function fetchFmp<T>(url: string) {
+  let lastStatus = 500
+  for (const key of FMP_KEYS) {
+    const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}apikey=${key}`, { cache: 'no-store' })
+    lastStatus = res.status
+    if (!res.ok && (res.status === 429 || res.status >= 500)) continue
+    const data = await res.json().catch(() => null)
+    return { ok: res.ok, status: res.status, data }
+  }
+  return { ok: false, status: lastStatus, data: null }
+}
+
+function normalizeYield(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null
+  return value <= 1 ? value * 100 : value
+}
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const exchange = searchParams.get('exchange') || 'ALL'
-    const minYield = parseFloat(searchParams.get('minYield') || '0.025') // 2.5% default
+    const minYieldInput = parseFloat(searchParams.get('minYield') || '0')
+    const minYieldPct = minYieldInput <= 1 ? minYieldInput * 100 : minYieldInput
     const limit = parseInt(searchParams.get('limit') || '25')
-    
-    // Use dividend stocks list + popular stocks
-    const [popularRes, dividendCalendarRes] = await Promise.all([
-      fetch(`${req.nextUrl.origin}/api/popular-stocks`).catch(() => null),
-      fetch(`${req.nextUrl.origin}/api/calendar/dividends?range=month`).catch(() => null),
-    ])
-
-    const popular = popularRes ? await popularRes.json().catch(() => ({ stocks: [] })) : { stocks: [] }
-    const dividendCalendar = dividendCalendarRes ? await dividendCalendarRes.json().catch(() => ({ items: [] })) : { items: [] }
-
-    // Build symbol list: dividend stocks + popular stocks with dividends
-    let symbolList = [...DIVIDEND_STOCKS]
-    
-    // Add symbols from dividend calendar
-    if (dividendCalendar.items && Array.isArray(dividendCalendar.items)) {
-      const calendarSymbols = dividendCalendar.items
-        .slice(0, 30)
-        .map((item: any) => item.symbol)
-        .filter(Boolean)
-      symbolList = [...new Set([...symbolList, ...calendarSymbols])]
+    const cacheKey = `dividend-yield:${exchange}:${minYieldPct}:${limit}`
+    const cached = getFromCache<any>(cacheKey)
+    if (cached && !cached.isStale) {
+      return NextResponse.json(cached.value, {
+        headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=1200' },
+      })
     }
-    
-    // Add popular stocks
-    if (popular.stocks && Array.isArray(popular.stocks)) {
-      const popularSymbols = popular.stocks
-        .slice(0, 20)
-        .map((s: any) => s.symbol)
-        .filter(Boolean)
-      symbolList = [...new Set([...symbolList, ...popularSymbols])]
-    }
-    
-    // Filter by exchange if specified
+
+    let symbolList = [...TOP_US_UNIVERSE, ...TOP_CANADA_UNIVERSE]
     if (exchange !== 'ALL') {
-      symbolList = symbolList.filter(sym => {
-        const parsed = parseSymbol(sym)
-        return parsed.exchange === exchange
-      })
-    }
-    
-    const symbols = symbolList.slice(0, 50).join(',')
-    
-    const quotesRes = await fetch(`${req.nextUrl.origin}/api/quotes?symbols=${symbols}`)
-    const quotes = await quotesRes.json().catch(() => ({ quotes: [] }))
-
-    // Ensure we have some stocks to work with
-    let workingQuotes = quotes.quotes || []
-    if (workingQuotes.length === 0) {
-      const fallbackStocks = [
-        // US dividend stocks
-        { symbol: 'T', name: 'AT&T Inc.' },
-        { symbol: 'VZ', name: 'Verizon Communications' },
-        { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
-        { symbol: 'BAC', name: 'Bank of America Corp.' },
-        { symbol: 'XOM', name: 'Exxon Mobil Corporation' },
-        { symbol: 'CVX', name: 'Chevron Corporation' },
-        // Canadian dividend stocks
-        { symbol: 'RY.TO', name: 'Royal Bank of Canada' },
-        { symbol: 'TD.TO', name: 'Toronto-Dominion Bank' },
-        { symbol: 'BNS.TO', name: 'Bank of Nova Scotia' },
-        { symbol: 'BMO.TO', name: 'Bank of Montreal' },
-        { symbol: 'CM.TO', name: 'Canadian Imperial Bank' },
-        { symbol: 'ENB.TO', name: 'Enbridge Inc.' },
-        { symbol: 'TRP.TO', name: 'TC Energy Corporation' },
-        { symbol: 'CNQ.TO', name: 'Canadian Natural Resources' },
-        { symbol: 'SU.TO', name: 'Suncor Energy Inc.' },
-      ]
-      workingQuotes = fallbackStocks.map(stock => ({
-        symbol: stock.symbol,
-        data: { price: 100 + Math.random() * 200, dp: (Math.random() - 0.5) * 5 },
-        name: stock.name,
-      }))
-    }
-    
-    // Get dividend data from calendar
-    const dividendMap = new Map<string, any>()
-    if (dividendCalendar.items && Array.isArray(dividendCalendar.items)) {
-      dividendCalendar.items.forEach((item: any) => {
-        if (item.symbol && item.yield) {
-          dividendMap.set(item.symbol.toUpperCase(), {
-            yield: parseFloat(item.yield) || 0,
-            amount: parseFloat(item.amount) || 0,
-            frequency: item.frequency || 'QUARTERLY',
-            nextExDate: item.exDate || item.date,
-          })
-        }
-      })
+      symbolList = symbolList.filter((sym) => parseSymbol(sym).exchange === exchange)
     }
 
-    // Ensure all quotes have symbol and name
-    workingQuotes = workingQuotes.map((q: any) => ({
-      ...q,
-      symbol: q.symbol || 'UNKNOWN',
-      name: q.name || q.data?.name || q.symbol || 'Unknown Company',
-    }))
+    const rows = await mapWithConcurrency(symbolList, 6, async (symbol) => {
+      const [metricsRes, profileRes] = await Promise.all([
+        fetchFmp(`https://financialmodelingprep.com/api/v3/key-metrics-ttm/${symbol}`),
+        fetchFmp(`https://financialmodelingprep.com/api/v3/profile/${symbol}`),
+      ])
 
-    // Filter for dividend + momentum (yield >= minYield, high relative strength)
-    const stocks = workingQuotes
-      .map((q: any) => {
-        // Handle both formats
-        const symbol = q.symbol || 'UNKNOWN'
-        const parsed = parseSymbol(symbol)
-        const price = q.data ? parseFloat(q.data.price || 0) : parseFloat(q.price || 0)
-        const changePercent = q.data ? parseFloat(q.data.dp || q.data.changePercent || 0) : parseFloat(q.changePercent || 0)
-        const name = q.name || q.data?.name || q.companyName || symbol
-        
-        // Get dividend yield from calendar or calculate from TTM
-        let dividendYield = 0
-        const dividendData = dividendMap.get(symbol.toUpperCase())
-        
-        if (dividendData && dividendData.yield > 0) {
-          dividendYield = dividendData.yield
-        } else if (dividendData && dividendData.amount > 0 && price > 0) {
-          // Calculate yield from amount
-          dividendYield = (dividendData.amount * (dividendData.frequency === 'QUARTERLY' ? 4 : dividendData.frequency === 'MONTHLY' ? 12 : 1)) / price * 100
-        }
-        
-        const relativeStrength = Math.abs(changePercent) + (dividendYield > 0 ? 2 : 0)
-        
-        let dividendLabel = 'Dividend'
-        if (dividendYield >= 4) dividendLabel = 'High Yield'
-        else if (dividendYield >= 2) dividendLabel = 'Steady Yield'
-        else if (dividendYield > 0) dividendLabel = 'Low Yield'
+      const metrics = metricsRes.ok ? metricsRes.data?.[0] : null
+      const profile = profileRes.ok ? profileRes.data?.[0] : null
+      const price = Number(profile?.price) || null
+      const lastDiv = Number(profile?.lastDiv) || null
 
-        return {
-          symbol: parsed.normalizedSymbol || symbol,
-          name: name || symbol,
-          exchange: parsed.exchange,
-          currency: parsed.currency,
-          dividend_yield: dividendYield,
-          relative_strength: relativeStrength,
-          price: price || 100 + Math.random() * 200,
-          changePercent: changePercent,
-          change: changePercent,
-          nextExDate: dividendData?.nextExDate,
-          frequency: dividendData?.frequency,
-          dividendLabel,
-          rationale: dividendYield > 0 ? `Dividend yield ${dividendYield.toFixed(2)}%.` : 'Dividend yield unavailable.',
-        }
-      })
-      .filter((s: any) => s.price > 0 && s.dividend_yield >= minYield * 100) // minYield is decimal
-      .sort((a: any, b: any) => {
-        // Sort by dividend yield first, then relative strength
-        if (Math.abs(a.dividend_yield - b.dividend_yield) > 0.1) {
-          return b.dividend_yield - a.dividend_yield
-        }
-        return b.relative_strength - a.relative_strength
-      })
-      .slice(0, limit)
+      const rawYield = pickFirst(
+        normalizeYield(metrics?.dividendYieldTTM),
+        normalizeYield(metrics?.dividendYieldPercentageTTM),
+        normalizeYield(metrics?.dividendYield),
+        lastDiv && price ? (lastDiv / price) * 100 : null
+      )
 
-    return NextResponse.json({
-      stocks,
+      return {
+        symbol,
+        name: profile?.companyName || symbol,
+        dividend_yield: rawYield ?? null,
+        price,
+      }
+    })
+
+    const ranked = rows
+      .filter((row) => Number.isFinite(row.dividend_yield) && (row.dividend_yield as number) > 0)
+      .filter((row) => (row.dividend_yield as number) >= minYieldPct)
+      .sort((a, b) => (b.dividend_yield as number) - (a.dividend_yield as number))
+      .slice(0, Math.max(limit, 10))
+
+    const withQuotes = await mapWithConcurrency(ranked, 6, async (row) => {
+      const parsed = parseSymbol(row.symbol)
+      let price = row.price
+      let changePercent = 0
+      try {
+        const quote = await getQuoteWithFallback(row.symbol)
+        price = quote?.price ?? price
+        changePercent = quote?.changePct ?? 0
+      } catch {}
+
+      let dividendLabel = 'Dividend'
+      if ((row.dividend_yield as number) >= 4) dividendLabel = 'High Yield'
+      else if ((row.dividend_yield as number) >= 2) dividendLabel = 'Steady Yield'
+      else if ((row.dividend_yield as number) > 0) dividendLabel = 'Low Yield'
+
+      return {
+        symbol: parsed.normalizedSymbol || row.symbol,
+        name: row.name || row.symbol,
+        exchange: parsed.exchange,
+        currency: parsed.currency,
+        dividend_yield: row.dividend_yield,
+        price: price ?? 0,
+        changePercent,
+        change: changePercent,
+        dividendLabel,
+        rationale: row.dividend_yield
+          ? `Dividend yield ${Number(row.dividend_yield).toFixed(2)}%.`
+          : 'Dividend yield unavailable.',
+      }
+    })
+
+    const payload = {
+      stocks: withQuotes.slice(0, limit),
       timestamp: Date.now(),
+    }
+
+    setCache(cacheKey, payload, 10 * 60 * 1000)
+
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=1200' },
     })
   } catch (error: any) {
     console.error('Dividend-momentum screener API error:', error)
@@ -177,3 +129,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
+function pickFirst<T>(...values: Array<T | null | undefined>) {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value !== '') return value
+  }
+  return null
+}

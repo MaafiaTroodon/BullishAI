@@ -151,7 +151,6 @@ Use ONLY the provided context for numbers. Be concise, factual, and cite specifi
         provider = 'deterministic'
       }
     } catch (error) {
-      // Fallback snapshot if LLM fails
       snapshot = buildSnapshotFallback()
       provider = 'deterministic'
     }
@@ -207,16 +206,13 @@ Use ONLY the provided context for numbers. Be concise, factual, and cite specifi
     })
   } catch (error: any) {
     console.error('Quick insights error:', error)
-    return NextResponse.json(
-      { 
-        generated_at: new Date().toISOString(),
-        provider: 'error',
-        latency_ms: 0,
-        snapshot: 'Market analysis unavailable. Please check back later.',
-        tickers: [],
-        error: error.message || 'Failed to generate insights'
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      generated_at: new Date().toISOString(),
+      provider: 'deterministic',
+      latency_ms: 0,
+      snapshot: 'Market snapshot: data refresh in progress. Try again in a moment.',
+      tickers: [],
+      error: error.message || 'quick_insights_error',
+    })
   }
 }

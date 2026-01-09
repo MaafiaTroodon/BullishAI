@@ -982,16 +982,26 @@ Answer using the rules above.`
       const quote = quoteResult.data
       const chart = chartResult.data
       if (!quoteResult.ok || !quote?.price || !chartResult.ok || !Array.isArray(chart?.data) || chart.data.length === 0) {
+        const dataStamp = formatDataStamp({
+          provider: quote?.source || 'Market Data',
+          symbol: targetSymbol,
+          exchange: getExchangeForSymbol(targetSymbol),
+          currency: quote?.currency || 'USD',
+          timestamp: quote?.fetchedAt || Date.now(),
+        })
+        const dayRange = quote?.low && quote?.high ? `$${Number(quote.low).toFixed(2)}–$${Number(quote.high).toFixed(2)}` : '—'
+        const answer = `Using latest quote only: ${targetSymbol} $${Number(quote?.price || 0).toFixed(2)} (${formatPercent(Number(quote?.changePercent || 0))}). Day range ${dayRange}. Ask again for full chart levels.`
         return NextResponse.json({
           answer: buildUnifiedResponse({
             understood: query,
-            dataStamp: 'Data: provider unavailable',
-            answer: `I can’t verify technical levels for ${targetSymbol} because live candles are unavailable.`,
-            next: 'Retry in a moment or ask for basic price info.',
+            dataStamp,
+            answer,
+            next: 'Want today’s movers or news on this ticker?',
           }),
           model: 'bullishai-technical',
           modelBadge: 'BullishAI TA Engine',
           latency: 0,
+          tickers: [targetSymbol],
         })
       }
 

@@ -39,37 +39,54 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Load chat history from localStorage
+  const storageKey = 'bullishai_chat_history_authed'
+  const greetedKey = 'bullishai_chat_greeted_authed'
+
+  // Clear stored state on logout
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('bullishai_chat_history')
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            // Convert timestamp strings back to Date objects
-            const messagesWithDates = parsed.map((msg: any) => ({
-              ...msg,
-              timestamp: new Date(msg.timestamp),
-            }))
-            setMessages(messagesWithDates)
-            if (messagesWithDates.length > 0) {
-              setIsExpanded(true)
-            }
+    if (typeof window === 'undefined') return
+    if (!isLoggedIn) {
+      sessionStorage.removeItem(storageKey)
+      sessionStorage.removeItem(greetedKey)
+      setMessages([])
+      setLastPresetId(null)
+      setLastFollowUpContext(null)
+      setLastSymbol(null)
+    }
+  }, [isLoggedIn])
+
+  // Load chat history from sessionStorage (only while logged in)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isLoggedIn) return
+    const saved = sessionStorage.getItem(storageKey)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          // Convert timestamp strings back to Date objects
+          const messagesWithDates = parsed.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }))
+          setMessages(messagesWithDates)
+          if (messagesWithDates.length > 0) {
+            setIsExpanded(true)
           }
-        } catch (e) {
-          console.error('Failed to load chat history:', e)
         }
+      } catch (e) {
+        console.error('Failed to load chat history:', e)
       }
     }
-  }, [])
+  }, [isLoggedIn])
 
-  // Save chat history to localStorage
+  // Save chat history to sessionStorage (keep lightweight)
   useEffect(() => {
-    if (messages.length > 0 && typeof window !== 'undefined') {
-      localStorage.setItem('bullishai_chat_history', JSON.stringify(messages))
+    if (!isLoggedIn || typeof window === 'undefined') return
+    if (messages.length > 0) {
+      const trimmed = messages.slice(-40)
+      sessionStorage.setItem(storageKey, JSON.stringify(trimmed))
     }
-  }, [messages])
+  }, [messages, isLoggedIn])
 
   // Auto-scroll to bottom (within chat container only)
   useEffect(() => {
@@ -98,7 +115,7 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
   // Initialize greeting message
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const greeted = localStorage.getItem('bullishai_chat_greeted')
+    const greeted = sessionStorage.getItem(greetedKey)
     if (messages.length === 0 && !greeted) {
       setMessages([
         {
@@ -108,9 +125,9 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           timestamp: new Date(),
         },
       ])
-      localStorage.setItem('bullishai_chat_greeted', '1')
+      sessionStorage.setItem(greetedKey, '1')
     }
-  }, [])
+  }, [messages.length])
 
   // Keep presets visible - they're now static at bottom, no auto-hide
 
@@ -179,6 +196,17 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
 
     // Call new conversational chat API
     try {
+      const contextFromHistory =
+        !isTradeFollowUp && !detectedSymbol && !focusSymbol && lastSymbol
+          ? {
+              type: 'market-summary',
+              stage: 'summary',
+              limit: 1,
+              domain: 'market_overview',
+              meta: { lastSymbol },
+            }
+          : null
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -187,7 +215,11 @@ export function InlineAIChat({ isLoggedIn, focusSymbol }: InlineAIChatProps) {
           symbol: detectedSymbol || focusSymbol || lastSymbol || undefined,
           presetId: presetIdToUse || undefined,
           followUp: isAffirmativeFollowUp || isTradeFollowUp,
-          previousContext: isTradeFollowUp ? lastFollowUpContext : (isAffirmativeFollowUp ? lastFollowUpContext : undefined),
+          previousContext: isTradeFollowUp
+            ? lastFollowUpContext
+            : isAffirmativeFollowUp
+              ? lastFollowUpContext
+              : contextFromHistory || undefined,
         }),
       })
 

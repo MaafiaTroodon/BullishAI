@@ -16,7 +16,7 @@ function ResearchContent() {
   const [symbol, setSymbol] = useState(searchParams.get('symbol')?.toUpperCase() || 'AAPL')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const { data: stockData } = useSWR(`/api/stocks/${symbol}`, fetcher, { refreshInterval: 300000 })
+  const { data: stockData } = useSWR(`/api/research/${symbol}`, fetcher, { refreshInterval: 300000 })
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,7 +39,9 @@ function ResearchContent() {
   }
 
   const quote = stockData?.quote
-  const fundamentals = stockData?.fundamentals
+  const metrics = stockData?.metrics
+  const financials = stockData?.financials
+  const dividends = stockData?.dividends
   const newsItems = stockData?.news || []
 
   return (
@@ -90,15 +92,15 @@ function ResearchContent() {
                 <div className="flex items-start justify-between mb-6">
                   <div>
                     <h2 className="text-3xl font-bold text-white mb-2">{symbol}</h2>
-                    <p className="text-slate-400">{stockData?.companyName || 'Company Name'}</p>
+                    <p className="text-slate-400">{stockData?.profile?.name || 'Company Name'}</p>
                   </div>
                   {quote && (
                     <div className="text-right">
                       <div className="text-3xl font-bold text-white mb-1">
                         {quote?.price ? `$${quote.price.toFixed(2)}` : '—'}
                       </div>
-                      <div className={`text-lg font-semibold ${quote?.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {quote?.changePct >= 0 ? '+' : ''}{quote?.changePct?.toFixed(2)}%
+                      <div className={`text-lg font-semibold ${quote?.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {quote?.changePercent >= 0 ? '+' : ''}{quote?.changePercent?.toFixed(2)}%
                       </div>
                     </div>
                   )}
@@ -109,13 +111,13 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Market Cap</div>
                     <div className="text-lg font-semibold text-white">
-                      {quote?.marketCap ? `$${(quote.marketCap / 1e9).toFixed(2)}B` : 'N/A'}
+                      {metrics?.marketCap ? `$${(metrics.marketCap / 1e9).toFixed(2)}B` : 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">P/E Ratio</div>
                     <div className="text-lg font-semibold text-white">
-                      {(fundamentals?.peRatio ?? quote?.peRatio) ? (fundamentals?.peRatio ?? quote?.peRatio)?.toFixed?.(2) ?? (fundamentals?.peRatio ?? quote?.peRatio) : 'N/A'}
+                      {metrics?.pe ? metrics.pe.toFixed(2) : 'N/A'}
                     </div>
                   </div>
                   <div>
@@ -127,8 +129,8 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">52W Range</div>
                     <div className="text-lg font-semibold text-white">
-                      {(fundamentals?.week52High ?? quote?.week52High) && (fundamentals?.week52Low ?? quote?.week52Low)
-                        ? `$${(fundamentals?.week52Low ?? quote?.week52Low).toFixed(2)} - $${(fundamentals?.week52High ?? quote?.week52High).toFixed(2)}`
+                      {metrics?.fiftyTwoWeekHigh && metrics?.fiftyTwoWeekLow
+                        ? `$${metrics.fiftyTwoWeekLow.toFixed(2)} - $${metrics.fiftyTwoWeekHigh.toFixed(2)}`
                         : 'N/A'}
                     </div>
                   </div>
@@ -144,19 +146,19 @@ function ResearchContent() {
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Revenue (TTM)</div>
                     <div className="text-lg font-semibold text-white">
-                      {fundamentals?.revenue ? `$${(fundamentals.revenue / 1e9).toFixed(2)}B` : 'N/A'}
+                      {financials?.revenueTTM ? `$${(financials.revenueTTM / 1e9).toFixed(2)}B` : 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">EPS</div>
                     <div className="text-lg font-semibold text-white">
-                      {fundamentals?.eps || 'N/A'}
+                      {financials?.epsTTM ?? 'N/A'}
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-slate-400 mb-1">Dividend Yield</div>
                     <div className="text-lg font-semibold text-white">
-                      {fundamentals?.dividendYield ? `${fundamentals.dividendYield.toFixed(2)}%` : 'N/A'}
+                      {dividends?.yield ? `${dividends.yield.toFixed(2)}%` : 'N/A'}
                     </div>
                   </div>
                 </div>

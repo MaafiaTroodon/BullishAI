@@ -69,6 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
       newsRes,
       fmpProfileRes,
       fmpMetricsRes,
+      fmpIncomeRes,
       fmpDividendRes,
       fmpNewsRes,
       alphaOverviewRes,
@@ -84,6 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
       finnhubFetch('company-news', { symbol, from: newsWindow.from, to: newsWindow.to }, { cacheSeconds: 900 }),
       fetchFmp(`https://financialmodelingprep.com/api/v3/profile/${symbol}`),
       fetchFmp(`https://financialmodelingprep.com/api/v3/key-metrics-ttm/${symbol}`),
+      fetchFmp(`https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=1`),
       fetchFmp(`https://financialmodelingprep.com/api/v3/stock_dividend/${symbol}`),
       fetchFmp(`https://financialmodelingprep.com/api/v3/stock_news?tickers=${symbol}&limit=5`),
       process.env.ALPHAVANTAGE_API_KEY
@@ -106,6 +108,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
 
     const fmpProfile = fmpProfileRes.status === 'fulfilled' ? fmpProfileRes.value.data?.[0] : null
     const fmpMetrics = fmpMetricsRes.status === 'fulfilled' ? fmpMetricsRes.value.data?.[0] : null
+    const fmpIncome = fmpIncomeRes.status === 'fulfilled' ? fmpIncomeRes.value.data?.[0] : null
     const fmpDividends = fmpDividendRes.status === 'fulfilled' ? fmpDividendRes.value.data?.historical || [] : []
     const fmpNews = fmpNewsRes.status === 'fulfilled' ? fmpNewsRes.value.data || [] : []
 
@@ -140,18 +143,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
     const epsTTM = pickFirst(
       Number(finnhubMetric.epsTTM),
       Number(fmpMetrics?.epsTTM),
+      Number(fmpIncome?.eps),
       Number(alphaOverview.EPS)
     )
     const revenueTTM = pickFirst(
       Number(finnhubMetric.revenueTTM),
       Number(fmpMetrics?.revenueTTM),
+      Number(fmpIncome?.revenue),
       Number(alphaOverview.RevenueTTM)
     )
 
+    const normalizeYield = (value?: number | null) => {
+      if (value === null || value === undefined || !Number.isFinite(value)) return null
+      return value <= 1 ? value * 100 : value
+    }
+
     const dividendYield = pickFirst(
-      Number(finnhubMetric.dividendYieldIndicatedAnnual),
-      Number(alphaOverview.DividendYield) * 100,
-      Number(fmpProfile?.lastDiv)
+      normalizeYield(Number(finnhubMetric.dividendYieldIndicatedAnnual)),
+      normalizeYield(Number(fmpMetrics?.dividendYieldTTM)),
+      normalizeYield(Number(fmpMetrics?.dividendYieldPercentageTTM)),
+      normalizeYield(Number(alphaOverview.DividendYield)),
+      fmpProfile?.lastDiv && fmpProfile?.price ? (Number(fmpProfile.lastDiv) / Number(fmpProfile.price)) * 100 : null
     )
     const lastDividend = pickFirst(
       finnhubDividend?.[0]?.amount,
